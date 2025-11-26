@@ -1,0 +1,52 @@
+[project]
+name = "worship-prep-portal"
+version = "0.1.0"
+description = "Keep lyrics, verses, and slides in sync with real-time reviews, publishing, and EasyWorship control."
+readme = "README.md"
+requires-python = ">=3.13.5"
+dependencies = [
+    "django>=5.2.8",
+    "django-allauth[socialaccount]>=65.13.0",
+    "django-cors-headers>=4.9.0",
+    "django-stubs-ext>=5.2.7",
+    "django-typer>=3.4.0",
+    "django-unfold>=0.71.0",
+    "environs[django]>=14.5.0",
+    "reactivated>=0.47.8",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs[compatible-mypy]>=5.2.7",
+    "easy-django-cli>=0.2.0",
+]
+
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+
+
+[tool.django-stubs]
+django_settings_module = "wpp_project.settings"
+
+
+[tool.basedpyright]
+reportImplicitStringConcatenation = "none"
+
+
+[tool.ruff]
+line-length = 90
+target-version = "py313"
+
+
+[tool.poe]
+executor.type = "uv"
+
+[tool.poe.tasks]
+manage = "python manage.py"
+dev = "python manage.py runserver"
+makemig = "python manage.py makemigrations"
+migrate = "python manage.py migrate"
+
+[tool.pyrefly]
+untyped_def_behavior = "skip-and-infer-return-any"

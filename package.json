@@ -1,0 +1,25 @@
+{
+  "name": "worship-prep-portal",
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "daisyui": "^5.5.5",
+    "json-schema-to-typescript": "^15.0.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "reactivated": "^0.47.8",
+    "tailwindcss": "^4.1.17",
+    "ts-morph": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^5.1.4"
+  },
+  "scripts": {
+    "postinstall": "patch-package"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1",
+    "postinstall-postinstall": "^2.1.0"
+  }
+}
