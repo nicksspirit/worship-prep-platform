@@ -6,11 +6,16 @@ interface Props {
     children?: React.ReactNode;
 }
 
-// Critical inline CSS to prevent FOUC
-// 1. Set background immediately to avoid white flash
-// 2. Hide content until styles load
-// 3. Reveal content smoothly after hydration
-const criticalCSS = `
+// Development-only: Critical inline CSS to prevent FOUC
+// In dev, Vite injects CSS via JS modules, causing a gap between HTML render and style injection.
+// This CSS:
+// 1. Sets background immediately to avoid white flash
+// 2. Hides content until styles load
+// 3. Reveals content smoothly after hydration
+//
+// NOTE: The background color (oklch value) matches DaisyUI's bg-base-200 dark theme.
+// If you change themes in tailwind.config.js, update this value accordingly.
+const devCriticalCSS = `
     html, body {
         background-color: oklch(0.253267 0.015896 252.417568);
         margin: 0;
@@ -27,15 +32,19 @@ const criticalCSS = `
 
 export const Layout = (props: Props) => {
     const {STATIC_URL} = React.useContext(Context);
-    const contentRef = React.useRef<HTMLDivElement>(null);
 
-    // Show content after hydration (styles will be loaded by then)
+    // Only apply FOUC prevention in development
+    // In production, Reactivated generates a blocking <link> tag, so CSS loads before paint
+    const isDev = !import.meta.env.PROD;
+
     React.useEffect(() => {
-        // Small delay to ensure CSS has been injected by Vite
+        if (!isDev) return;
+
+        // Reveal content after hydration (styles will be loaded by then)
         requestAnimationFrame(() => {
-            contentRef.current?.classList.add("loaded");
+            document.getElementById("app-content")?.classList.add("loaded");
         });
-    }, []);
+    }, [isDev]);
 
     return (
         <html>
@@ -43,17 +52,13 @@ export const Layout = (props: Props) => {
                 <meta charSet="utf-8" />
                 <title>{props.title}</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-                
-                {/* Critical CSS to prevent Flash of Unstyled Content (FOUC) */}
-                <style dangerouslySetInnerHTML={{ __html: criticalCSS }} />
-                
-                {/* Production: load compiled CSS */}
-                {import.meta.env.PROD && (
-                    <link rel="stylesheet" href={`${STATIC_URL}dist/index.css`} />
-                )}
+
+                {/* Development: inject critical CSS to prevent FOUC */}
+                {isDev && <style dangerouslySetInnerHTML={{ __html: devCriticalCSS }} />}
             </head>
             <body>
-                <div id="app-content" ref={contentRef}>
+                {/* In production, content is visible immediately (no opacity hiding) */}
+                <div id="app-content" className={isDev ? "" : "loaded"}>
                     {props.children}
                 </div>
             </body>
