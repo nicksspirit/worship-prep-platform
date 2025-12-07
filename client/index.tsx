@@ -8,7 +8,7 @@ const {props, context} = getServerData();
 const Template = await getTemplate(context);
 
 ReactDOM.hydrateRoot(
-    document.getElementById("root") as HTMLElement,
+    document,
     <React.StrictMode>
         <Provider value={context}>
             <Template {...props} />
