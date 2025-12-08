@@ -1,11 +1,5 @@
-from django.http import HttpRequest, HttpResponse
-from . import templates
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import TemplateView
 
-
-def homepage(request: HttpRequest) -> HttpResponse:
-    return templates.MyTemplate(
-        name="George Washington",
-        title="President",
-        age=67,
-        location="Virginia",
-    ).render(request)
+class StartPageView(LoginRequiredMixin, TemplateView):
+    template_name = 'users/start_page.html'
