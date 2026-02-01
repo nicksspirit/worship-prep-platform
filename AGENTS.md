@@ -1,4 +1,4 @@
-# Worship Prep Portal
+# Worship Prep Platform
 
 ## Project Overview
 - **Purpose:** This tool coordinates Scripture, song lyrics, and service slides for ministers, choir members, and the tech booth, keeping all content in sync for worship services.

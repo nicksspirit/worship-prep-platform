@@ -1,5 +1,5 @@
 [project]
-name = "worship-prep-portal"
+name = "worship-prep-platform"
 version = "0.1.0"
 description = "Keep lyrics, verses, and slides in sync with real-time reviews, publishing, and EasyWorship control."
 readme = "README.md"
