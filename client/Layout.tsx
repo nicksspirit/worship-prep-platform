@@ -6,7 +6,7 @@ interface Props {
     children?: React.ReactNode;
 }
 
-// Development-only: Critical inline CSS to prevent FOUC
+// Development-only: Critical inline CSS to prevent Flash of Unstyled Content (FOUC)
 // In dev, Vite injects CSS via JS modules, causing a gap between HTML render and style injection.
 // This CSS:
 // 1. Sets background immediately to avoid white flash

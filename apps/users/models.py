@@ -1,8 +1,8 @@
-import typing as t
+import typing as ty
 
 from django.contrib import auth
 from django.contrib.auth.base_user import BaseUserManager
-from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
+from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import models
@@ -13,8 +13,14 @@ from django_stubs_ext.db.models import TypedModelMeta
 from apps.common.db.validators import NoWhitespaceValidator
 from apps.common.models import BaseModel
 
+_T = ty.TypeVar("_T", bound="models.Model")
 
-class UserManager(BaseUserManager):
+
+class HasMeta(ty.Protocol):
+    Meta: ty.ClassVar[ty.Any]
+
+
+class UserManager(BaseUserManager[_T]):
     """A Manager for the User model. This mimics the UserManager in django.contrib.auth.models.UserManager"""
 
     use_in_migrations = True
@@ -32,7 +38,7 @@ class UserManager(BaseUserManager):
         except ValidationError:
             raise ValueError("The user's email address is invalid")
 
-        user: "User" = self.model(email=email, **extra_fields)
+        user: "User" = ty.cast("User", self.model(email=email, **extra_fields))
         user.set_password(password)
         user.save()
 
@@ -86,7 +92,7 @@ class UserManager(BaseUserManager):
         is_active: bool = True,
         include_superusers: bool = True,
         backend: str | None = None,
-        obj: t.Optional["User"] = None,
+        obj: ty.Optional["User"] = None,
     ) -> QuerySet["User"]:
         """Return a QuerySet of all users with the given permission.
 
@@ -126,14 +132,14 @@ class UserManager(BaseUserManager):
                 obj=obj,
             )
 
-            return t.cast(QuerySet["User"], qs)
+            return ty.cast(QuerySet["User"], qs)
 
         return self.none()
 
 
 class User(AbstractUser, BaseModel):
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = [
+    REQUIRED_FIELDS: list[str] = [
         "first_name",
         "last_name",
     ]
@@ -155,9 +161,10 @@ class User(AbstractUser, BaseModel):
     )
     username = None
 
-    objects: DjangoUserManager["User"] = t.cast(DjangoUserManager["User"], UserManager())
+    objects: UserManager["User"] = UserManager()
+    AbstractUserMeta = ty.cast(HasMeta, AbstractUser)
 
-    class Meta(AbstractUser.Meta, TypedModelMeta):
+    class Meta(AbstractUserMeta.Meta, TypedModelMeta):
         verbose_name = _("User")
         verbose_name_plural = _("Users")
         swappable = "AUTH_USER_MODEL"
@@ -166,9 +173,9 @@ class User(AbstractUser, BaseModel):
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
 
-    def __str__(self) -> str:
-        return f"{self.full_name} ({self.email})"
-
     def clean(self):
         super().clean()
         self.email = self.email.lower().strip()
+
+    def __str__(self) -> str:
+        return f"{self.full_name} <{self.email}>"

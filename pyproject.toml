@@ -40,7 +40,7 @@ target-version = "py313"
 
 
 [tool.poe]
-executor.type = "uv"
+executor = "uv"
 
 [tool.poe.tasks]
 manage = "python manage.py"

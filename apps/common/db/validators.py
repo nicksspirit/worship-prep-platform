@@ -2,6 +2,7 @@ from django.utils.deconstruct import deconstructible
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
+from django_stubs_ext import StrOrPromise
 
 
 @deconstructible
@@ -11,11 +12,11 @@ class NoWhitespaceValidator:
 
     def __init__(
         self,
-        message: str | None = None,
+        message: StrOrPromise | None = None,
         code: str | None = None,
         whitelist: list[str] | None = None,
     ):
-        self.message = message or self.message
+        self.message: StrOrPromise = message or self.message
         self.code = code or self.code
 
     def __call__(self, value: str) -> None:

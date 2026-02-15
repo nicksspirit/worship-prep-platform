@@ -46,8 +46,8 @@ ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=[])
 SITE_ID = env.int("SITE_ID", default=1)
 
 INSTALLED_APPS = [
-    # 3rd party apps
-    "unfold",
+    # 3rd party apps (unfold must be before django.contrib.admin)
+    "unfold.apps.DefaultAppConfig",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
