@@ -68,6 +68,9 @@ class UserManager(BaseUserManager[_T]):
             email: The email of the superuser.
             password: The password of the superuser.
             **extra_fields: Additional fields to set on the superuser.
+        
+        Returns:
+            The created superuser.
         """
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
@@ -112,6 +115,7 @@ class UserManager(BaseUserManager[_T]):
         """
         if backend is None:
             backends = auth.get_backends()
+
             if len(backends) > 1:
                 raise ValueError(
                     "You have multiple authentication backends configured and "
@@ -124,6 +128,8 @@ class UserManager(BaseUserManager[_T]):
 
         from django.contrib.auth.backends import ModelBackend
 
+        qs = self.none()
+
         if isinstance(backend_, ModelBackend):
             qs = backend_.with_perm(
                 perm,
@@ -132,9 +138,7 @@ class UserManager(BaseUserManager[_T]):
                 obj=obj,
             )
 
-            return ty.cast(QuerySet["User"], qs)
-
-        return self.none()
+        return ty.cast(QuerySet["User"], qs)
 
 
 class User(AbstractUser, BaseModel):

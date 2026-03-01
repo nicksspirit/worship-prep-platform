@@ -7,7 +7,7 @@ from django_stubs_ext import StrOrPromise
 
 @deconstructible
 class NoWhitespaceValidator:
-    message = _("Leading and trailing whitespaces are not allowed.")
+    message: StrOrPromise = _("Leading and trailing whitespaces are not allowed.")
     code = "no_whitespace"
 
     def __init__(
