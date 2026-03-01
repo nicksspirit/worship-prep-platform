@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     "reactivated",
+    "django_bolt",
     # Django apps
     "django.contrib.admin",
     "django.contrib.auth",
@@ -64,6 +65,7 @@ INSTALLED_APPS = [
     # 1st party apps
     "apps.common",
     "apps.users",
+    "apps.schedules",
 ]
 
 MIDDLEWARE = [
@@ -183,3 +185,6 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+
+N8N_INTAKE_API_KEY = env.str("N8N_INTAKE_API_KEY", default="intake-key-for-testing")
+LOG_INBOUND_SCHEDULE_REQUESTS = env.bool("LOG_INBOUND_SCHEDULE_REQUESTS", default=False)
