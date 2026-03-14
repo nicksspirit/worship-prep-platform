@@ -9,7 +9,9 @@ class ServiceScheduleStatus(models.TextChoices):
 
 
 class ScheduleItemType(models.TextChoices):
+    SUNDAY_SCHOOL = "sunday_school", "Sunday School"
     OPENING_PRAYER = "opening_prayer", "Opening Prayer"
+    CLOSING_PRAYER = "closing_prayer", "Closing Prayer"
     WORSHIP_SONG = "worship_song", "Worship Song"
     HYMN = "hymn", "Hymn"
     SCRIPTURE_READING = "scripture_reading", "Scripture Reading"
