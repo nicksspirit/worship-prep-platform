@@ -1,5 +1,8 @@
 from django.contrib import admin
+from django.shortcuts import redirect
+from django.urls import reverse
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.decorators import action
 
 from apps.schedules.models import (
     Contact,
@@ -15,6 +18,17 @@ class ScheduleItemInline(TabularInline):
     model = ScheduleItem
     extra = 0
     tab = True
+    show_change_link = True
+    max_num = 0
+    readonly_fields = [
+        "position",
+        "item_type",
+        "title",
+        "start_time",
+        "end_time",
+        "status",
+        "assigned_contact",
+    ]
     fields = [
         "position",
         "item_type",
@@ -33,6 +47,37 @@ class ServiceScheduleAdmin(ModelAdmin):
     search_fields = ["title", "notes"]
     ordering = ["-date"]
     inlines = [ScheduleItemInline]
+    actions_detail = ["add_schedule_item"]
+    readonly_fields = ["updated_on", "deleted_on"]
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": [
+                    "title",
+                    "status",
+                    "template",
+                    "notes",
+                ]
+            },
+        ),
+        (
+            "Metadata",
+            {
+                "classes": ["collapse"],
+                "fields": [
+                    "date",
+                    "updated_on",
+                    "deleted_on",
+                ],
+            },
+        ),
+    )
+
+    @action(description="Add Schedule Item", url_path="add-item")
+    def add_schedule_item(self, request, object_id: int):
+        base_url = reverse("admin:schedules_scheduleitem_add")
+        return redirect(f"{base_url}?schedule={object_id}")
 
 
 class TemplateItemInline(TabularInline):

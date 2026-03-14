@@ -14,6 +14,8 @@ from pathlib import Path
 
 import django_stubs_ext
 from environs import Env
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -188,3 +190,87 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 N8N_INTAKE_API_KEY = env.str("N8N_INTAKE_API_KEY", default="intake-key-for-testing")
 LOG_INBOUND_SCHEDULE_REQUESTS = env.bool("LOG_INBOUND_SCHEDULE_REQUESTS", default=False)
+
+# Unfold Admin Configuration
+UNFOLD = {
+    "SITE_TITLE": "Worship Prep Admin",
+    "SITE_HEADER": "Worship Prep Platform",
+    "SITE_URL": "/",
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": _("Worship Planning"),
+                "separator": True,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": _("Service Schedules"),
+                        "icon": "calendar_today",
+                        "link": reverse_lazy("admin:schedules_serviceschedule_changelist"),
+                    },
+                    {
+                        "title": _("Templates"),
+                        "icon": "description",
+                        "link": reverse_lazy("admin:schedules_scheduletemplate_changelist"),
+                    },
+                    {
+                        "title": _("Submissions"),
+                        "icon": "inbox",
+                        "link": reverse_lazy("admin:schedules_contentsubmission_changelist"),
+                    },
+                    {
+                        "title": _("Contacts"),
+                        "icon": "contacts",
+                        "link": reverse_lazy("admin:schedules_contact_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("User Management"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Users"),
+                        "icon": "person",
+                        "link": reverse_lazy("admin:users_user_changelist"),
+                    },
+                    {
+                        "title": _("Groups"),
+                        "icon": "group",
+                        "link": reverse_lazy("admin:auth_group_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("System"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Sites"),
+                        "icon": "language",
+                        "link": reverse_lazy("admin:sites_site_changelist"),
+                    },
+                    {
+                        "title": _("Social Accounts"),
+                        "icon": "share",
+                        "link": reverse_lazy("admin:socialaccount_socialaccount_changelist"),
+                    },
+                    {
+                        "title": _("Social Applications"),
+                        "icon": "settings_applications",
+                        "link": reverse_lazy("admin:socialaccount_socialapp_changelist"),
+                    },
+                    {
+                        "title": _("Email Addresses"),
+                        "icon": "email",
+                        "link": reverse_lazy("admin:account_emailaddress_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
+}
