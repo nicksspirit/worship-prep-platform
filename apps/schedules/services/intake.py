@@ -130,24 +130,17 @@ def get_or_create_contact(leader_name: str | None, phone: str | None) -> Contact
     return contact
 
 
-def build_submission_message_id(source_message_id: str | None, *, operation: str) -> str | None:
-    if not source_message_id:
-        return None
-    return f"{operation}:{source_message_id}"
-
-
 @transaction.atomic
 def _intake_whatsapp_schedule_sync(
     payload: WhatsAppScheduleIntakePayload,
     *,
     allow_create: bool,
 ) -> IntakeResult:
-    operation = "create" if allow_create else "patch"
     builtins_payload = msgspec.to_builtins(payload)
-    submission_message_id = build_submission_message_id(payload.source_message_id, operation=operation)
+    submission_message_id = payload.source_message_id if allow_create else None
 
     existing_submission = None
-    if submission_message_id:
+    if allow_create and submission_message_id:
         existing_submission = (
             ContentSubmission.objects.filter(source_message_id=submission_message_id)
             .select_related("created_schedule")
@@ -156,8 +149,8 @@ def _intake_whatsapp_schedule_sync(
         if existing_submission and existing_submission.created_schedule:
             if existing_submission.parsed_payload != builtins_payload:
                 raise DuplicateSubmissionError(
-                    f"Submission {payload.source_message_id} was already processed for {operation} "
-                    "with different content."
+                    f"Submission {payload.source_message_id} was already processed with "
+                    "different content."
                 )
             return IntakeResult(
                 schedule=existing_submission.created_schedule,

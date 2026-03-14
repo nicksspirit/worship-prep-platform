@@ -258,6 +258,47 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(updated_item.assigned_contact.name, "Min. Victor Umukoro")
         self.assertEqual(ContentSubmission.objects.count(), 2)
 
+    def test_patch_allows_repeated_updates_with_same_raw_message_id(self):
+        async_to_sync(intake_schedule_from_whatsapp)(
+            payload=self._payload(source_message_id="wamid-repeat-patch-create"),
+            n8n_api_key="test-intake-key",
+        )
+
+        first_response = async_to_sync(patch_schedule_from_whatsapp)(
+            payload=self._payload(
+                source_message_id="wamid-repeat-patch",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "MIN. VICTOR UMUKORO",
+                    }
+                ],
+            ),
+            n8n_api_key="test-intake-key",
+        )
+        self.assertIsInstance(first_response, IntakeResponse)
+
+        second_response = async_to_sync(patch_schedule_from_whatsapp)(
+            payload=self._payload(
+                source_message_id="wamid-repeat-patch",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "MIN. KENECHI ADEDIJI",
+                    }
+                ],
+            ),
+            n8n_api_key="test-intake-key",
+        )
+        self.assertIsInstance(second_response, IntakeResponse)
+        self.assertEqual(second_response.created_or_updated, "updated")
+
+        updated_item = ScheduleItem.objects.get(position=1)
+        self.assertEqual(updated_item.assigned_contact.name, "Min. Kenechi Adediji")
+        self.assertEqual(ContentSubmission.objects.count(), 3)
+
     def test_patch_updates_existing_schedule_without_creating_new_schedule(self):
         async_to_sync(intake_schedule_from_whatsapp)(
             payload=self._payload(source_message_id="wamid-patch-base"),

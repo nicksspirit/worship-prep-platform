@@ -65,7 +65,6 @@ api = BoltAPI(
 
 @api.post(
     "/schedules/intake/whatsapp",
-    response_model=IntakeResponse,
     status_code=201,
     tags=["schedules"],
     summary="Ingest WhatsApp Sunday schedule",
@@ -88,7 +87,6 @@ async def intake_schedule_from_whatsapp(
 
 @api.patch(
     "/schedules/intake/whatsapp",
-    response_model=IntakeResponse,
     status_code=200,
     tags=["schedules"],
     summary="Update WhatsApp Sunday schedule",
