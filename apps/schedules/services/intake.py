@@ -18,9 +18,13 @@ from apps.schedules.exceptions import (
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
-from apps.schedules.models import Contact, ContentSubmission, ScheduleItem, ServiceSchedule
+from apps.schedules.models import (
+    Contact,
+    ContentSubmission,
+    ScheduleItem,
+    ServiceSchedule,
+)
 from apps.schedules.schemas import AgendaItemPayload, WhatsAppScheduleIntakePayload
-
 
 TIME_RE = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})$")
 KNOWN_CONTACT_ALIASES = {
@@ -237,7 +241,9 @@ def _intake_whatsapp_schedule_sync(
     )
 
 
-async def intake_whatsapp_schedule(payload: WhatsAppScheduleIntakePayload) -> IntakeResult:
+async def intake_whatsapp_schedule(
+    payload: WhatsAppScheduleIntakePayload,
+) -> IntakeResult:
     return await sync_to_async(_intake_whatsapp_schedule_sync, thread_sensitive=True)(
         payload,
         allow_create=True,
