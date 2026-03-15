@@ -1,6 +1,7 @@
 import datetime as dt
 import shutil
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import msgspec
@@ -11,10 +12,15 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django_bolt import JSON
 
-from apps.schedules.api import intake_schedule_endpoint, patch_schedule_endpoint
+from apps.schedules.api import (
+    intake_schedule_endpoint,
+    patch_schedule_endpoint,
+    schedule_lookup_detail_endpoint,
+    schedule_lookup_list_endpoint,
+)
 from apps.schedules.choices import ServiceScheduleStatus
 from apps.schedules.models import Contact, ContentSubmission, ScheduleItem, ServiceSchedule
-from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload
+from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload, SchedulePreviewResponse
 from apps.schedules.services.intake import intake_schedule
 from apps.schedules.services.preview import get_schedule_preview
 from apps.schedules.views import build_empty_state, build_schedule_preview_page, format_service_date
@@ -501,6 +507,109 @@ class SchedulePreviewTests(TestCase):
         self.assertEqual(result.title, "Sunday Service")
         self.assertEqual(len(result.items), 1)
         self.assertEqual(result.items[0].title, "Opening Prayer")
+
+
+@override_settings(N8N_INTAKE_API_KEY="test-intake-key")
+class ScheduleLookupEndpointTests(TestCase):
+    def test_list_endpoint_requires_api_key(self):
+        response = async_to_sync(schedule_lookup_list_endpoint)(n8n_api_key=None)
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_endpoint_returns_last_five_visible_schedules(self):
+        for offset in range(6):
+            schedule = ServiceSchedule.objects.create(
+                date=dt.date(2026, 4, 6 + offset),
+                title=f"Visible Service {offset}",
+                status=ServiceScheduleStatus.PUBLISHED if offset % 2 == 0 else ServiceScheduleStatus.READY,
+            )
+            ScheduleItem.objects.create(
+                schedule=schedule,
+                position=1,
+                item_type="opening_prayer",
+                title=f"Item {offset}",
+            )
+
+        ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 20),
+            title="Draft Service",
+            status=ServiceScheduleStatus.DRAFT,
+        )
+        ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 21),
+            title="In Progress Service",
+            status=ServiceScheduleStatus.IN_PROGRESS,
+        )
+
+        response = async_to_sync(schedule_lookup_list_endpoint)(n8n_api_key="test-intake-key")
+
+        self.assertEqual(len(response), 5)
+        self.assertEqual([item.date for item in response], [
+            "2026-04-11",
+            "2026-04-10",
+            "2026-04-09",
+            "2026-04-08",
+            "2026-04-07",
+        ])
+        self.assertEqual(response[0].item_count, 1)
+        self.assertTrue(all(item.status in {"ready", "published"} for item in response))
+
+    def test_list_endpoint_returns_upcoming_schedule_detail(self):
+        schedule = ServiceSchedule.objects.create(
+            date=dt.date(2026, 3, 15),
+            title="Upcoming Sunday",
+            status=ServiceScheduleStatus.IN_PROGRESS,
+        )
+        ScheduleItem.objects.create(
+            schedule=schedule,
+            position=1,
+            item_type="opening_prayer",
+            title="Opening Prayer",
+        )
+
+        request = SimpleNamespace(query={"upcoming": "true"})
+
+        with patch("apps.schedules.api.get_upcoming_schedule_date", return_value=dt.date(2026, 3, 15)):
+            response = async_to_sync(schedule_lookup_list_endpoint)(
+                request=request,
+                n8n_api_key="test-intake-key",
+            )
+
+        self.assertIsInstance(response, SchedulePreviewResponse)
+        self.assertEqual(response.date, "2026-03-15")
+        self.assertEqual(response.status, "in_progress")
+
+    def test_detail_endpoint_returns_unpublished_schedule(self):
+        schedule = ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 5),
+            title="Draft Detail",
+            status=ServiceScheduleStatus.DRAFT,
+        )
+        ScheduleItem.objects.create(
+            schedule=schedule,
+            position=1,
+            item_type="opening_prayer",
+            title="Opening Prayer",
+        )
+
+        response = async_to_sync(schedule_lookup_detail_endpoint)(
+            date="2026-04-05",
+            n8n_api_key="test-intake-key",
+        )
+
+        self.assertIsInstance(response, SchedulePreviewResponse)
+        self.assertEqual(response.date, "2026-04-05")
+        self.assertEqual(response.status, "draft")
+
+    def test_detail_endpoint_rejects_invalid_date(self):
+        response = async_to_sync(schedule_lookup_detail_endpoint)(
+            date="04-05-2026",
+            n8n_api_key="test-intake-key",
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
 
 
 class SchedulePageViewTests(TestCase):

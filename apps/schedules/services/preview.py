@@ -4,12 +4,13 @@ import datetime as dt
 from dataclasses import dataclass
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from apps.schedules.choices import ServiceScheduleStatus
 from apps.schedules.models import ScheduleItem, ServiceSchedule
 from apps.schedules.schemas import (
     ScheduleItemDetail,
+    ScheduleListItem,
     SchedulePreviewResponse,
     SongDetail,
 )
@@ -22,6 +23,38 @@ class PreviewResult:
     next_date: str | None
 
 
+VISIBLE_SCHEDULE_STATUSES = (
+    ServiceScheduleStatus.READY,
+    ServiceScheduleStatus.PUBLISHED,
+)
+
+
+def get_upcoming_schedule_date(today: dt.date | None = None) -> dt.date:
+    """Return the next Sunday on or after the provided date."""
+    current_date = today or dt.date.today()
+    days_until_sunday = (6 - current_date.weekday()) % 7
+    return current_date + dt.timedelta(days=days_until_sunday)
+
+
+def list_recent_schedule_summaries(limit: int = 5) -> list[ScheduleListItem]:
+    """Return recent visible schedules as lightweight list items."""
+    schedules = (
+        ServiceSchedule.objects.filter(status__in=VISIBLE_SCHEDULE_STATUSES)
+        .annotate(item_count=Count("schedule_items"))
+        .order_by("-date")[:limit]
+    )
+    return [
+        ScheduleListItem(
+            schedule_id=str(schedule.pk),
+            date=schedule.date.isoformat(),
+            title=schedule.title or "",
+            status=schedule.status,
+            item_count=schedule.item_count,
+        )
+        for schedule in schedules
+    ]
+
+
 def _get_preview_schedule(
     date: dt.date,
     *,
@@ -30,10 +63,7 @@ def _get_preview_schedule(
     """Fetch schedule by date and previous/next visible dates."""
     schedule_filters = {"date": date}
     if not include_unpublished:
-        schedule_filters["status__in"] = (
-            ServiceScheduleStatus.READY,
-            ServiceScheduleStatus.PUBLISHED,
-        )
+        schedule_filters["status__in"] = VISIBLE_SCHEDULE_STATUSES
 
     schedule = (
         ServiceSchedule.objects.filter(**schedule_filters)
@@ -46,7 +76,7 @@ def _get_preview_schedule(
     if not schedule:
         return None
 
-    visible = Q(status=ServiceScheduleStatus.READY) | Q(status=ServiceScheduleStatus.PUBLISHED)
+    visible = Q(status__in=VISIBLE_SCHEDULE_STATUSES)
     prev = (
         ServiceSchedule.objects.filter(date__lt=date)
         .filter(visible)
@@ -139,3 +169,7 @@ async def get_schedule_preview_async(
         date,
         include_unpublished=include_unpublished,
     )
+
+
+async def list_recent_schedule_summaries_async(limit: int = 5) -> list[ScheduleListItem]:
+    return await sync_to_async(list_recent_schedule_summaries, thread_sensitive=True)(limit)

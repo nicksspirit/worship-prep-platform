@@ -16,9 +16,17 @@ from apps.schedules.exceptions import (
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
-from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload, SchedulePreviewResponse
+from apps.schedules.schemas import (
+    IntakeResponse,
+    ScheduleIntakePayload,
+    SchedulePreviewResponse,
+)
 from apps.schedules.services.intake import intake_schedule, patch_schedule
-from apps.schedules.services.preview import get_schedule_preview_async
+from apps.schedules.services.preview import (
+    get_schedule_preview_async,
+    get_upcoming_schedule_date,
+    list_recent_schedule_summaries_async,
+)
 
 logger = logging.getLogger("apps.schedules.inbound")
 
@@ -123,6 +131,64 @@ async def patch_schedule_endpoint(
 
 
 @api.get(
+    "/schedules",
+    status_code=200,
+    tags=["schedules"],
+    summary="List schedules",
+    description=(
+        "Returns recent visible schedules, or the next Sunday's schedule detail when "
+        "`upcoming=true` is provided."
+    ),
+)
+async def schedule_lookup_list_endpoint(
+    request: Request | None = None,
+    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+):
+    authorized = authorize_n8n_request(n8n_api_key)
+    if authorized is not None:
+        return authorized
+
+    if _request_flag_is_true(request, "upcoming"):
+        upcoming_date = get_upcoming_schedule_date()
+        preview = await get_schedule_preview_async(upcoming_date, include_unpublished=True)
+        if not preview:
+            return JSON(
+                {"detail": f"No schedule found for {upcoming_date.isoformat()}."},
+                status_code=404,
+            )
+        return preview
+
+    return await list_recent_schedule_summaries_async(limit=5)
+
+
+@api.get(
+    "/schedules/{date}",
+    status_code=200,
+    tags=["schedules"],
+    summary="Get schedule by date",
+    description="Returns schedule detail for the given date using n8n API key authentication.",
+)
+async def schedule_lookup_detail_endpoint(
+    date: str,
+    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+):
+    authorized = authorize_n8n_request(n8n_api_key)
+    if authorized is not None:
+        return authorized
+
+    try:
+        parsed = dt.date.fromisoformat(date)
+    except ValueError:
+        return JSON({"detail": "Invalid date format. Use YYYY-MM-DD."}, status_code=400)
+
+    preview = await get_schedule_preview_async(parsed, include_unpublished=True)
+    if not preview:
+        return JSON({"detail": f"No schedule found for {date}."}, status_code=404)
+
+    return preview
+
+
+@api.get(
     "/schedules/{date}/preview",
     status_code=200,
     tags=["schedules"],
@@ -152,6 +218,19 @@ def authorize_n8n_request(n8n_api_key: str | None):
         return JSON({"detail": "Unauthorized"}, status_code=401)
 
     return None
+
+
+def _request_flag_is_true(request: Request | None, key: str) -> bool:
+    if request is None or not getattr(request, "query", None):
+        return False
+
+    value = request.query.get(key)
+    if isinstance(value, list):
+        value = value[-1] if value else None
+    if value is None:
+        return False
+
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def build_preview_url(

@@ -36,6 +36,14 @@ class IntakeResponse(msgspec.Struct, kw_only=True):
     preview_url: str
 
 
+class ScheduleListItem(msgspec.Struct, kw_only=True):
+    schedule_id: str
+    date: str
+    title: str
+    status: str
+    item_count: int
+
+
 class SongDetail(msgspec.Struct, kw_only=True):
     song_id: str
     title: str
