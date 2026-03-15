@@ -1,21 +1,31 @@
 import datetime as dt
+import shutil
+import tempfile
 from unittest.mock import patch
 
 import msgspec
 from asgiref.sync import async_to_sync
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django_bolt import JSON
 
-from apps.schedules.api import intake_schedule_from_whatsapp, patch_schedule_from_whatsapp
+from apps.schedules.api import intake_schedule_endpoint, patch_schedule_endpoint
+from apps.schedules.choices import ServiceScheduleStatus
 from apps.schedules.models import Contact, ContentSubmission, ScheduleItem, ServiceSchedule
-from apps.schedules.schemas import IntakeResponse, WhatsAppScheduleIntakePayload
-from apps.schedules.services.intake import intake_whatsapp_schedule
+from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload
+from apps.schedules.services.intake import intake_schedule
+from apps.schedules.services.preview import get_schedule_preview
+from apps.schedules.views import build_empty_state, build_schedule_preview_page, format_service_date
+from apps.songs.models import Song, SongAssignment
+
+User = get_user_model()
 
 
 @override_settings(N8N_INTAKE_API_KEY="test-intake-key")
-class WhatsAppScheduleIntakeTests(TestCase):
-    def _payload(self, **overrides) -> WhatsAppScheduleIntakePayload:
+class ScheduleIntakeTests(TestCase):
+    def _payload(self, **overrides) -> ScheduleIntakePayload:
         payload = {
             "source": "whatsapp",
             "sender_name": "Min. Samuel Ojoh",
@@ -44,10 +54,10 @@ class WhatsAppScheduleIntakeTests(TestCase):
             ],
         }
         payload.update(overrides)
-        return msgspec.convert(payload, type=WhatsAppScheduleIntakePayload)
+        return msgspec.convert(payload, type=ScheduleIntakePayload)
 
     def test_requires_api_key(self):
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(),
             n8n_api_key=None,
         )
@@ -55,13 +65,14 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_creates_schedule_and_submission(self):
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(),
             n8n_api_key="test-intake-key",
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "created")
         self.assertEqual(response.items_created, 2)
+        self.assertEqual(response.preview_url, "/schedule/2026-02-15/preview/")
 
         schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
         self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
@@ -69,11 +80,11 @@ class WhatsAppScheduleIntakeTests(TestCase):
 
     def test_duplicate_source_message_id_is_idempotent(self):
         request_payload = self._payload()
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=request_payload,
             n8n_api_key="test-intake-key",
         )
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=request_payload,
             n8n_api_key="test-intake-key",
         )
@@ -83,12 +94,12 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(ScheduleItem.objects.count(), 2)
 
     def test_duplicate_source_message_id_with_different_payload_returns_conflict(self):
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-conflict"),
             n8n_api_key="test-intake-key",
         )
 
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-conflict",
                 title="Different Sunday Service",
@@ -100,7 +111,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
 
     def test_updates_existing_schedule_by_date(self):
         first = self._payload(source_message_id="wamid-first")
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=first,
             n8n_api_key="test-intake-key",
         )
@@ -119,7 +130,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
                 }
             ],
         )
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=second,
             n8n_api_key="test-intake-key",
         )
@@ -131,12 +142,12 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(schedule.title, "Updated Sunday Service")
 
     def test_updates_existing_schedule_item_by_type_when_position_changes(self):
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-initial-position"),
             n8n_api_key="test-intake-key",
         )
 
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-moved-position",
                 items=[
@@ -166,7 +177,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(updated_item.start_time, dt.time(10, 40))
 
     def test_rejects_payload_with_duplicate_schedule_item_types(self):
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-duplicate-types",
                 items=[
@@ -202,7 +213,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
             ],
             source_message_id="wamid-partial",
         )
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
             n8n_api_key="test-intake-key",
         )
@@ -234,7 +245,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
             ],
         )
 
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
             n8n_api_key="test-intake-key",
         )
@@ -263,7 +274,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
             ],
         )
 
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
             n8n_api_key="test-intake-key",
         )
@@ -272,13 +283,27 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(ScheduleItem.objects.get(position=1).item_type, "sunday_school")
         self.assertEqual(ScheduleItem.objects.get(position=2).item_type, "closing_prayer")
 
+    def test_source_optional_defaults_to_unknown(self):
+        payload = self._payload(source_message_id="wamid-source-optional")
+        payload_dict = msgspec.to_builtins(payload)
+        del payload_dict["source"]
+        payload_no_source = msgspec.convert(payload_dict, type=ScheduleIntakePayload)
+
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=payload_no_source,
+            n8n_api_key="test-intake-key",
+        )
+        self.assertIsInstance(response, IntakeResponse)
+        submission = ContentSubmission.objects.get(source_message_id="wamid-source-optional")
+        self.assertEqual(submission.source, "unknown")
+
     def test_uses_human_readable_default_schedule_title(self):
         payload = self._payload(
             source_message_id="wamid-default-title",
             title=None,
         )
 
-        response = async_to_sync(intake_schedule_from_whatsapp)(
+        response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
             n8n_api_key="test-intake-key",
         )
@@ -288,7 +313,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(schedule.title, "Sunday Service - February 15, 2026")
 
     def test_patch_requires_existing_schedule(self):
-        response = async_to_sync(patch_schedule_from_whatsapp)(
+        response = async_to_sync(patch_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-patch-missing"),
             n8n_api_key="test-intake-key",
         )
@@ -296,12 +321,12 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_patch_can_reuse_raw_message_id_from_create_without_being_blocked(self):
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-shared"),
             n8n_api_key="test-intake-key",
         )
 
-        response = async_to_sync(patch_schedule_from_whatsapp)(
+        response = async_to_sync(patch_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-shared",
                 items=[
@@ -322,12 +347,12 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(ContentSubmission.objects.count(), 2)
 
     def test_patch_allows_repeated_updates_with_same_raw_message_id(self):
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-repeat-patch-create"),
             n8n_api_key="test-intake-key",
         )
 
-        first_response = async_to_sync(patch_schedule_from_whatsapp)(
+        first_response = async_to_sync(patch_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-repeat-patch",
                 items=[
@@ -342,7 +367,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
         )
         self.assertIsInstance(first_response, IntakeResponse)
 
-        second_response = async_to_sync(patch_schedule_from_whatsapp)(
+        second_response = async_to_sync(patch_schedule_endpoint)(
             payload=self._payload(
                 source_message_id="wamid-repeat-patch",
                 items=[
@@ -363,7 +388,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(ContentSubmission.objects.count(), 3)
 
     def test_patch_updates_existing_schedule_without_creating_new_schedule(self):
-        async_to_sync(intake_schedule_from_whatsapp)(
+        async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-patch-base"),
             n8n_api_key="test-intake-key",
         )
@@ -387,7 +412,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
             ],
         )
 
-        response = async_to_sync(patch_schedule_from_whatsapp)(
+        response = async_to_sync(patch_schedule_endpoint)(
             payload=patch_payload,
             n8n_api_key="test-intake-key",
         )
@@ -418,7 +443,7 @@ class WhatsAppScheduleIntakeTests(TestCase):
             side_effect=RuntimeError("boom"),
         ):
             with self.assertRaises(RuntimeError):
-                async_to_sync(intake_whatsapp_schedule)(
+                async_to_sync(intake_schedule)(
                     self._payload(source_message_id="wamid-atomic")
                 )
 
@@ -442,3 +467,139 @@ class WhatsAppScheduleIntakeTests(TestCase):
                 item_type="opening_prayer",
                 title="Opening Prayer Again",
             )
+
+
+class SchedulePreviewTests(TestCase):
+    def test_returns_none_when_no_schedule(self):
+        result = get_schedule_preview(dt.date(2099, 1, 1))
+        self.assertIsNone(result)
+
+    def test_returns_none_for_draft_schedule(self):
+        ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 5),
+            title="Sunday Service",
+            status=ServiceScheduleStatus.DRAFT,
+        )
+        result = get_schedule_preview(dt.date(2026, 4, 5))
+        self.assertIsNone(result)
+
+    def test_returns_preview_for_ready_schedule(self):
+        schedule = ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 12),
+            title="Sunday Service",
+            status=ServiceScheduleStatus.READY,
+        )
+        ScheduleItem.objects.create(
+            schedule=schedule,
+            position=1,
+            item_type="opening_prayer",
+            title="Opening Prayer",
+        )
+        result = get_schedule_preview(dt.date(2026, 4, 12))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.date, "2026-04-12")
+        self.assertEqual(result.title, "Sunday Service")
+        self.assertEqual(len(result.items), 1)
+        self.assertEqual(result.items[0].title, "Opening Prayer")
+
+
+class SchedulePageViewTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            email="planner@example.com",
+            password="pass1234",
+            first_name="Planner",
+            last_name="User",
+        )
+        self.media_root = tempfile.mkdtemp()
+        self.media_override = override_settings(MEDIA_ROOT=self.media_root)
+        self.media_override.enable()
+
+    def tearDown(self):
+        self.media_override.disable()
+        shutil.rmtree(self.media_root, ignore_errors=True)
+        super().tearDown()
+
+    def sign_in(self):
+        self.client.force_login(self.user)
+
+    def test_home_page_redirects_authenticated_user_to_schedule_landing(self):
+        self.sign_in()
+
+        response = self.client.get(reverse("home_page"))
+
+        self.assertRedirects(
+            response,
+            reverse("schedule_landing"),
+            fetch_redirect_response=False,
+        )
+
+    def test_schedule_landing_redirects_to_nearest_upcoming_visible_schedule(self):
+        self.sign_in()
+        today = dt.date.today()
+        ServiceSchedule.objects.create(
+            date=today + dt.timedelta(days=14),
+            title="Later Service",
+            status=ServiceScheduleStatus.PUBLISHED,
+        )
+        upcoming = ServiceSchedule.objects.create(
+            date=today + dt.timedelta(days=7),
+            title="Nearest Service",
+            status=ServiceScheduleStatus.READY,
+        )
+
+        response = self.client.get(reverse("schedule_landing"))
+
+        self.assertRedirects(
+            response,
+            reverse("service_preview", kwargs={"date": upcoming.date.isoformat()}),
+            fetch_redirect_response=False,
+        )
+
+    def test_build_schedule_preview_page_returns_structured_song_details(self):
+        schedule = ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 12),
+            title="Sunday Service",
+            status=ServiceScheduleStatus.READY,
+        )
+        item = ScheduleItem.objects.create(
+            schedule=schedule,
+            position=2,
+            item_type="worship_song",
+            title="Praise and Worship",
+        )
+        song = Song.objects.create(
+            title="Amazing Grace",
+            formatted_lyrics="[Verse 1]\nAmazing grace, how sweet the sound",
+            slide_count=2,
+        )
+        SongAssignment.objects.create(schedule_item=item, song=song, position=0)
+
+        page = build_schedule_preview_page(schedule.date)
+
+        self.assertIsNotNone(page)
+        self.assertEqual(page.title, "Sunday Service")
+        self.assertEqual(page.items[0].title, "Praise and Worship")
+        self.assertEqual(page.items[0].songs[0].title, "Amazing Grace")
+        self.assertEqual(page.items[0].songs[0].filename, "Amazing_Grace.txt")
+
+    def test_build_schedule_preview_page_returns_in_progress_schedule_for_direct_link(self):
+        ServiceSchedule.objects.create(
+            date=dt.date(2026, 4, 5),
+            title="In Progress Schedule",
+            status=ServiceScheduleStatus.IN_PROGRESS,
+        )
+
+        page = build_schedule_preview_page(dt.date(2026, 4, 5))
+
+        self.assertIsNotNone(page)
+        self.assertEqual(page.title, "In Progress Schedule")
+
+    def test_build_empty_state_uses_human_friendly_date_label(self):
+        date_label = format_service_date(dt.date(2026, 4, 5))
+
+        empty_state = build_empty_state(date_label)
+
+        self.assertEqual(empty_state.heading, "No schedule for Sunday, April 5, 2026 yet")
+        self.assertEqual(empty_state.link_label, "Back to schedule list")

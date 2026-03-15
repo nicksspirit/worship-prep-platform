@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.users",
     "apps.schedules",
+    "apps.songs",
 ]
 
 MIDDLEWARE = [
@@ -165,7 +166,7 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
-LOGIN_REDIRECT_URL = "/start/"
+LOGIN_REDIRECT_URL = "/schedule/"
 LOGOUT_REDIRECT_URL = "/"
 
 ACCOUNT_LOGIN_METHODS = ["email"]
@@ -224,6 +225,11 @@ UNFOLD = {
                         "title": _("Contacts"),
                         "icon": "contacts",
                         "link": reverse_lazy("admin:schedules_contact_changelist"),
+                    },
+                    {
+                        "title": _("Songs"),
+                        "icon": "music_note",
+                        "link": reverse_lazy("admin:songs_song_changelist"),
                     },
                 ],
             },

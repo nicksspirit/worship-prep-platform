@@ -25,7 +25,7 @@ from apps.schedules.models import (
     ScheduleItem,
     ServiceSchedule,
 )
-from apps.schedules.schemas import AgendaItemPayload, WhatsAppScheduleIntakePayload
+from apps.schedules.schemas import AgendaItemPayload, ScheduleIntakePayload
 
 TIME_RE = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})$")
 KNOWN_CONTACT_ALIASES = {
@@ -214,8 +214,8 @@ def upsert_schedule_item(
 
 
 @transaction.atomic
-def _intake_whatsapp_schedule_sync(
-    payload: WhatsAppScheduleIntakePayload,
+def _intake_schedule_sync(
+    payload: ScheduleIntakePayload,
     *,
     allow_create: bool,
 ) -> IntakeResult:
@@ -299,8 +299,15 @@ def _intake_whatsapp_schedule_sync(
             for idx, item in enumerate(payload.items, start=1)
         ]
     )
+    source_value = (payload.source or "unknown").lower()
+    if source_value == "whatsapp":
+        submission_source = SubmissionSource.WHATSAPP
+    elif source_value == "email":
+        submission_source = SubmissionSource.EMAIL
+    else:
+        submission_source = SubmissionSource.UNKNOWN
     submission = ContentSubmission.objects.create(
-        source=SubmissionSource.WHATSAPP,
+        source=submission_source,
         sender_phone=payload.sender_phone,
         sender_email=payload.sender_email,
         sender_name=payload.sender_name,
@@ -324,15 +331,15 @@ def _intake_whatsapp_schedule_sync(
     )
 
 
-async def intake_whatsapp_schedule(payload: WhatsAppScheduleIntakePayload) -> IntakeResult:
-    return await sync_to_async(_intake_whatsapp_schedule_sync, thread_sensitive=True)(
+async def intake_schedule(payload: ScheduleIntakePayload) -> IntakeResult:
+    return await sync_to_async(_intake_schedule_sync, thread_sensitive=True)(
         payload,
         allow_create=True,
     )
 
 
-async def patch_whatsapp_schedule(payload: WhatsAppScheduleIntakePayload) -> IntakeResult:
-    return await sync_to_async(_intake_whatsapp_schedule_sync, thread_sensitive=True)(
+async def patch_schedule(payload: ScheduleIntakePayload) -> IntakeResult:
+    return await sync_to_async(_intake_schedule_sync, thread_sensitive=True)(
         payload,
         allow_create=False,
     )

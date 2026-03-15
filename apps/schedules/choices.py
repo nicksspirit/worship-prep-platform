@@ -38,6 +38,7 @@ class ContactRole(models.TextChoices):
 class SubmissionSource(models.TextChoices):
     WHATSAPP = "whatsapp", "WhatsApp"
     EMAIL = "email", "Email"
+    UNKNOWN = "unknown", "Unknown"
 
 
 class SubmissionStatus(models.TextChoices):

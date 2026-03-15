@@ -1,13 +1,11 @@
 from typing import Any, cast
 
 from allauth.account.views import LoginView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
-from django.views.generic import TemplateView
 
 from .templates import RenderableTemplate, SignInPage
 
@@ -15,7 +13,7 @@ from .templates import RenderableTemplate, SignInPage
 class HomePageView(View):
     def get(self, request, *args, **kwargs) -> HttpResponse:
         if request.user.is_authenticated:
-            return redirect("start_page")
+            return redirect("schedule_landing")
 
         return redirect_to_login(request.get_full_path())
 
@@ -37,7 +35,3 @@ class SignInView(LoginView):
             ),
         )
         return page.render(self.request)
-
-
-class StartPageView(LoginRequiredMixin, TemplateView):
-    template_name = "users/start_page.html"

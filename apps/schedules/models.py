@@ -112,6 +112,12 @@ class ScheduleItem(BaseModel):
         Contact, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_items"
     )
     notes = models.TextField(blank=True)
+    songs = models.ManyToManyField(
+        "songs.Song",
+        through="songs.SongAssignment",
+        blank=True,
+        related_name="schedule_items",
+    )
 
     class Meta(TypedModelMeta):
         constraints = [

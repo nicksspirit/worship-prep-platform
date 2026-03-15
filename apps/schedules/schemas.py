@@ -14,8 +14,8 @@ class AgendaItemPayload(msgspec.Struct, kw_only=True):
     is_required: bool = True
 
 
-class WhatsAppScheduleIntakePayload(msgspec.Struct, kw_only=True):
-    source: str
+class ScheduleIntakePayload(msgspec.Struct, kw_only=True):
+    source: str = "unknown"
     target_date: dt.date
     raw_content: str
     sender_name: str
@@ -33,3 +33,36 @@ class IntakeResponse(msgspec.Struct, kw_only=True):
     items_created: int
     items_updated: int
     confirmation_text: str
+    preview_url: str
+
+
+class SongDetail(msgspec.Struct, kw_only=True):
+    song_id: str
+    title: str
+    formatted_lyrics: str
+    filename: str
+    slide_count: int | None
+    position: int
+
+
+class ScheduleItemDetail(msgspec.Struct, kw_only=True):
+    position: int
+    item_type: str
+    title: str
+    start_time: str | None
+    end_time: str | None
+    leader_name: str | None
+    notes: str
+    status: str
+    is_complete: bool
+    songs: list[SongDetail]
+
+
+class SchedulePreviewResponse(msgspec.Struct, kw_only=True):
+    schedule_id: str
+    date: str
+    title: str
+    status: str
+    items: list[ScheduleItemDetail]
+    prev_date: str | None
+    next_date: str | None

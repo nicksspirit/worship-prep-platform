@@ -1,9 +1,12 @@
+import datetime as dt
 import logging
 from typing import Annotated
 
 from django.conf import settings
+from django.urls import reverse
 from django.utils.crypto import constant_time_compare
-from django_bolt import BoltAPI, JSON
+from django_bolt import BoltAPI, JSON, Request
+from django_bolt.auth import IsAuthenticated
 from django_bolt.middleware import Middleware
 from django_bolt.openapi import OpenAPIConfig
 from django_bolt.param_functions import Header
@@ -13,8 +16,9 @@ from apps.schedules.exceptions import (
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
-from apps.schedules.schemas import IntakeResponse, WhatsAppScheduleIntakePayload
-from apps.schedules.services.intake import intake_whatsapp_schedule, patch_whatsapp_schedule
+from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload, SchedulePreviewResponse
+from apps.schedules.services.intake import intake_schedule, patch_schedule
+from apps.schedules.services.preview import get_schedule_preview_async
 
 logger = logging.getLogger("apps.schedules.inbound")
 
@@ -57,22 +61,24 @@ api = BoltAPI(
     openapi_config=OpenAPIConfig(
         title="Worship Prep Platform API",
         description="Inbound schedule intake and workflow automation endpoints.",
-        version="1.0.0"
+        version="1.0.0",
     ),
     middleware=[InboundRequestDebugMiddleware],
+    django_middleware=True,
     prefix="/api/v1",
 )
 
 
 @api.post(
-    "/schedules/intake/whatsapp",
+    "/schedules/intake",
     status_code=201,
     tags=["schedules"],
-    summary="Ingest WhatsApp Sunday schedule",
-    description="Creates or updates the target Sunday schedule from a parsed WhatsApp agenda payload.",
+    summary="Ingest Sunday schedule",
+    description="Creates or updates the target Sunday schedule from a parsed agenda payload.",
 )
-async def intake_schedule_from_whatsapp(
-    payload: WhatsAppScheduleIntakePayload,
+async def intake_schedule_endpoint(
+    payload: ScheduleIntakePayload,
+    request: Request | None = None,
     n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
 ):
     authorized = authorize_n8n_request(n8n_api_key)
@@ -80,23 +86,24 @@ async def intake_schedule_from_whatsapp(
         return authorized
 
     try:
-        result = await intake_whatsapp_schedule(payload)
+        result = await intake_schedule(payload)
     except DuplicateScheduleItemTypeError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
-    return build_intake_response(result, status_code=201)
+    return build_intake_response(result, request=request, status_code=201)
 
 
 @api.patch(
-    "/schedules/intake/whatsapp",
+    "/schedules/intake",
     status_code=200,
     tags=["schedules"],
-    summary="Update WhatsApp Sunday schedule",
-    description="Applies a partial update to an existing Sunday schedule using the parsed WhatsApp agenda payload.",
+    summary="Update Sunday schedule",
+    description="Applies a partial update to an existing Sunday schedule using the parsed agenda payload.",
 )
-async def patch_schedule_from_whatsapp(
-    payload: WhatsAppScheduleIntakePayload,
+async def patch_schedule_endpoint(
+    payload: ScheduleIntakePayload,
+    request: Request | None = None,
     n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
 ):
     authorized = authorize_n8n_request(n8n_api_key)
@@ -104,7 +111,7 @@ async def patch_schedule_from_whatsapp(
         return authorized
 
     try:
-        result = await patch_whatsapp_schedule(payload)
+        result = await patch_schedule(payload)
     except DuplicateScheduleItemTypeError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
     except ScheduleNotFoundError as exc:
@@ -112,7 +119,28 @@ async def patch_schedule_from_whatsapp(
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
 
-    return build_intake_response(result, status_code=200)
+    return build_intake_response(result, request=request, status_code=200)
+
+
+@api.get(
+    "/schedules/{date}/preview",
+    status_code=200,
+    tags=["schedules"],
+    summary="Get schedule preview",
+    description="Returns schedule with items and linked song data for a given date. Requires authentication.",
+    guards=[IsAuthenticated],
+)
+async def schedule_preview_endpoint(date: str):
+    try:
+        parsed = dt.date.fromisoformat(date)
+    except ValueError:
+        return JSON({"detail": "Invalid date format. Use YYYY-MM-DD."}, status_code=400)
+
+    preview = await get_schedule_preview_async(parsed)
+    if not preview:
+        return JSON({"detail": f"No published or ready schedule for {date}."}, status_code=404)
+
+    return preview
 
 
 def authorize_n8n_request(n8n_api_key: str | None):
@@ -126,7 +154,41 @@ def authorize_n8n_request(n8n_api_key: str | None):
     return None
 
 
-def build_intake_response(result, *, status_code: int) -> IntakeResponse:
+def build_preview_url(
+    schedule_date: dt.date,
+    *,
+    request: Request | None = None,
+) -> str:
+    preview_path = reverse(
+        "service_preview",
+        kwargs={"date": schedule_date.isoformat()},
+    )
+    if request is None:
+        return preview_path
+
+    forwarded_proto = (
+        request.headers.get("x-forwarded-proto")
+        or request.headers.get("X-Forwarded-Proto")
+        or "https"
+    )
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("X-Forwarded-Host")
+        or request.headers.get("host")
+        or request.headers.get("Host")
+    )
+    if not host:
+        return preview_path
+
+    return f"{forwarded_proto}://{host}{preview_path}"
+
+
+def build_intake_response(
+    result,
+    *,
+    request: Request | None = None,
+    status_code: int,
+) -> IntakeResponse:
     confirmation_text = (
         f"Schedule for {result.schedule.date.isoformat()} received and "
         f"{result.created_or_updated} successfully."
@@ -138,5 +200,6 @@ def build_intake_response(result, *, status_code: int) -> IntakeResponse:
         items_created=result.items_created,
         items_updated=result.items_updated,
         confirmation_text=confirmation_text,
+        preview_url=build_preview_url(result.schedule.date, request=request),
     )
 

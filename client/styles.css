@@ -1,3 +1,25 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+:root {
+    --chapel-primary-200: #ecc9cd;
+    --chapel-primary-500: #9d1e2c;
+    --worship-accent-300: #fcc9a0;
+    --worship-accent-500: #e67e22;
+    --chapel-secondary-200: #cbd7ea;
+    --chapel-secondary-500: #1e3a8a;
+    --chapel-success-500: #198754;
+    --chapel-danger-500: #dc3545;
+}
+
+html {
+    color-scheme: dark;
+}
+
+body {
+    margin: 0;
+}
+
+::selection {
+    background: rgba(230, 126, 34, 0.3);
+}

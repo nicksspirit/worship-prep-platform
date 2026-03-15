@@ -13,5 +13,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/login/", SignInView.as_view(), name="account_login"),
     path("accounts/", include("allauth.urls")),
+    path("", include("apps.schedules.urls")),
     path("", include("apps.users.urls")),
 ]
