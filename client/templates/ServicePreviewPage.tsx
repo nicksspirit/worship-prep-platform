@@ -52,14 +52,6 @@ type ServicePreviewPageProps = {
     empty_state: EmptyState | null;
 };
 
-type Tone = {
-    background: string;
-    border: string;
-    text: string;
-};
-
-const shellBorder = "rgba(148, 163, 184, 0.18)";
-const printShellBorder = "rgba(148, 163, 184, 0.32)";
 const serviceNotes = [
     "Sunday School | 9:40 AM",
     "Worship Service | 10:30 AM",
@@ -87,37 +79,7 @@ function downloadSong(song: SongPreviewData): void {
     downloadBlob(song.filename, new Blob([song.formatted_lyrics], {type: "text/plain"}));
 }
 
-function resolveItemTone(itemType: string): Tone {
-    if (itemType === "worship_song" || itemType === "hymn") {
-        return {
-            background: "rgba(230, 126, 34, 0.14)",
-            border: "rgba(230, 126, 34, 0.32)",
-            text: "var(--worship-accent-300)",
-        };
-    }
-    if (itemType === "sermon" || itemType === "scripture_reading") {
-        return {
-            background: "rgba(59, 130, 246, 0.14)",
-            border: "rgba(59, 130, 246, 0.3)",
-            text: "var(--chapel-secondary-200)",
-        };
-    }
-    if (itemType === "opening_prayer" || itemType === "closing_prayer") {
-        return {
-            background: "rgba(157, 30, 44, 0.18)",
-            border: "rgba(157, 30, 44, 0.34)",
-            text: "var(--chapel-primary-200)",
-        };
-    }
-    return {
-        background: "rgba(248, 250, 252, 0.08)",
-        border: "rgba(148, 163, 184, 0.22)",
-        text: "rgb(226 232 240)",
-    };
-}
-
 export const Template = (props: ServicePreviewPageProps) => {
-    const [isPrintMode, setIsPrintMode] = React.useState(false);
     const [activeItemPosition, setActiveItemPosition] = React.useState<number | null>(null);
 
     const activeItem = React.useMemo(() => {
@@ -144,31 +106,20 @@ export const Template = (props: ServicePreviewPageProps) => {
         const emptyState = props.empty_state;
         return (
             <Layout title={props.title}>
-                <div className="min-h-screen bg-slate-950 px-4 py-10 text-slate-100 sm:px-6 lg:px-8">
+                <div className="min-h-screen bg-chapel-neutral-50 px-4 py-16 text-chapel-neutral-950 sm:px-6 lg:px-8">
                     <div className="mx-auto max-w-3xl">
-                        <section
-                            className="rounded-[2rem] border p-10 text-center shadow-2xl"
-                            style={{
-                                borderColor: shellBorder,
-                                background:
-                                    "radial-gradient(circle at top, rgba(230, 126, 34, 0.24), transparent 28%), linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.94))",
-                            }}
-                        >
-                            <p className="text-sm font-semibold uppercase tracking-[0.34em] text-orange-200/80">
-                                Service Preview
-                            </p>
-                            <h1 className="mt-5 text-4xl font-black tracking-tight text-white">
+                        <section className="text-center">
+                            <h1 className="mt-5 font-serif text-4xl font-bold tracking-tight text-chapel-neutral-900">
                                 {emptyState?.heading ?? "No schedule available"}
                             </h1>
-                            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300">
+                            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-chapel-neutral-600">
                                 {emptyState?.message ??
                                     "A ready or published schedule will appear here once it is available."}
                             </p>
                             {emptyState?.link_url && emptyState.link_label ? (
                                 <a
                                     href={emptyState.link_url}
-                                    className="btn mt-8 border-0 text-white"
-                                    style={{backgroundColor: "var(--chapel-primary-500)"}}
+                                    className="minimal-btn mt-8"
                                 >
                                     {emptyState.link_label}
                                 </a>
@@ -198,466 +149,267 @@ export const Template = (props: ServicePreviewPageProps) => {
 
     return (
         <Layout title={props.title}>
-            <div
-                className={`min-h-screen px-4 py-6 transition-colors sm:px-6 lg:px-8 ${
-                    isPrintMode ? "bg-stone-100 text-slate-900" : "bg-slate-950 text-slate-100"
-                }`}
-            >
-                <div className="mx-auto flex max-w-7xl flex-col gap-8">
-                    <section
-                        className="overflow-hidden rounded-[2rem] border p-6 shadow-2xl sm:p-8"
-                        style={{
-                            borderColor: isPrintMode ? printShellBorder : shellBorder,
-                            background: isPrintMode
-                                ? "linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96))"
-                                : "radial-gradient(circle at top right, rgba(230, 126, 34, 0.24), transparent 32%), linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 58, 138, 0.88) 52%, rgba(157, 30, 44, 0.9))",
-                        }}
-                    >
-                        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="space-y-4">
-                                <p
-                                    className={`text-sm font-semibold uppercase tracking-[0.34em] ${
-                                        isPrintMode ? "text-slate-500" : "text-orange-200/85"
-                                    }`}
-                                >
-                                    Chapel of Mercy
+            <div className={`min-h-screen px-6 py-12 transition-colors lg:px-12 bg-white print:bg-white`}>
+                <div className="mx-auto max-w-[1400px]">
+                    
+                    {/* Header Section */}
+                    <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between mb-16 border-b border-chapel-neutral-300 pb-8">
+                        <div>
+                            <h1 className="font-sans text-3xl font-bold uppercase tracking-wide text-chapel-neutral-900 sm:text-4xl mb-2">
+                                {schedule.title}
+                            </h1>
+                            <div className="flex items-center gap-4">
+                                <p className="text-sm font-medium text-chapel-neutral-600">
+                                    {schedule.items.length} Agenda Items
                                 </p>
-                                <div className="space-y-3">
-                                    <p
-                                        className={`text-sm uppercase tracking-[0.28em] ${
-                                            isPrintMode ? "text-slate-500" : "text-slate-300/75"
-                                        }`}
-                                    >
-                                        {schedule.display_date}
-                                    </p>
-                                    <h1
-                                        className={`max-w-4xl text-3xl font-black tracking-tight sm:text-5xl ${
-                                            isPrintMode ? "text-slate-950" : "text-white"
-                                        }`}
-                                    >
-                                        {schedule.title}
-                                    </h1>
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                    {schedule.status !== "published" ? (
-                                        <span
-                                            className="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em]"
-                                            style={{
-                                                backgroundColor: "rgba(230, 126, 34, 0.14)",
-                                                borderColor: "rgba(230, 126, 34, 0.34)",
-                                                color: "var(--worship-accent-300)",
-                                            }}
-                                        >
-                                            {schedule.status_label}
-                                        </span>
-                                    ) : null}
-                                    <span
-                                        className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
-                                            isPrintMode
-                                                ? "border-slate-300 bg-white text-slate-600"
-                                                : "border-white/10 bg-white/5 text-slate-300"
-                                        }`}
-                                    >
-                                        {schedule.items.length} agenda items
+                                {schedule.status !== "published" && (
+                                    <span className="rounded-full bg-worship-accent-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-worship-accent-950">
+                                        {schedule.status_label}
                                     </span>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                <a
-                                    href={schedule.prev_url ?? "#"}
-                                    aria-disabled={!schedule.prev_url}
-                                    className={`btn rounded-full border px-5 ${
-                                        schedule.prev_url
-                                            ? ""
-                                            : "pointer-events-none opacity-40"
-                                    } ${isPrintMode ? "border-slate-300 bg-white text-slate-700" : "border-white/15 bg-slate-950/35 text-slate-100"}`}
-                                >
-                                    Previous
-                                </a>
-                                <a
-                                    href={schedule.next_url ?? "#"}
-                                    aria-disabled={!schedule.next_url}
-                                    className={`btn rounded-full border px-5 ${
-                                        schedule.next_url
-                                            ? ""
-                                            : "pointer-events-none opacity-40"
-                                    } ${isPrintMode ? "border-slate-300 bg-white text-slate-700" : "border-white/15 bg-slate-950/35 text-slate-100"}`}
-                                >
-                                    Next
-                                </a>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPrintMode((current) => !current)}
-                                    className={`btn rounded-full border px-5 ${
-                                        isPrintMode
-                                            ? "border-slate-300 bg-white text-slate-700"
-                                            : "border-white/15 bg-slate-950/35 text-slate-100"
-                                    }`}
-                                >
-                                    {isPrintMode ? "Dark View" : "Print View"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => window.print()}
-                                    className="btn rounded-full border-0 px-5 text-white"
-                                    style={{backgroundColor: "var(--chapel-primary-500)"}}
-                                >
-                                    Print
-                                </button>
+                                )}
                             </div>
                         </div>
-                    </section>
 
-                    <div className="grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
-                        <section className="space-y-6">
-                            <div className="flex items-end justify-between gap-4">
-                                <div>
-                                    <p
-                                        className={`text-sm uppercase tracking-[0.3em] ${
-                                            isPrintMode ? "text-slate-500" : "text-slate-400"
-                                        }`}
-                                    >
-                                        Service Agenda
-                                    </p>
-                                    <h2
-                                        className={`mt-2 text-3xl font-bold ${
-                                            isPrintMode ? "text-slate-950" : "text-white"
-                                        }`}
-                                    >
-                                        Timeline and leadership handoff
-                                    </h2>
-                                </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <a
+                                href={schedule.prev_url ?? "#"}
+                                aria-disabled={!schedule.prev_url}
+                                className={`rounded-full px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 ${
+                                    schedule.prev_url ? "bg-chapel-secondary-500" : "pointer-events-none bg-chapel-neutral-300 text-chapel-neutral-500"
+                                }`}
+                            >
+                                Previous
+                            </a>
+                            <a
+                                href={schedule.next_url ?? "#"}
+                                aria-disabled={!schedule.next_url}
+                                className={`rounded-full px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 ${
+                                    schedule.next_url ? "bg-chapel-secondary-500" : "pointer-events-none bg-chapel-neutral-300 text-chapel-neutral-500"
+                                }`}
+                            >
+                                Next
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="rounded-full bg-chapel-primary-800 px-5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                            >
+                                Print
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Main Content Layout */}
+                    <div className="grid gap-16 lg:grid-cols-[1fr_350px]">
+                        
+                        {/* Left Column: Agenda */}
+                        <section>
+                            <div className="mb-8">
+                                <h2 className="text-lg font-bold uppercase tracking-wider text-chapel-neutral-900">
+                                    Service Agenda
+                                </h2>
+                                <p className="text-sm text-chapel-neutral-500">Timeline and leadership handoff</p>
                             </div>
 
-                            <div className="space-y-5">
-                                {schedule.items.map((item) => {
-                                    const tone = resolveItemTone(item.item_type);
-                                    return (
-                                        <article
-                                            key={item.position}
-                                            className={`grid gap-4 rounded-[1.75rem] border p-5 shadow-lg sm:grid-cols-[auto_1fr] sm:p-6 ${
-                                                isPrintMode
-                                                    ? "bg-white"
-                                                    : "bg-slate-900/75 backdrop-blur"
-                                            }`}
-                                            style={{
-                                                borderColor: isPrintMode
-                                                    ? printShellBorder
-                                                    : shellBorder,
-                                            }}
-                                        >
-                                            <div className="flex flex-col items-start gap-3">
-                                                <span
-                                                    className={`rounded-2xl border px-4 py-2 text-sm font-semibold ${
-                                                        isPrintMode ? "bg-slate-50" : ""
-                                                    }`}
-                                                    style={{
-                                                        borderColor: tone.border,
-                                                        backgroundColor: tone.background,
-                                                        color: tone.text,
-                                                    }}
-                                                >
-                                                    {item.time_label}
+                            <div className="space-y-0">
+                                {schedule.items.map((item) => (
+                                    <article
+                                        key={item.position}
+                                        className="flex flex-col gap-4 border-t border-dotted border-chapel-neutral-400 py-6 sm:flex-row sm:items-start"
+                                    >
+                                        {/* Time & Item Number */}
+                                        <div className="w-40 flex-shrink-0 pt-1">
+                                            <p className="text-sm font-bold text-chapel-neutral-900">{item.time_label}</p>
+                                            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-chapel-neutral-500">
+                                                Item {item.position}
+                                            </p>
+                                        </div>
+
+                                        {/* Center: Pills, Title, Songs */}
+                                        <div className="flex-1">
+                                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                                                <span className="rounded-full bg-worship-accent-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm">
+                                                    {item.item_label}
                                                 </span>
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className="h-3 w-3 rounded-full"
-                                                        style={{
-                                                            backgroundColor: item.is_complete
-                                                                ? "var(--chapel-success-500)"
-                                                                : "var(--chapel-danger-500)",
-                                                        }}
-                                                    />
-                                                    <span
-                                                        className={`text-xs font-semibold uppercase tracking-[0.24em] ${
-                                                            isPrintMode
-                                                                ? "text-slate-500"
-                                                                : "text-slate-400"
-                                                        }`}
-                                                    >
-                                                        Item {item.position}
+                                                {!item.is_complete && (
+                                                    <span className="rounded-full bg-chapel-danger-600 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm">
+                                                        Missing Details
                                                     </span>
-                                                </div>
+                                                )}
                                             </div>
+                                            
+                                            <h3 className="font-serif text-2xl font-bold text-chapel-neutral-950">
+                                                {item.title}
+                                            </h3>
 
-                                            <div className="space-y-4">
-                                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                                    <div className="space-y-3">
-                                                        <div className="flex flex-wrap items-center gap-3">
-                                                            <span
-                                                                className="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em]"
-                                                                style={{
-                                                                    borderColor: tone.border,
-                                                                    backgroundColor: tone.background,
-                                                                    color: tone.text,
-                                                                }}
-                                                            >
-                                                                {item.item_label}
-                                                            </span>
-                                                            {!item.is_complete ? (
-                                                                <span
-                                                                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${
-                                                                        isPrintMode
-                                                                            ? "border-red-200 bg-red-50 text-red-700"
-                                                                            : "border-red-400/25 bg-red-500/10 text-red-200"
-                                                                    }`}
+                                            {item.notes && (
+                                                <p className="mt-2 text-sm text-chapel-neutral-600">{item.notes}</p>
+                                            )}
+
+                                            {item.songs.length > 0 && (
+                                                <div className="mt-4 rounded-xl border border-chapel-neutral-200 bg-white p-3">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {item.songs
+                                                            .slice()
+                                                            .sort((a, b) => a.position - b.position)
+                                                            .map((song) => (
+                                                                <button
+                                                                    key={song.song_id}
+                                                                    type="button"
+                                                                    onClick={() => setActiveItemPosition(item.position)}
+                                                                    className="rounded-lg bg-chapel-neutral-100 px-3 py-1.5 text-xs font-medium text-chapel-neutral-700 transition hover:bg-chapel-neutral-200"
                                                                 >
-                                                                    Missing details
-                                                                </span>
-                                                            ) : null}
-                                                        </div>
-                                                        <h3
-                                                            className={`text-2xl font-bold ${
-                                                                isPrintMode
-                                                                    ? "text-slate-950"
-                                                                    : "text-white"
-                                                            }`}
-                                                        >
-                                                            {item.title}
-                                                        </h3>
-                                                    </div>
-
-                                                    <div
-                                                        className={`rounded-2xl border px-4 py-3 text-sm ${
-                                                            isPrintMode
-                                                                ? "border-slate-200 bg-slate-50 text-slate-700"
-                                                                : "border-white/10 bg-white/5 text-slate-200"
-                                                        }`}
-                                                    >
-                                                        <p className="font-semibold">
-                                                            Leader: {item.leader_label}
-                                                        </p>
-                                                        <p className="mt-1 opacity-80">
-                                                            Status: {item.status_label}
-                                                        </p>
+                                                                    <svg className="mr-1.5 inline-block h-3 w-3 text-chapel-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                                    </svg>
+                                                                    {song.title}
+                                                                </button>
+                                                            ))}
                                                     </div>
                                                 </div>
+                                            )}
+                                        </div>
 
-                                                {item.notes ? (
-                                                    <div
-                                                        className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${
-                                                            isPrintMode
-                                                                ? "border-slate-200 bg-slate-50 text-slate-700"
-                                                                : "border-white/10 bg-white/5 text-slate-300"
-                                                        }`}
-                                                    >
-                                                        {item.notes}
-                                                    </div>
-                                                ) : null}
-
-                                                {item.songs.length > 0 ? (
-                                                    <div
-                                                        className={`rounded-2xl border px-4 py-4 ${
-                                                            isPrintMode
-                                                                ? "border-slate-200 bg-slate-50"
-                                                                : "border-white/10 bg-white/5"
-                                                        }`}
-                                                    >
-                                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                                            <div>
-                                                                <p
-                                                                    className={`text-xs font-semibold uppercase tracking-[0.3em] ${
-                                                                        isPrintMode
-                                                                            ? "text-slate-500"
-                                                                            : "text-orange-200/80"
-                                                                    }`}
-                                                                >
-                                                                    Linked songs
-                                                                </p>
-                                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                                    {item.songs
-                                                                        .slice()
-                                                                        .sort(
-                                                                            (left, right) =>
-                                                                                left.position -
-                                                                                right.position,
-                                                                        )
-                                                                        .map((song) => (
-                                                                            <button
-                                                                                key={song.song_id}
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                    setActiveItemPosition(
-                                                                                        item.position,
-                                                                                    )
-                                                                                }
-                                                                                className={`rounded-full border px-3 py-2 text-sm font-medium transition hover:-translate-y-0.5 ${
-                                                                                    isPrintMode
-                                                                                        ? "border-slate-200 bg-white text-slate-700"
-                                                                                        : "border-white/10 bg-slate-950/40 text-slate-100"
-                                                                                }`}
-                                                                            >
-                                                                                {song.position + 1}.{" "}
-                                                                                {song.title}
-                                                                            </button>
-                                                                        ))}
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setActiveItemPosition(item.position)
-                                                                }
-                                                                className="btn border-0 text-white"
-                                                                style={{
-                                                                    backgroundColor:
-                                                                        "var(--chapel-secondary-500)",
-                                                                }}
-                                                            >
-                                                                Open lyrics
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : null}
+                                        {/* Right: Leader */}
+                                        <div className="w-48 flex-shrink-0 pt-1 text-left sm:text-right">
+                                            <p className="text-sm font-bold text-chapel-neutral-900">
+                                                Leader: <span className="font-medium">{item.leader_name ? item.leader_label : "-"}</span>
+                                            </p>
+                                            <div className="mt-1.5">
+                                                <span className="inline-block rounded-full bg-chapel-neutral-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-chapel-neutral-500">
+                                                    Status: {item.status_label}
+                                                </span>
                                             </div>
-                                        </article>
-                                    );
-                                })}
+                                        </div>
+                                    </article>
+                                ))}
+                                <div className="border-t border-dotted border-chapel-neutral-400"></div>
                             </div>
                         </section>
 
-                        <aside className="space-y-5">
-                            <section
-                                className={`rounded-[1.75rem] border p-6 shadow-lg ${
-                                    isPrintMode ? "bg-white" : "bg-slate-900/75"
-                                }`}
-                                style={{
-                                    borderColor: isPrintMode ? printShellBorder : shellBorder,
-                                }}
-                            >
-                                <p
-                                    className={`text-sm uppercase tracking-[0.3em] ${
-                                        isPrintMode ? "text-slate-500" : "text-orange-200/80"
-                                    }`}
-                                >
+                        {/* Right Column: Notes & Guidance */}
+                        <aside className="space-y-12">
+                            <section>
+                                <h2 className="mb-6 text-lg font-bold uppercase tracking-wider text-chapel-neutral-900 border-b border-chapel-neutral-300 pb-2">
                                     Worship Notes
-                                </p>
-                                <div className="mt-4 space-y-4">
-                                    {serviceNotes.map((entry) => (
-                                        <div
-                                            key={entry}
-                                            className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${
-                                                isPrintMode
-                                                    ? "border-slate-200 bg-slate-50 text-slate-700"
-                                                    : "border-white/10 bg-white/5 text-slate-300"
-                                            }`}
-                                        >
-                                            {entry}
-                                        </div>
+                                </h2>
+                                <ul className="space-y-4">
+                                    {serviceNotes.map((entry, idx) => (
+                                        <li key={idx} className="flex items-start text-sm text-chapel-neutral-700 border-b border-dotted border-chapel-neutral-300 pb-4 last:border-0 last:pb-0">
+                                            <div className="mr-3 mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-chapel-neutral-400"></div>
+                                            <span>{entry}</span>
+                                        </li>
                                     ))}
-                                </div>
+                                </ul>
                             </section>
 
-                            <section
-                                className={`rounded-[1.75rem] border p-6 shadow-lg ${
-                                    isPrintMode ? "bg-white" : "bg-slate-900/75"
-                                }`}
-                                style={{
-                                    borderColor: isPrintMode ? printShellBorder : shellBorder,
-                                }}
-                            >
-                                <p
-                                    className={`text-sm uppercase tracking-[0.3em] ${
-                                        isPrintMode ? "text-slate-500" : "text-orange-200/80"
-                                    }`}
-                                >
-                                    Print guidance
-                                </p>
-                                <ul
-                                    className={`mt-4 space-y-3 text-sm leading-6 ${
-                                        isPrintMode ? "text-slate-700" : "text-slate-300"
-                                    }`}
-                                >
-                                    <li>Use Print View before sending this page to paper or PDF.</li>
-                                    <li>Open lyrics from worship and hymn items to export text files.</li>
-                                    <li>
-                                        Incomplete agenda items are highlighted so the team can fill
-                                        missing leader or time details before service.
+                            <section>
+                                <h2 className="mb-6 text-lg font-bold uppercase tracking-wider text-chapel-neutral-900 border-b border-chapel-neutral-300 pb-2">
+                                    Print Guidance
+                                </h2>
+                                <ul className="space-y-4 text-sm text-chapel-neutral-700">
+                                    <li className="flex items-start">
+                                        <div className="mr-3 mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-chapel-secondary-500 text-white">
+                                            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                        <span>Use the Print button before sending this page to paper or PDF.</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <div className="mr-3 mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-chapel-secondary-500 text-white">
+                                            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                        <span>Open lyrics from worship and hymn items to export text files.</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <div className="mr-3 mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-chapel-secondary-500 text-white">
+                                            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                        <span>Incomplete agenda items are highlighted so the team can fill missing details.</span>
                                     </li>
                                 </ul>
                             </section>
                         </aside>
+
                     </div>
                 </div>
 
+                {/* Lyrics Modal */}
                 {activeItem ? (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/78 px-4 py-6">
-                        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 text-slate-100 shadow-2xl">
-                            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-chapel-neutral-950/60 px-4 py-6 backdrop-blur-sm print:hidden">
+                        <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            <div className="flex items-center justify-between border-b border-chapel-neutral-200 px-6 py-5 bg-chapel-neutral-50">
                                 <div>
-                                    <p className="text-xs uppercase tracking-[0.28em] text-orange-200/75">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-chapel-secondary-500">
                                         Song lyrics
                                     </p>
-                                    <h3 className="mt-2 text-2xl font-bold text-white">
+                                    <h3 className="mt-1 font-serif text-2xl font-bold text-chapel-neutral-950">
                                         {activeItem.title}
                                     </h3>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setActiveItemPosition(null)}
-                                    className="btn btn-ghost text-slate-100"
+                                    className="rounded-full p-2 text-chapel-neutral-500 hover:bg-chapel-neutral-200 transition-colors"
                                 >
-                                    Close
+                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
                                 </button>
                             </div>
 
                             <div className="max-h-[calc(90vh-5.25rem)] overflow-y-auto px-6 py-6">
                                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                                    <p className="text-sm text-slate-300">
+                                    <p className="text-sm font-medium text-chapel-neutral-600">
                                         {activeItem.songs.length} song
-                                        {activeItem.songs.length === 1 ? "" : "s"} linked to this
-                                        schedule item.
+                                        {activeItem.songs.length === 1 ? "" : "s"} linked to this schedule item.
                                     </p>
                                     {activeItem.songs.length > 1 ? (
                                         <button
                                             type="button"
                                             onClick={() => downloadAllSongs(activeItem)}
-                                            className="btn border-0 text-white"
-                                            style={{
-                                                backgroundColor: "var(--chapel-primary-500)",
-                                            }}
+                                            className="rounded-lg bg-chapel-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-chapel-primary-700"
                                         >
                                             Download All (.zip)
                                         </button>
                                     ) : null}
                                 </div>
 
-                                <div className="space-y-5">
+                                <div className="space-y-6">
                                     {activeItem.songs
                                         .slice()
                                         .sort((left, right) => left.position - right.position)
                                         .map((song) => (
                                             <section
                                                 key={song.song_id}
-                                                className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5"
+                                                className="rounded-xl border border-chapel-neutral-200 bg-chapel-neutral-50 overflow-hidden"
                                             >
-                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="flex flex-col gap-3 border-b border-chapel-neutral-200 bg-white px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                                                     <div>
-                                                        <p className="text-xs uppercase tracking-[0.28em] text-orange-200/75">
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-chapel-secondary-500">
                                                             Song {song.position + 1}
                                                         </p>
-                                                        <h4 className="mt-2 text-2xl font-bold text-white">
+                                                        <h4 className="mt-1 font-serif text-xl font-bold text-chapel-neutral-900">
                                                             {song.title}
                                                         </h4>
-                                                        <p className="mt-2 text-sm text-slate-400">
-                                                            {song.slide_count ?? "?"} slides |{" "}
-                                                            {song.filename}
+                                                        <p className="mt-1 text-xs text-chapel-neutral-500">
+                                                            {song.slide_count ?? "?"} slides | {song.filename}
                                                         </p>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => downloadSong(song)}
-                                                        className="btn border-0 text-white"
-                                                        style={{
-                                                            backgroundColor:
-                                                                "var(--chapel-secondary-500)",
-                                                        }}
+                                                        className="rounded-lg border border-chapel-neutral-300 bg-white px-4 py-2 text-xs font-bold text-chapel-neutral-700 transition hover:bg-chapel-neutral-100 shadow-sm"
                                                     >
                                                         Download .txt
                                                     </button>
                                                 </div>
-                                                <pre className="mt-5 overflow-x-auto whitespace-pre-wrap rounded-[1.25rem] border border-white/10 bg-slate-950/70 p-4 font-mono text-sm leading-7 text-slate-200">
+                                                <pre className="p-5 overflow-x-auto whitespace-pre-wrap font-mono text-sm leading-relaxed text-chapel-neutral-800">
                                                     {song.formatted_lyrics}
                                                 </pre>
                                             </section>

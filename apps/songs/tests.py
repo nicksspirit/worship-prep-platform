@@ -82,3 +82,32 @@ class SongIntakeTests(TestCase):
         self.assertEqual(response.schedule_date, "2026-03-22")
         self.assertEqual(response.preview_url, "/schedule/2026-03-22/preview/")
         self.assertEqual(SongAssignment.objects.count(), 1)
+        self.assertEqual(SongAssignment.objects.get().position, 1)
+
+    def test_uses_explicit_song_position_when_provided(self):
+        schedule = ServiceSchedule.objects.create(
+            date=dt.date(2026, 3, 29),
+            title="Sunday Service",
+            status=ServiceScheduleStatus.READY,
+        )
+        item = ScheduleItem.objects.create(
+            schedule=schedule,
+            position=2,
+            item_type="worship_song",
+            title="Praise & Worship",
+        )
+
+        response = async_to_sync(intake_song_endpoint)(
+            payload=self._payload(
+                schedule_date=dt.date(2026, 3, 29),
+                item_type="worship_song",
+                position=4,
+                group_type="praise",
+            ),
+            n8n_api_key="test-intake-key",
+        )
+
+        self.assertIsInstance(response, SongIntakeResponse)
+        self.assertTrue(response.linked_to_schedule)
+        assignment = SongAssignment.objects.get(schedule_item=item)
+        self.assertEqual(assignment.position, 4)

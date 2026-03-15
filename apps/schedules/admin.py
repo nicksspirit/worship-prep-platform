@@ -1,9 +1,13 @@
+from typing import Callable, Protocol, cast
+
 from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import action
 
+from apps.schedules.choices import ScheduleItemStatus
 from apps.schedules.models import (
     Contact,
     ContentSubmission,
@@ -12,6 +16,26 @@ from apps.schedules.models import (
     ServiceSchedule,
     TemplateItem,
 )
+
+
+class _AdminDisplayCallable(Protocol):
+    """Protocol for admin list_display/readonly_fields callables with short_description."""
+
+    short_description: str
+
+    def __call__(self, obj: ScheduleItem | None) -> str: ...
+
+
+def _admin_display(description: str):
+    """Attach short_description to a callable so Django admin shows it; satisfies type checkers."""
+
+    def decorator(
+        func: Callable[..., str],
+    ) -> _AdminDisplayCallable:
+        setattr(func, "short_description", description)
+        return cast(_AdminDisplayCallable, func)
+
+    return decorator
 
 
 class ScheduleItemInline(TabularInline):
@@ -28,6 +52,7 @@ class ScheduleItemInline(TabularInline):
         "end_time",
         "status",
         "assigned_contact",
+        "quick_actions",
     ]
     fields = [
         "position",
@@ -37,7 +62,29 @@ class ScheduleItemInline(TabularInline):
         "end_time",
         "status",
         "assigned_contact",
+        "quick_actions",
     ]
+
+    @_admin_display("Actions")
+    def quick_actions(self, obj: ScheduleItem | None) -> str:
+        if not obj or not obj.pk:
+            return ""
+
+        if obj.status == ScheduleItemStatus.APPROVED:
+            return format_html(
+                '<span style="color: var(--color-chapel-success-500); font-weight: bold;">Approved</span>'
+            )
+
+        url = reverse("admin:schedules_scheduleitem_mark_as_approved", args=[obj.pk])
+        # We append a query param to know where to redirect back
+        redirect_url = reverse(
+            "admin:schedules_serviceschedule_change", args=[obj.schedule.pk]
+        )
+        return format_html(
+            '<a class="button" style="background-color: var(--color-chapel-primary-500); color: white; padding: 1px 2px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold;" href="{}?next={}">Mark Approved</a>',
+            url,
+            redirect_url,
+        )
 
 
 @admin.register(ServiceSchedule)
@@ -97,10 +144,43 @@ class ScheduleTemplateAdmin(ModelAdmin):
 
 @admin.register(ScheduleItem)
 class ScheduleItemAdmin(ModelAdmin):
-    list_display = ["schedule", "position", "title", "item_type", "status", "assigned_contact"]
+    list_display = [
+        "schedule",
+        "position",
+        "title",
+        "item_type",
+        "status",
+        "assigned_contact",
+    ]
     list_filter = ["item_type", "status", "schedule__date"]
     search_fields = ["title", "notes", "assigned_contact__name"]
     ordering = ["schedule__date", "position"]
+    actions_detail = ["mark_as_approved"]
+    actions_row = ["mark_as_approved"]
+    actions = ["mark_queryset_as_approved"]
+
+    @action(description="Mark as Approved", url_path="mark-approved")
+    def mark_as_approved(self, request, object_id: int):
+        ScheduleItem.objects.filter(pk=object_id).update(
+            status=ScheduleItemStatus.APPROVED
+        )
+        self.message_user(request, "Schedule item marked as approved.")
+
+        # If 'next' is provided in query params, redirect there (useful for inlines)
+        next_url = request.GET.get("next")
+        if next_url:
+            return redirect(next_url)
+
+        return redirect(
+            request.META.get(
+                "HTTP_REFERER", reverse("admin:schedules_scheduleitem_changelist")
+            )
+        )
+
+    @admin.action(description="Mark selected items as Approved")
+    def mark_queryset_as_approved(self, request, queryset):
+        count = queryset.update(status=ScheduleItemStatus.APPROVED)
+        self.message_user(request, f"{count} schedule items marked as approved.")
 
 
 @admin.register(Contact)

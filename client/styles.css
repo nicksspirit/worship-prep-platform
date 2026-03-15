@@ -1,25 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
 @import "tailwindcss";
 @plugin "daisyui";
 
-:root {
-    --chapel-primary-200: #ecc9cd;
-    --chapel-primary-500: #9d1e2c;
-    --worship-accent-300: #fcc9a0;
-    --worship-accent-500: #e67e22;
-    --chapel-secondary-200: #cbd7ea;
-    --chapel-secondary-500: #1e3a8a;
-    --chapel-success-500: #198754;
-    --chapel-danger-500: #dc3545;
+@theme {
+  --color-chapel-primary-50: #FBF2F3;
+  --color-chapel-primary-100: #F5E4E6;
+  --color-chapel-primary-200: #ECC9CD;
+  --color-chapel-primary-300: #E0AAB2;
+  --color-chapel-primary-400: #D08791;
+  --color-chapel-primary-500: #9D1E2C;
+  --color-chapel-primary-600: #8A1A27;
+  --color-chapel-primary-700: #751621;
+  --color-chapel-primary-800: #60121B;
+  --color-chapel-primary-900: #4D0E15;
+  --color-chapel-primary-950: #3A0A10;
+
+  --color-worship-accent-50: #FEF6F3;
+  --color-worship-accent-100: #FEEEF3;
+  --color-worship-accent-200: #FDDCC9;
+  --color-worship-accent-300: #FCC9A0;
+  --color-worship-accent-400: #FBB577;
+  --color-worship-accent-500: #E67E22;
+  --color-worship-accent-600: #DA7020;
+  --color-worship-accent-700: #C6621C;
+  --color-worship-accent-800: #AD5418;
+  --color-worship-accent-900: #954614;
+  --color-worship-accent-950: #7E3911;
+
+  --color-chapel-secondary-50: #F1F4F9;
+  --color-chapel-secondary-100: #E2E8F4;
+  --color-chapel-secondary-200: #CBD7EA;
+  --color-chapel-secondary-300: #A9C0DC;
+  --color-chapel-secondary-400: #82A5CF;
+  --color-chapel-secondary-500: #1E3A8A;
+  --color-chapel-secondary-600: #1A3378;
+  --color-chapel-secondary-700: #162C66;
+  --color-chapel-secondary-800: #122453;
+  --color-chapel-secondary-900: #0F1E42;
+  --color-chapel-secondary-950: #0B1732;
+
+  --color-chapel-neutral-50: #F8F9FA;
+  --color-chapel-neutral-100: #F1F3F5;
+  --color-chapel-neutral-200: #E9ECEF;
+  --color-chapel-neutral-300: #DEE2E6;
+  --color-chapel-neutral-400: #CED4DA;
+  --color-chapel-neutral-500: #ADB5BD;
+  --color-chapel-neutral-600: #6C757D;
+  --color-chapel-neutral-700: #495057;
+  --color-chapel-neutral-800: #343A40;
+  --color-chapel-neutral-900: #212529;
+  --color-chapel-neutral-950: #000000;
+
+  --color-chapel-success-50: #ECFDF5;
+  --color-chapel-success-100: #D1FAE5;
+  --color-chapel-success-200: #A7F3D0;
+  --color-chapel-success-300: #6EE7B7;
+  --color-chapel-success-400: #34D399;
+  --color-chapel-success-500: #198754;
+  --color-chapel-success-600: #157347;
+  --color-chapel-success-700: #115C39;
+  --color-chapel-success-800: #0D472B;
+  --color-chapel-success-900: #09311F;
+  --color-chapel-success-950: #051A11;
+
+  --color-chapel-danger-50: #FEF2F2;
+  --color-chapel-danger-100: #FEE2E2;
+  --color-chapel-danger-200: #FECACA;
+  --color-chapel-danger-300: #FCA5A5;
+  --color-chapel-danger-400: #F87171;
+  --color-chapel-danger-500: #DC3545;
+  --color-chapel-danger-600: #B02A37;
+  --color-chapel-danger-700: #8E212C;
+  --color-chapel-danger-800: #6C1921;
+  --color-chapel-danger-900: #4B1016;
+  --color-chapel-danger-950: #29080A;
+
+  --font-serif: 'Cormorant Garamond', serif;
+  --font-sans: 'Instrument Sans', sans-serif;
 }
 
-html {
-    color-scheme: dark;
+:root {
+  background-color: var(--color-chapel-neutral-50);
+  color: var(--color-chapel-neutral-950);
+  /* Make sure scrolling doesn't jump */
+  scroll-behavior: smooth;
 }
 
 body {
-    margin: 0;
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
 }
 
 ::selection {
-    background: rgba(230, 126, 34, 0.3);
+  background: var(--color-chapel-primary-200);
+  color: var(--color-chapel-primary-950);
+}
+
+/* Base resets that DaisyUI handled */
+button {
+  cursor: pointer;
+}
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/* Ultra Minimal Inputs */
+.minimal-input {
+  @apply w-full border-0 border-b border-chapel-neutral-950 bg-transparent py-4 px-0 text-lg font-medium text-chapel-neutral-950 placeholder:text-chapel-neutral-400 placeholder:font-normal focus:border-chapel-primary-500 focus:outline-none focus:ring-0 transition-colors duration-300 rounded-none;
+}
+
+.minimal-btn {
+  @apply inline-flex items-center justify-center bg-chapel-neutral-950 text-chapel-neutral-50 hover:bg-chapel-primary-500 transition-all duration-500 py-4 px-8 text-sm font-bold tracking-[0.15em] uppercase border border-transparent active:scale-[0.98];
+}
+
+.minimal-btn-outline {
+  @apply inline-flex items-center justify-center bg-transparent border border-chapel-neutral-300 text-chapel-neutral-950 hover:border-chapel-neutral-950 transition-all duration-500 py-4 px-8 text-sm font-bold tracking-[0.15em] uppercase active:scale-[0.98];
+}
+
+/* Subtle grain overlay for texture */
+.bg-grain {
+  position: relative;
+}
+.bg-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.25;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 1;
 }

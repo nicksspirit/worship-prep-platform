@@ -71,6 +71,26 @@ def _get_or_create_schedule_item(
     )
 
 
+def _next_song_assignment_position(schedule_item: ScheduleItem) -> int:
+    last_position = (
+        schedule_item.song_assignments.order_by("-position")
+        .values_list("position", flat=True)
+        .first()
+    )
+    if last_position is None:
+        return 1
+    return last_position + 1
+
+
+def _resolve_song_assignment_position(
+    schedule_item: ScheduleItem,
+    explicit_position: int | None,
+) -> int:
+    if explicit_position is not None and explicit_position > 0:
+        return explicit_position
+    return _next_song_assignment_position(schedule_item)
+
+
 @transaction.atomic
 def _intake_song_sync(payload: SongIntakePayload) -> SongIntakeResult:
     existing = _find_similar_song(payload.song_title)
@@ -96,7 +116,12 @@ def _intake_song_sync(payload: SongIntakePayload) -> SongIntakeResult:
             SongAssignment.objects.get_or_create(
                 schedule_item=schedule_item,
                 song=existing,
-                defaults={"position": schedule_item.song_assignments.count()},
+                defaults={
+                    "position": _resolve_song_assignment_position(
+                        schedule_item,
+                        payload.position,
+                    )
+                },
             )
             linked_to_schedule = True
 
@@ -122,7 +147,10 @@ def _intake_song_sync(payload: SongIntakePayload) -> SongIntakeResult:
         SongAssignment.objects.create(
             schedule_item=schedule_item,
             song=song,
-            position=schedule_item.song_assignments.count(),
+            position=_resolve_song_assignment_position(
+                schedule_item,
+                payload.position,
+            ),
         )
         linked_to_schedule = True
 

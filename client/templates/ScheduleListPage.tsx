@@ -1,5 +1,4 @@
 import React from "react";
-
 import {Layout} from "../Layout";
 
 type EmptyState = {
@@ -25,181 +24,97 @@ type ScheduleListPageProps = {
     empty_state: EmptyState | null;
 };
 
-const cardBorder = "rgba(226, 232, 240, 0.12)";
-
 export const Template = (props: ScheduleListPageProps) => {
     return (
         <Layout title={props.title}>
-            <div className="min-h-screen bg-slate-950 text-slate-100">
-                <div className="mx-auto flex max-w-7xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-8">
-                    <section
-                        className="overflow-hidden rounded-[2rem] border p-8 shadow-2xl"
-                        style={{
-                            borderColor: cardBorder,
-                            background:
-                                "radial-gradient(circle at top right, rgba(230, 126, 34, 0.28), transparent 32%), linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 58, 138, 0.88) 58%, rgba(157, 30, 44, 0.9))",
-                        }}
-                    >
-                        <div className="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
-                            <div className="space-y-5">
-                                <p className="text-sm font-semibold uppercase tracking-[0.35em] text-orange-200/90">
-                                    Chapel of Mercy
-                                </p>
-                                <div className="space-y-3">
-                                    <h1 className="max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">
-                                        Service schedule previews for ministers, choir, and the
-                                        booth.
-                                    </h1>
-                                    <p className="max-w-2xl text-base leading-7 text-slate-200/85">
-                                        Browse ready and published orders of service, then open the
-                                        full preview page to review agenda flow and linked worship
-                                        songs.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 rounded-[1.75rem] border border-white/15 bg-slate-950/30 p-5 backdrop-blur">
-                                <div>
-                                    <p className="text-xs uppercase tracking-[0.3em] text-slate-300/70">
-                                        Archive
-                                    </p>
-                                    <p className="mt-2 text-3xl font-bold text-white">
-                                        {props.schedules.length}
-                                    </p>
-                                    <p className="mt-2 text-sm text-slate-200/80">
-                                        Visible service schedules are sorted newest first when no
-                                        upcoming service is available.
-                                    </p>
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-orange-200/75">
-                                            Sunday School
-                                        </p>
-                                        <p className="mt-2 text-lg font-semibold text-white">
-                                            9:40 AM
-                                        </p>
-                                    </div>
-                                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                        <p className="text-xs uppercase tracking-[0.24em] text-orange-200/75">
-                                            Worship Service
-                                        </p>
-                                        <p className="mt-2 text-lg font-semibold text-white">
-                                            10:30 AM
-                                        </p>
-                                    </div>
-                                </div>
+            <div className="min-h-screen bg-chapel-neutral-50 text-chapel-neutral-950">
+                <main className="px-6 lg:px-12 py-16 lg:py-24 max-w-[1400px] mx-auto">
+                    {/* Editorial Header Section */}
+                    <div className="mb-16 flex flex-col lg:flex-row lg:items-end justify-between gap-12 border-b border-chapel-neutral-300 pb-12">
+                        <div className="max-w-3xl">
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-chapel-secondary-500 mb-6">
+                                Service Agendas
+                            </p>
+                            <h1 className="font-serif text-[3.5rem] lg:text-[5rem] leading-[0.95] tracking-tight text-chapel-neutral-950">
+                                Orchestrating the <br />
+                                <span className="italic text-chapel-neutral-500">Divine Flow.</span>
+                            </h1>
+                        </div>
+                        
+                        <div className="flex gap-16 lg:pb-2">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-chapel-neutral-500 mb-2">Total Archives</p>
+                                <p className="font-sans text-5xl font-medium tracking-tight text-chapel-neutral-900">{props.schedules.length}</p>
                             </div>
                         </div>
-                    </section>
+                    </div>
 
                     {props.empty_state ? (
-                        <section
-                            className="rounded-[2rem] border bg-slate-900/75 p-10 text-center shadow-xl"
-                            style={{borderColor: cardBorder}}
-                        >
-                            <div className="mx-auto max-w-2xl space-y-4">
-                                <p className="text-sm font-semibold uppercase tracking-[0.32em] text-orange-300/80">
-                                    Schedule Archive
-                                </p>
-                                <h2 className="text-3xl font-bold text-white">
-                                    {props.empty_state.heading}
-                                </h2>
-                                <p className="text-base leading-7 text-slate-300">
-                                    {props.empty_state.message}
-                                </p>
-                                {props.empty_state.link_url && props.empty_state.link_label ? (
-                                    <a
-                                        href={props.empty_state.link_url}
-                                        className="btn border-0 text-white"
-                                        style={{backgroundColor: "var(--chapel-primary-500)"}}
-                                    >
-                                        {props.empty_state.link_label}
-                                    </a>
-                                ) : null}
-                            </div>
-                        </section>
+                        <div className="py-32 flex flex-col items-center justify-center text-center">
+                            <h2 className="font-serif text-4xl mb-4 text-chapel-neutral-900">{props.empty_state.heading}</h2>
+                            <p className="text-lg text-chapel-neutral-600 max-w-md mb-8">
+                                {props.empty_state.message}
+                            </p>
+                            {props.empty_state.link_url && props.empty_state.link_label && (
+                                <a href={props.empty_state.link_url} className="minimal-btn bg-chapel-primary-500 text-white hover:bg-chapel-primary-600 rounded-lg">
+                                    {props.empty_state.link_label}
+                                </a>
+                            )}
+                        </div>
                     ) : (
-                        <section className="space-y-5">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                                <div>
-                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-400">
-                                        Schedule Library
-                                    </p>
-                                    <h2 className="mt-2 text-3xl font-bold text-white">
-                                        Past ready and published services
-                                    </h2>
-                                </div>
-                                <p className="max-w-xl text-sm leading-6 text-slate-400">
-                                    Open any card to review the full service flow, inspect linked
-                                    songs, and prepare for print or booth handoff.
-                                </p>
-                            </div>
-
-                            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                                {props.schedules.map((schedule) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                            {props.schedules.map((schedule, idx) => {
+                                const isPublished = schedule.status === "published";
+                                return (
                                     <a
                                         key={schedule.date}
                                         href={schedule.preview_url}
-                                        className="group flex h-full flex-col justify-between rounded-[1.75rem] border bg-slate-900/80 p-6 shadow-lg transition duration-200 hover:-translate-y-1 hover:border-orange-300/35 hover:bg-slate-900"
-                                        style={{borderColor: cardBorder}}
+                                        className="group flex flex-col border border-chapel-neutral-300 bg-white hover:border-chapel-secondary-500 hover:shadow-xl transition-all duration-300 overflow-hidden"
                                     >
-                                        <div className="space-y-6">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div>
-                                                    <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                                                        {schedule.display_date}
-                                                    </p>
-                                                    <h3 className="mt-3 text-2xl font-bold text-white">
-                                                        {schedule.title}
-                                                    </h3>
-                                                </div>
-                                                {schedule.status !== "published" ? (
-                                                    <span
-                                                        className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]"
-                                                        style={{
-                                                            backgroundColor:
-                                                                "rgba(230, 126, 34, 0.14)",
-                                                            color: "var(--worship-accent-300)",
-                                                        }}
-                                                    >
-                                                        {schedule.status_label}
+                                        <div className="p-8 lg:p-10 flex-grow flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-start justify-between mb-8">
+                                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-chapel-neutral-400 group-hover:text-chapel-secondary-300 transition-colors">
+                                                        No. {String(idx + 1).padStart(3, '0')}
                                                     </span>
-                                                ) : null}
-                                            </div>
-
-                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                                    <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
-                                                        Agenda Items
-                                                    </p>
-                                                    <p className="mt-2 text-2xl font-semibold text-white">
-                                                        {schedule.item_count}
-                                                    </p>
+                                                    {!isPublished && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest bg-worship-accent-100 text-worship-accent-950 px-3 py-1 rounded-full group-hover:bg-worship-accent-500 group-hover:text-white transition-colors">
+                                                            {schedule.status_label}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                                    <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
-                                                        Status
-                                                    </p>
-                                                    <p className="mt-2 text-lg font-semibold text-white">
-                                                        {schedule.status_label}
-                                                    </p>
-                                                </div>
+                                                
+                                                <h3 className="font-serif text-3xl lg:text-4xl leading-tight mb-4 text-chapel-neutral-900 group-hover:text-chapel-secondary-600 transition-colors">
+                                                    {schedule.title}
+                                                </h3>
+                                                
+                                                <p className="text-sm font-medium text-chapel-neutral-500 group-hover:text-chapel-secondary-400 transition-colors tracking-wide">
+                                                    {schedule.display_date}
+                                                </p>
                                             </div>
                                         </div>
 
-                                        <div className="mt-8 flex items-center justify-between text-sm text-slate-300">
-                                            <span>Open preview</span>
-                                            <span className="transition group-hover:translate-x-1">
-                                                →
-                                            </span>
+                                        <div className="border-t border-chapel-neutral-200 group-hover:border-chapel-secondary-200 p-6 flex items-center justify-between bg-chapel-neutral-50 group-hover:bg-chapel-secondary-50 transition-colors">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-chapel-neutral-500 group-hover:text-chapel-secondary-500 mb-1 transition-colors">Agenda Items</p>
+                                                <p className="font-serif text-2xl text-chapel-neutral-900 group-hover:text-chapel-secondary-600 transition-colors">{schedule.item_count}</p>
+                                            </div>
+                                            <div className="w-10 h-10 flex items-center justify-center rounded-full bg-chapel-neutral-200 text-chapel-neutral-600 group-hover:bg-chapel-secondary-500 group-hover:text-white transition-colors">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                </svg>
+                                            </div>
                                         </div>
                                     </a>
-                                ))}
-                            </div>
-                        </section>
+                                );
+                            })}
+                        </div>
                     )}
-                </div>
+                </main>
+
+                <footer className="border-t border-chapel-neutral-300 py-12 px-6 lg:px-12 text-center text-xs font-bold uppercase tracking-[0.2em] text-chapel-neutral-500 bg-white">
+                    Redeemed Christian Church of God • Chapel of Mercy
+                </footer>
             </div>
         </Layout>
     );

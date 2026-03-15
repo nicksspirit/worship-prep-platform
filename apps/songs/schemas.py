@@ -11,6 +11,8 @@ class SongIntakePayload(msgspec.Struct, kw_only=True):
     slide_count: int
     schedule_date: dt.date | None = None
     item_type: str | None = None
+    position: int | None = None
+    group_type: str | None = None
 
 
 class SongIntakeResponse(msgspec.Struct, kw_only=True):
