@@ -9,6 +9,7 @@ from django_bolt.openapi import OpenAPIConfig
 from django_bolt.param_functions import Header
 
 from apps.schedules.exceptions import (
+    DuplicateScheduleItemTypeError,
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
@@ -80,6 +81,8 @@ async def intake_schedule_from_whatsapp(
 
     try:
         result = await intake_whatsapp_schedule(payload)
+    except DuplicateScheduleItemTypeError as exc:
+        return JSON({"detail": str(exc)}, status_code=409)
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
     return build_intake_response(result, status_code=201)
@@ -102,6 +105,8 @@ async def patch_schedule_from_whatsapp(
 
     try:
         result = await patch_whatsapp_schedule(payload)
+    except DuplicateScheduleItemTypeError as exc:
+        return JSON({"detail": str(exc)}, status_code=409)
     except ScheduleNotFoundError as exc:
         return JSON({"detail": str(exc)}, status_code=404)
     except DuplicateSubmissionError as exc:

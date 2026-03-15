@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import msgspec
 from asgiref.sync import async_to_sync
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django_bolt import JSON
 
@@ -128,6 +129,68 @@ class WhatsAppScheduleIntakeTests(TestCase):
 
         schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
         self.assertEqual(schedule.title, "Updated Sunday Service")
+
+    def test_updates_existing_schedule_item_by_type_when_position_changes(self):
+        async_to_sync(intake_schedule_from_whatsapp)(
+            payload=self._payload(source_message_id="wamid-initial-position"),
+            n8n_api_key="test-intake-key",
+        )
+
+        response = async_to_sync(intake_schedule_from_whatsapp)(
+            payload=self._payload(
+                source_message_id="wamid-moved-position",
+                items=[
+                    {
+                        "position": 3,
+                        "time_start": "10:40",
+                        "time_end": "10:45",
+                        "title": "Opening Prayer",
+                        "leader_name": "Min. Samuel Ojoh",
+                        "item_type": "opening_prayer",
+                    }
+                ],
+            ),
+            n8n_api_key="test-intake-key",
+        )
+
+        self.assertIsInstance(response, IntakeResponse)
+        self.assertEqual(response.created_or_updated, "updated")
+        self.assertEqual(response.items_created, 0)
+        self.assertEqual(response.items_updated, 1)
+
+        schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
+        self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
+
+        updated_item = ScheduleItem.objects.get(schedule=schedule, item_type="opening_prayer")
+        self.assertEqual(updated_item.position, 3)
+        self.assertEqual(updated_item.start_time, dt.time(10, 40))
+
+    def test_rejects_payload_with_duplicate_schedule_item_types(self):
+        response = async_to_sync(intake_schedule_from_whatsapp)(
+            payload=self._payload(
+                source_message_id="wamid-duplicate-types",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "Min. Samuel Ojoh",
+                        "item_type": "opening_prayer",
+                    },
+                    {
+                        "position": 2,
+                        "title": "Another Prayer",
+                        "leader_name": "Min. Victor Umukoro",
+                        "item_type": "opening_prayer",
+                    },
+                ],
+            ),
+            n8n_api_key="test-intake-key",
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
+        self.assertEqual(ScheduleItem.objects.count(), 0)
 
     def test_partial_item_parsing_infers_type(self):
         payload = self._payload(
@@ -362,3 +425,20 @@ class WhatsAppScheduleIntakeTests(TestCase):
         self.assertEqual(ServiceSchedule.objects.count(), 0)
         self.assertEqual(ScheduleItem.objects.count(), 0)
         self.assertEqual(ContentSubmission.objects.count(), 0)
+
+    def test_schedule_items_must_be_unique_by_type_per_schedule(self):
+        schedule = ServiceSchedule.objects.create(date=dt.date(2026, 2, 15), title="Sunday Service")
+        ScheduleItem.objects.create(
+            schedule=schedule,
+            position=1,
+            item_type="opening_prayer",
+            title="Opening Prayer",
+        )
+
+        with self.assertRaises(ValidationError):
+            ScheduleItem.objects.create(
+                schedule=schedule,
+                position=2,
+                item_type="opening_prayer",
+                title="Opening Prayer Again",
+            )

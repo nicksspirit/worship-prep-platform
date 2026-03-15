@@ -117,6 +117,9 @@ class ScheduleItem(BaseModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["schedule", "position"], name="unique_schedule_item_position"
+            ),
+            models.UniqueConstraint(
+                fields=["schedule", "item_type"], name="unique_schedule_item_type"
             )
         ]
         ordering = ["position"]

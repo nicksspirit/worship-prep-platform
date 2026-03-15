@@ -15,6 +15,7 @@ from apps.schedules.choices import (
     SubmissionStatus,
 )
 from apps.schedules.exceptions import (
+    DuplicateScheduleItemTypeError,
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
@@ -40,6 +41,18 @@ class IntakeResult:
     items_created: int
     items_updated: int
     submission: ContentSubmission
+
+
+@dataclass(frozen=True)
+class ScheduleItemData:
+    position: int
+    item_type: str
+    title: str
+    start_time: dt.time | None
+    end_time: dt.time | None
+    is_required: bool
+    assigned_contact: Contact | None
+    notes: str
 
 
 def parse_optional_time(value: str | None) -> dt.time | None:
@@ -134,6 +147,72 @@ def get_or_create_contact(leader_name: str | None, phone: str | None) -> Contact
     return contact
 
 
+def validate_unique_item_types(items: list[AgendaItemPayload]) -> None:
+    seen_item_types: set[str] = set()
+    for item in items:
+        item_type = infer_item_type(item)
+        if item_type in seen_item_types:
+            raise DuplicateScheduleItemTypeError(
+                f"Schedule items must be unique per type. Duplicate type: '{item_type}'."
+            )
+        seen_item_types.add(item_type)
+
+
+def upsert_schedule_item(
+    *,
+    schedule: ServiceSchedule,
+    item_data: ScheduleItemData,
+) -> bool:
+    schedule_item = (
+        ScheduleItem.objects.select_for_update()
+        .filter(schedule=schedule, item_type=item_data.item_type)
+        .first()
+    )
+    if schedule_item is None:
+        schedule_item = (
+            ScheduleItem.objects.select_for_update()
+            .filter(schedule=schedule, position=item_data.position)
+            .first()
+        )
+
+    if schedule_item is None:
+        ScheduleItem.objects.create(
+            schedule=schedule,
+            position=item_data.position,
+            item_type=item_data.item_type,
+            title=item_data.title,
+            start_time=item_data.start_time,
+            end_time=item_data.end_time,
+            is_required=item_data.is_required,
+            assigned_contact=item_data.assigned_contact,
+            notes=item_data.notes,
+        )
+        return True
+
+    schedule_item.position = item_data.position
+    schedule_item.item_type = item_data.item_type
+    schedule_item.title = item_data.title
+    schedule_item.start_time = item_data.start_time
+    schedule_item.end_time = item_data.end_time
+    schedule_item.is_required = item_data.is_required
+    schedule_item.assigned_contact = item_data.assigned_contact
+    schedule_item.notes = item_data.notes
+    schedule_item.save(
+        update_fields=[
+            "position",
+            "item_type",
+            "title",
+            "start_time",
+            "end_time",
+            "is_required",
+            "assigned_contact",
+            "notes",
+            "updated_on",
+        ]
+    )
+    return False
+
+
 @transaction.atomic
 def _intake_whatsapp_schedule_sync(
     payload: WhatsAppScheduleIntakePayload,
@@ -142,6 +221,8 @@ def _intake_whatsapp_schedule_sync(
 ) -> IntakeResult:
     builtins_payload = msgspec.to_builtins(payload)
     submission_message_id = payload.source_message_id if allow_create else None
+
+    validate_unique_item_types(payload.items)
 
     existing_submission = None
     if allow_create and submission_message_id:
@@ -189,22 +270,24 @@ def _intake_whatsapp_schedule_sync(
     items_created = 0
     items_updated = 0
     for index, item in enumerate(payload.items, start=1):
-        position = item.position or index
-        assigned_contact = get_or_create_contact(item.leader_name, payload.sender_phone)
-        defaults = {
-            "item_type": infer_item_type(item),
-            "title": item.title,
-            "start_time": parse_optional_time(item.time_start),
-            "end_time": parse_optional_time(item.time_end),
-            "is_required": item.is_required,
-            "assigned_contact": assigned_contact,
-            "notes": item.notes or "",
-        }
-        _schedule_item, item_created = ScheduleItem.objects.update_or_create(
-            schedule=schedule,
-            position=position,
-            defaults=defaults,
+        item_data = ScheduleItemData(
+            position=item.position or index,
+            item_type=infer_item_type(item),
+            title=item.title,
+            start_time=parse_optional_time(item.time_start),
+            end_time=parse_optional_time(item.time_end),
+            is_required=item.is_required,
+            assigned_contact=get_or_create_contact(
+                item.leader_name, payload.sender_phone
+            ),
+            notes=item.notes or "",
         )
+
+        item_created = upsert_schedule_item(
+            schedule=schedule,
+            item_data=item_data,
+        )
+
         if item_created:
             items_created += 1
         else:
@@ -241,9 +324,7 @@ def _intake_whatsapp_schedule_sync(
     )
 
 
-async def intake_whatsapp_schedule(
-    payload: WhatsAppScheduleIntakePayload,
-) -> IntakeResult:
+async def intake_whatsapp_schedule(payload: WhatsAppScheduleIntakePayload) -> IntakeResult:
     return await sync_to_async(_intake_whatsapp_schedule_sync, thread_sensitive=True)(
         payload,
         allow_create=True,
