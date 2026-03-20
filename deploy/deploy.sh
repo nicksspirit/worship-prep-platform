@@ -11,10 +11,12 @@
 #   GCP_REGION              (default: us-central1)
 #   AR_REPOSITORY           (default: worship-prep)
 #   IMAGE_NAME              (default: worship-prep-app)
-#   DJANGO_SERVICE          (default: worship-prep-django)
-#   BOLT_SERVICE            (default: worship-prep-bolt)
-#   MIGRATE_JOB             (default: worship-prep-migrate)
+#   DJANGO_SERVICE          (default: wpp-app)
+#   BOLT_SERVICE            (default: wpp-api)
+#   MIGRATE_JOB             (default: wpp-migrate)
 #   SUPABASE_S3_REGION      (default: us-east-1)
+#   ALLOWED_HOSTS           Comma-separated runtime hosts
+#   CSRF_TRUSTED_ORIGINS    Comma-separated trusted origins for Django
 #
 set -euo pipefail
 
@@ -34,22 +36,26 @@ SUPABASE_S3_ENDPOINT="${SUPABASE_S3_ENDPOINT:?Set SUPABASE_S3_ENDPOINT}"
 REGION="${GCP_REGION:-us-central1}"
 AR_REPO="${AR_REPOSITORY:-worship-prep}"
 IMAGE_NAME="${IMAGE_NAME:-worship-prep-app}"
-DJANGO_SERVICE="${DJANGO_SERVICE:-worship-prep-django}"
-BOLT_SERVICE="${BOLT_SERVICE:-worship-prep-bolt}"
-MIGRATE_JOB="${MIGRATE_JOB:-worship-prep-migrate}"
+DJANGO_SERVICE="${DJANGO_SERVICE:-wpp-app}"
+BOLT_SERVICE="${BOLT_SERVICE:-wpp-api}"
+MIGRATE_JOB="${MIGRATE_JOB:-wpp-migrate}"
 SUPABASE_S3_REGION="${SUPABASE_S3_REGION:-us-east-1}"
+ALLOWED_HOSTS="${ALLOWED_HOSTS:-.run.app,localhost,127.0.0.1}"
+CSRF_TRUSTED_ORIGINS="${CSRF_TRUSTED_ORIGINS:-https://*.run.app}"
 
 gcloud builds submit "${ROOT}" \
   --project="${PROJECT_ID}" \
   --config="${ROOT}/cloudbuild.yaml" \
   --substitutions=\
-"_REGION=${REGION},\
-_AR_REPOSITORY=${AR_REPO},\
-_IMAGE_NAME=${IMAGE_NAME},\
-_RUNTIME_SA=${RUNTIME_SA},\
-_DJANGO_SERVICE=${DJANGO_SERVICE},\
-_BOLT_SERVICE=${BOLT_SERVICE},\
-_MIGRATE_JOB=${MIGRATE_JOB},\
-_SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET},\
-_SUPABASE_S3_ENDPOINT=${SUPABASE_S3_ENDPOINT},\
-_SUPABASE_S3_REGION=${SUPABASE_S3_REGION}"
+"^|^_REGION=${REGION}|\
+_AR_REPOSITORY=${AR_REPO}|\
+_IMAGE_NAME=${IMAGE_NAME}|\
+_RUNTIME_SA=${RUNTIME_SA}|\
+_DJANGO_SERVICE=${DJANGO_SERVICE}|\
+_BOLT_SERVICE=${BOLT_SERVICE}|\
+_MIGRATE_JOB=${MIGRATE_JOB}|\
+_SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET}|\
+_SUPABASE_S3_ENDPOINT=${SUPABASE_S3_ENDPOINT}|\
+_SUPABASE_S3_REGION=${SUPABASE_S3_REGION}|\
+_ALLOWED_HOSTS=${ALLOWED_HOSTS}|\
+_CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}"

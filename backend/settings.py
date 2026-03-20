@@ -175,7 +175,7 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 STATIC_ROOT = PUBLIC_ASSET_DIR / "static"
 MEDIA_ROOT = PUBLIC_ASSET_DIR / "media"
-STATICFILES_DIRS: list[str] = []
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 LOCAL_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 LOCAL_STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
@@ -206,7 +206,7 @@ if SUPABASE_STORAGE_BUCKET:
 
 if DJANGO_ENV == "prod":
     STORAGES["staticfiles"] = {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     }
 
 # Default primary key field type

@@ -1004,7 +1004,6 @@ dependencies = [
     { name = "environs", extra = ["django"] },
     { name = "psycopg", extra = ["binary"] },
     { name = "reactivated" },
-    { name = "structlog" },
 ]
 
 [package.dev-dependencies]
@@ -1042,7 +1041,6 @@ requires-dist = [
     { name = "environs", extras = ["django"], specifier = ">=14.5.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.2" },
     { name = "reactivated", specifier = ">=0.47.8" },
-    { name = "structlog", specifier = ">=25.4.0" },
 ]
 
 [package.metadata.requires-dev]

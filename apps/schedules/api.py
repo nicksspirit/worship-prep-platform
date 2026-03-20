@@ -3,14 +3,15 @@ from typing import Annotated
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import connections
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.urls import reverse
 from django.utils.crypto import constant_time_compare
 from django_bolt import BoltAPI, JSON, Request
 from django_bolt.auth import IsAuthenticated
-from django_bolt.health import add_health_check, check_database, register_health_checks
-from django_bolt.logging import LoggingConfig, LoggingMiddleware
+from django_bolt.health import add_health_check, register_health_checks
+from django_bolt.logging import LoggingConfig
 from django_bolt.middleware import CompressionConfig
 from django_bolt.openapi import OpenAPIConfig
 from django_bolt.param_functions import Header
@@ -33,6 +34,15 @@ DJANGO_ENV = getattr(settings, "DJANGO_ENV", "local")
 BOLT_HEALTH_PREFIX = "/api/v1"
 
 
+def _check_database_sync() -> tuple[bool, str]:
+    try:
+        connection = connections["default"]
+        connection.ensure_connection()
+        return True, "Database OK"
+    except Exception as exc:
+        return False, f"Database error: {exc}"
+
+
 def _check_storage_sync() -> tuple[bool, str]:
     filename = "__healthcheck__/bolt-storage-check.txt"
     try:
@@ -44,6 +54,10 @@ def _check_storage_sync() -> tuple[bool, str]:
         return True, "Storage OK"
     except Exception as exc:
         return False, f"Storage error: {exc}"
+
+
+async def check_database() -> tuple[bool, str]:
+    return await sync_to_async(_check_database_sync)()
 
 
 async def check_storage() -> tuple[bool, str]:
@@ -66,17 +80,15 @@ bolt_logging_config = LoggingConfig(
     min_duration_ms=0 if DJANGO_ENV in ("local", "test") else 100,
 )
 
-bolt_logging_mw = LoggingMiddleware(bolt_logging_config)
-
 api = BoltAPI(
     openapi_config=OpenAPIConfig(
         title="Worship Prep Platform API",
         description="Inbound schedule intake and workflow automation endpoints.",
         version="1.0.0",
     ),
-    middleware=[bolt_logging_mw],
     django_middleware=True,
-    enable_logging=False,
+    enable_logging=True,
+    logging_config=bolt_logging_config,
     compression=CompressionConfig(backend="gzip", minimum_size=500),
     prefix=BOLT_HEALTH_PREFIX,
 )
