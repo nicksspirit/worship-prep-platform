@@ -1,13 +1,17 @@
 import datetime as dt
-import logging
 from typing import Annotated
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.urls import reverse
 from django.utils.crypto import constant_time_compare
 from django_bolt import BoltAPI, JSON, Request
 from django_bolt.auth import IsAuthenticated
-from django_bolt.middleware import Middleware
+from django_bolt.health import add_health_check, check_database, register_health_checks
+from django_bolt.logging import LoggingConfig, LoggingMiddleware
+from django_bolt.middleware import CompressionConfig
 from django_bolt.openapi import OpenAPIConfig
 from django_bolt.param_functions import Header
 
@@ -16,11 +20,7 @@ from apps.schedules.exceptions import (
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
-from apps.schedules.schemas import (
-    IntakeResponse,
-    ScheduleIntakePayload,
-    SchedulePreviewResponse,
-)
+from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload
 from apps.schedules.services.intake import intake_schedule, patch_schedule
 from apps.schedules.services.preview import (
     get_schedule_preview_async,
@@ -28,42 +28,45 @@ from apps.schedules.services.preview import (
     list_recent_schedule_summaries_async,
 )
 
-logger = logging.getLogger("apps.schedules.inbound")
+DJANGO_ENV = getattr(settings, "DJANGO_ENV", "local")
+
+BOLT_HEALTH_PREFIX = "/api/v1"
 
 
-class InboundRequestDebugMiddleware(Middleware):
-    """Logs inbound request data for debugging integrations."""
+def _check_storage_sync() -> tuple[bool, str]:
+    filename = "__healthcheck__/bolt-storage-check.txt"
+    try:
+        saved_name = default_storage.save(filename, ContentFile(b"ok"))
+        exists = default_storage.exists(saved_name)
+        default_storage.delete(saved_name)
+        if not exists:
+            return False, "Storage write/read failed"
+        return True, "Storage OK"
+    except Exception as exc:
+        return False, f"Storage error: {exc}"
 
-    async def process_request(self, request):
-        debug_enabled = getattr(settings, "LOG_INBOUND_SCHEDULE_REQUESTS", False)
-        if not debug_enabled:
-            return await self.get_response(request)
 
-        body_preview = ""
-        if request.body:
-            try:
-                body_preview = request.body.decode("utf-8")[:500]
-            except UnicodeDecodeError:
-                body_preview = "<non-utf8-body>"
+async def check_storage() -> tuple[bool, str]:
+    return await sync_to_async(_check_storage_sync)()
 
-        log_payload = {
-            "method": request.method,
-            "path": request.path,
-            "query": dict(request.query) if request.query else {},
-            "headers": dict(request.headers),
-            "body_preview": body_preview,
-        }
-        logger.info("Inbound schedule intake request: %s", log_payload)
 
-        response = await self.get_response(request)
-        logger.info(
-            "Inbound schedule intake response: %s %s %s",
-            request.method,
-            request.path,
-            response.status_code,
-        )
-        return response
+add_health_check(check_database)
+add_health_check(check_storage)
 
+bolt_logging_config = LoggingConfig(
+    logger_name="django_bolt.logging",
+    skip_paths={
+        f"{BOLT_HEALTH_PREFIX}/health",
+        f"{BOLT_HEALTH_PREFIX}/ready",
+    },
+    request_log_fields={"method", "path", "client_ip", "user_agent"},
+    response_log_fields={"status_code", "duration"},
+    obfuscate_headers={"authorization", "cookie", "x-api-key", "x-n8n-api-key"},
+    sample_rate=1.0 if DJANGO_ENV in ("local", "test") else 0.1,
+    min_duration_ms=0 if DJANGO_ENV in ("local", "test") else 100,
+)
+
+bolt_logging_mw = LoggingMiddleware(bolt_logging_config)
 
 api = BoltAPI(
     openapi_config=OpenAPIConfig(
@@ -71,9 +74,11 @@ api = BoltAPI(
         description="Inbound schedule intake and workflow automation endpoints.",
         version="1.0.0",
     ),
-    middleware=[InboundRequestDebugMiddleware],
+    middleware=[bolt_logging_mw],
     django_middleware=True,
-    prefix="/api/v1",
+    enable_logging=False,
+    compression=CompressionConfig(backend="gzip", minimum_size=500),
+    prefix=BOLT_HEALTH_PREFIX,
 )
 
 
@@ -282,3 +287,5 @@ def build_intake_response(
         preview_url=build_preview_url(result.schedule.date, request=request),
     )
 
+
+register_health_checks(api)

@@ -9,7 +9,9 @@ dependencies = [
     "django-allauth[socialaccount]>=65.13.0",
     "django-bolt>=0.6.0",
     "django-cors-headers>=4.9.0",
+    "django-health-check>=3.20.0",
     "django-stubs-ext>=5.2.7",
+    "django-structlog>=9.1.0",
     "django-typer>=3.4.0",
     "django-unfold>=0.71.0",
     "environs[django]>=14.5.0",
@@ -21,6 +23,19 @@ dependencies = [
 dev = [
     "django-stubs[compatible-mypy]>=5.2.7",
     "easy-django-cli>=0.2.0",
+]
+local = [
+    { include-group = "dev" },
+]
+prod = [
+    "django-storages[boto3]>=1.14.6",
+    "gunicorn>=23.0.0",
+    "whitenoise>=6.9.0",
+]
+test = [
+    "pytest>=8.4.0",
+    "pytest-django>=4.11.0",
+    { include-group = "dev" },
 ]
 
 

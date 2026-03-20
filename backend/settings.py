@@ -11,8 +11,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from typing import Any
 
 import django_stubs_ext
+from django.core.exceptions import ImproperlyConfigured
 from environs import Env
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -23,6 +25,8 @@ django_stubs_ext.monkeypatch()
 
 env = Env()
 env.read_env()
+
+from backend.logging import DJANGO_ENV, LOGGING  # noqa: E402
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,9 +42,18 @@ SECRET_KEY = env.str(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool("DEBUG", default=True)
+DEBUG = env.bool("DEBUG", default=DJANGO_ENV == "local")
 
-ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=['trojanhq.tplinkdns.com', 'localhost'])
+ALLOWED_HOSTS: list[str] = env.list(
+    "ALLOWED_HOSTS", default=["trojanhq.tplinkdns.com", "localhost"]
+)
+
+CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+if DJANGO_ENV == "prod":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -55,6 +68,8 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     "reactivated",
+    "django_structlog",
+    "health_check",
     "django_bolt",
     # Django apps
     "django.contrib.admin",
@@ -73,11 +88,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "apps.common.middleware.ApiCsrfExemptMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
@@ -125,6 +142,10 @@ DATABASES = {
     ),
 }
 
+if DJANGO_ENV == "prod":
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -149,9 +170,44 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = "static/"
-STATIC_ROOT = env.path("STATIC_ROOT", default=BASE_DIR / "public" / "static")
-STATICFILES_DIRS = (BASE_DIR / "static/",)
+PUBLIC_ASSET_DIR = BASE_DIR / "public"
+STATIC_URL = "/static/"
+MEDIA_URL = "/media/"
+STATIC_ROOT = PUBLIC_ASSET_DIR / "static"
+MEDIA_ROOT = PUBLIC_ASSET_DIR / "media"
+STATICFILES_DIRS: list[str] = []
+
+LOCAL_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+LOCAL_STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+
+STORAGES: dict[str, dict[str, Any]] = {
+    "default": {"BACKEND": LOCAL_FILE_STORAGE},
+    "staticfiles": {"BACKEND": LOCAL_STATICFILES_STORAGE},
+}
+
+SUPABASE_STORAGE_BUCKET = env.str("SUPABASE_STORAGE_BUCKET", default="")
+
+if DJANGO_ENV == "prod" and not SUPABASE_STORAGE_BUCKET:
+    raise ImproperlyConfigured("SUPABASE_STORAGE_BUCKET must be set in production.")
+
+if SUPABASE_STORAGE_BUCKET:
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": SUPABASE_STORAGE_BUCKET,
+            "endpoint_url": env.str("SUPABASE_S3_ENDPOINT"),
+            "access_key": env.str("SUPABASE_S3_ACCESS_KEY"),
+            "secret_key": env.str("SUPABASE_S3_SECRET_KEY"),
+            "region_name": env.str("SUPABASE_S3_REGION", default="us-east-1"),
+            "default_acl": None,
+            "querystring_auth": False,
+        },
+    }
+
+if DJANGO_ENV == "prod":
+    STORAGES["staticfiles"] = {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -191,7 +247,8 @@ SOCIALACCOUNT_PROVIDERS = {
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
 N8N_INTAKE_API_KEY = env.str("N8N_INTAKE_API_KEY", default="intake-key-for-testing")
-LOG_INBOUND_SCHEDULE_REQUESTS = env.bool("LOG_INBOUND_SCHEDULE_REQUESTS", default=False)
+
+BOLT_PROCESSES = env.int("BOLT_PROCESSES", default=1)
 
 # Unfold Admin Configuration
 UNFOLD = {
