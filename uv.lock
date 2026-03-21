@@ -1004,6 +1004,7 @@ dependencies = [
     { name = "environs", extra = ["django"] },
     { name = "psycopg", extra = ["binary"] },
     { name = "reactivated" },
+    { name = "whitenoise" },
 ]
 
 [package.dev-dependencies]
@@ -1018,7 +1019,6 @@ local = [
 prod = [
     { name = "django-storages", extra = ["boto3"] },
     { name = "gunicorn" },
-    { name = "whitenoise" },
 ]
 test = [
     { name = "django-stubs", extra = ["compatible-mypy"] },
@@ -1041,6 +1041,7 @@ requires-dist = [
     { name = "environs", extras = ["django"], specifier = ">=14.5.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.2" },
     { name = "reactivated", specifier = ">=0.47.8" },
+    { name = "whitenoise", specifier = ">=6.9.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1055,7 +1056,6 @@ local = [
 prod = [
     { name = "django-storages", extras = ["boto3"], specifier = ">=1.14.6" },
     { name = "gunicorn", specifier = ">=23.0.0" },
-    { name = "whitenoise", specifier = ">=6.9.0" },
 ]
 test = [
     { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.7" },

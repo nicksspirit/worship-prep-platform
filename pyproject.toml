@@ -14,6 +14,7 @@ dependencies = [
     "django-structlog>=9.1.0",
     "django-typer>=3.4.0",
     "django-unfold>=0.71.0",
+    "whitenoise>=6.9.0",
     "environs[django]>=14.5.0",
     "psycopg[binary]>=3.3.2",
     "reactivated>=0.47.8",
@@ -30,7 +31,6 @@ local = [
 prod = [
     "django-storages[boto3]>=1.14.6",
     "gunicorn>=23.0.0",
-    "whitenoise>=6.9.0",
 ]
 test = [
     "pytest>=8.4.0",

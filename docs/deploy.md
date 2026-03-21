@@ -143,10 +143,12 @@ The expected meaning of the database URLs is:
 The expected meaning of the storage variables is:
 
 - `SUPABASE_STORAGE_BUCKET`: the media bucket name, usually `wpp-media`
-- `SUPABASE_S3_ENDPOINT`: your Supabase S3 endpoint
+- `SUPABASE_S3_ENDPOINT`: your Supabase S3 endpoint, in the form `https://<PROJECT_REF>.supabase.co/storage/v1/s3`
 - `SUPABASE_S3_ACCESS_KEY`: S3 access key
 - `SUPABASE_S3_SECRET_KEY`: S3 secret key
 - `SUPABASE_S3_REGION`: usually `us-east-1`
+
+**Important:** `deploy/deploy.sh` will hard-fail if `SUPABASE_STORAGE_BUCKET` or `SUPABASE_S3_ENDPOINT` are empty. Make sure both are set in `.env` or exported before running the script. If your `.env` only has `SUPABASE_URL`, you still need to add these two variables separately.
 
 ## Step 2: Create the Supabase Storage Buckets
 
@@ -271,12 +273,12 @@ The deployment currently uses these Cloud Run names:
 - API service: `wpp-api`
 - migration job: `wpp-migrate`
 
-The deployment also uses these default environment values:
+The deployment also keeps these Cloud Run-safe values in the runtime environment:
 
-- `ALLOWED_HOSTS=.run.app,localhost,127.0.0.1`
-- `CSRF_TRUSTED_ORIGINS=https://*.run.app`
+- `ALLOWED_HOSTS` always includes `.run.app`
+- `CSRF_TRUSTED_ORIGINS` always includes `https://*.run.app`
 
-You do not usually need to override these unless your deployment strategy changes.
+This means future Cloud Run `*.run.app` URLs continue to work without per-release host updates. If you add custom domains, append them instead of replacing the wildcard Cloud Run entries.
 
 ## Step 6: Run the Deployment
 
@@ -294,17 +296,19 @@ Export the deployment variables expected by `deploy/deploy.sh`:
 export GCP_PROJECT_ID=worship-prep-portal
 export GCP_REGION=us-west1
 export RUNTIME_SA=wpp-runtime@worship-prep-portal.iam.gserviceaccount.com
-export SUPABASE_STORAGE_BUCKET=wpp-media
-export SUPABASE_S3_ENDPOINT="https://<SUPABASE_PROJECT_REF>.supabase.co/storage/v1/s3"
-export SUPABASE_S3_REGION=us-east-1
-export AR_REPOSITORY=worship-prep
-export IMAGE_NAME=worship-prep-app
-export DJANGO_SERVICE=wpp-app
-export BOLT_SERVICE=wpp-api
-export MIGRATE_JOB=wpp-migrate
-export ALLOWED_HOSTS=".run.app,localhost,127.0.0.1"
-export CSRF_TRUSTED_ORIGINS="https://*.run.app"
 ```
+
+If your `.env` already contains `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ENDPOINT`, and `SUPABASE_S3_REGION`, no additional exports are needed — the `source .env` step above makes them available. Otherwise, export them explicitly:
+
+```bash
+export SUPABASE_STORAGE_BUCKET=wpp-media
+export SUPABASE_S3_ENDPOINT="https://<PROJECT_REF>.supabase.co/storage/v1/s3"
+export SUPABASE_S3_REGION=us-east-1
+```
+
+The remaining variables (`AR_REPOSITORY`, `IMAGE_NAME`, `DJANGO_SERVICE`, `BOLT_SERVICE`, `MIGRATE_JOB`) default to the project's standard naming and only need to be exported if you've changed them.
+
+You do not need to export `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS`. `deploy/deploy.sh` automatically ensures `.run.app` and `https://*.run.app` are present, even if your `.env` file has narrower values.
 
 Run the deployment:
 
@@ -312,10 +316,12 @@ Run the deployment:
 ./deploy/deploy.sh
 ```
 
+**Important:** `deploy/deploy.sh` defaults `GCP_REGION` to `us-central1`, but this project's infrastructure is in `us-west1`. Always export `GCP_REGION=us-west1` before running the script, or your resources will be created in the wrong region.
+
 What this command does:
 
 1. uploads the source to Cloud Build
-2. builds the production Docker image
+2. builds the production Docker image (~5 minutes)
 3. pushes the image to Artifact Registry
 4. deploys the migration job
 5. runs migrations
@@ -354,21 +360,21 @@ gcloud run jobs list --region=us-west1
 Check the Django service:
 
 ```bash
-curl -fsSL https://wpp-app-<PROJECT_NUMBER>.us-west1.run.app/health/
-curl -fsSL https://wpp-app-<PROJECT_NUMBER>.us-west1.run.app/ready/
+curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/health/
+curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/ready/
 ```
 
 Check the API service:
 
 ```bash
-curl -fsSL https://wpp-api-<PROJECT_NUMBER>.us-west1.run.app/api/v1/health
-curl -fsSL https://wpp-api-<PROJECT_NUMBER>.us-west1.run.app/api/v1/ready
+curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/health
+curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/ready
 ```
 
 Check the app login page:
 
 ```bash
-curl -I "https://wpp-app-<PROJECT_NUMBER>.us-west1.run.app/accounts/login/?next=/"
+curl -I "https://wpp-app-zxdtzfpwua-uw.a.run.app/accounts/login/?next=/"
 ```
 
 You should see `200` responses for all of these.
@@ -501,6 +507,18 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 
 ## Troubleshooting
 
+### `deploy.sh` fails immediately with "Set SUPABASE_STORAGE_BUCKET" or "Set SUPABASE_S3_ENDPOINT"
+
+Symptom:
+
+- the script exits before uploading anything to Cloud Build
+
+Fix:
+
+- add `SUPABASE_STORAGE_BUCKET` and `SUPABASE_S3_ENDPOINT` to your `.env` file, or export them before running the script
+- `SUPABASE_STORAGE_BUCKET` is usually `wpp-media`
+- `SUPABASE_S3_ENDPOINT` follows the form `https://<PROJECT_REF>.supabase.co/storage/v1/s3`; the project ref is the subdomain of your `SUPABASE_URL`
+
 ### `DisallowedHost`
 
 Symptom:
@@ -510,8 +528,22 @@ Symptom:
 
 Fix:
 
-- make sure `ALLOWED_HOSTS` includes `.run.app`
+- check whether `.env`, `deploy/deploy.sh`, or a Cloud Build trigger is explicitly setting a narrow `ALLOWED_HOSTS`
+- make sure the deployed value still includes `.run.app`
 - redeploy the app
+
+### CSRF origin rejected
+
+Symptom:
+
+- Django returns `403 Forbidden`
+- the response mentions `Origin checking failed`
+
+Fix:
+
+- check whether `.env`, `deploy/deploy.sh`, or a Cloud Build trigger is explicitly setting a narrow `CSRF_TRUSTED_ORIGINS`
+- make sure the deployed value still includes `https://*.run.app`
+- redeploy `wpp-app`
 
 ### App pages render without CSS or JS
 
@@ -577,25 +609,21 @@ set +a
 export GCP_PROJECT_ID=worship-prep-portal
 export GCP_REGION=us-west1
 export RUNTIME_SA=wpp-runtime@worship-prep-portal.iam.gserviceaccount.com
-export SUPABASE_STORAGE_BUCKET=wpp-media
-export SUPABASE_S3_ENDPOINT="https://<SUPABASE_PROJECT_REF>.supabase.co/storage/v1/s3"
-export SUPABASE_S3_REGION=us-east-1
-export AR_REPOSITORY=worship-prep
-export IMAGE_NAME=worship-prep-app
-export DJANGO_SERVICE=wpp-app
-export BOLT_SERVICE=wpp-api
-export MIGRATE_JOB=wpp-migrate
 
 ./deploy/deploy.sh
 ```
 
+This assumes `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ENDPOINT`, and `SUPABASE_S3_REGION` are already in your `.env`. If they are not, export them before running the script (see Step 6).
+
+Typical build duration is around 5 minutes.
+
 Then verify:
 
 ```bash
-curl -fsSL https://wpp-app-<PROJECT_NUMBER>.us-west1.run.app/health/
-curl -fsSL https://wpp-app-<PROJECT_NUMBER>.us-west1.run.app/ready/
-curl -fsSL https://wpp-api-<PROJECT_NUMBER>.us-west1.run.app/api/v1/health
-curl -fsSL https://wpp-api-<PROJECT_NUMBER>.us-west1.run.app/api/v1/ready
+curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/health/
+curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/ready/
+curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/health
+curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/ready
 ```
 
 ## Final Notes

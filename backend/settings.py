@@ -44,11 +44,22 @@ SECRET_KEY = env.str(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=DJANGO_ENV == "local")
 
-ALLOWED_HOSTS: list[str] = env.list(
-    "ALLOWED_HOSTS", default=["trojanhq.tplinkdns.com", "localhost"]
-)
+DEFAULT_ALLOWED_HOSTS = [
+    "trojanhq.tplinkdns.com",
+    ".run.app",
+    "localhost",
+    "127.0.0.1",
+]
+DEFAULT_CSRF_TRUSTED_ORIGINS = [
+    "https://*.run.app",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 
-CSRF_TRUSTED_ORIGINS: list[str] = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=DEFAULT_ALLOWED_HOSTS)
+CSRF_TRUSTED_ORIGINS: list[str] = env.list(
+    "CSRF_TRUSTED_ORIGINS", default=DEFAULT_CSRF_TRUSTED_ORIGINS
+)
 
 if DJANGO_ENV == "prod":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -255,6 +266,37 @@ UNFOLD = {
     "SITE_TITLE": "Worship Prep Admin",
     "SITE_HEADER": "Worship Prep Platform",
     "SITE_URL": "/",
+    "SITE_ICON": {
+        "light": lambda request: "/static/rccgcm_logo.png",
+        "dark": lambda request: "/static/rccgcm_logo.png",
+    },
+    "SITE_LOGO": {
+        "light": lambda request: "/static/rccgcm_logo.png",
+        "dark": lambda request: "/static/rccgcm_logo.png",
+    },
+    "SITE_FAVICONS": [
+        {
+            "rel": "apple-touch-icon",
+            "sizes": "180x180",
+            "href": lambda request: "/static/apple-touch-icon.png",
+        },
+        {
+            "rel": "icon",
+            "type": "image/png",
+            "sizes": "32x32",
+            "href": lambda request: "/static/favicon-32x32.png",
+        },
+        {
+            "rel": "icon",
+            "type": "image/png",
+            "sizes": "16x16",
+            "href": lambda request: "/static/favicon-16x16.png",
+        },
+        {
+            "rel": "shortcut icon",
+            "href": lambda request: "/static/favicon.ico",
+        },
+    ],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,

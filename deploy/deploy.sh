@@ -15,8 +15,8 @@
 #   BOLT_SERVICE            (default: wpp-api)
 #   MIGRATE_JOB             (default: wpp-migrate)
 #   SUPABASE_S3_REGION      (default: us-east-1)
-#   ALLOWED_HOSTS           Comma-separated runtime hosts
-#   CSRF_TRUSTED_ORIGINS    Comma-separated trusted origins for Django
+#   ALLOWED_HOSTS           Comma-separated runtime hosts; .run.app is always appended
+#   CSRF_TRUSTED_ORIGINS    Comma-separated trusted origins; https://*.run.app is always appended
 #
 set -euo pipefail
 
@@ -40,8 +40,39 @@ DJANGO_SERVICE="${DJANGO_SERVICE:-wpp-app}"
 BOLT_SERVICE="${BOLT_SERVICE:-wpp-api}"
 MIGRATE_JOB="${MIGRATE_JOB:-wpp-migrate}"
 SUPABASE_S3_REGION="${SUPABASE_S3_REGION:-us-east-1}"
-ALLOWED_HOSTS="${ALLOWED_HOSTS:-.run.app,localhost,127.0.0.1}"
-CSRF_TRUSTED_ORIGINS="${CSRF_TRUSTED_ORIGINS:-https://*.run.app}"
+
+append_csv_value() {
+  local csv="${1:-}"
+  local required="$2"
+  local IFS=','
+  local values=()
+
+  if [[ -n "$csv" ]]; then
+    read -r -a values <<< "$csv"
+    for value in "${values[@]}"; do
+      value="${value#"${value%%[![:space:]]*}"}"
+      value="${value%"${value##*[![:space:]]}"}"
+      if [[ "$value" == "$required" ]]; then
+        printf '%s' "$csv"
+        return
+      fi
+    done
+
+    printf '%s,%s' "$csv" "$required"
+    return
+  fi
+
+  printf '%s' "$required"
+}
+
+# Keep wildcard Cloud Run entries even when deploying from an older .env that
+# still sets narrower host/origin lists.
+ALLOWED_HOSTS="$(append_csv_value "${ALLOWED_HOSTS:-localhost,127.0.0.1}" ".run.app")"
+CSRF_TRUSTED_ORIGINS="$(
+  append_csv_value \
+    "${CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}" \
+    "https://*.run.app"
+)"
 
 gcloud builds submit "${ROOT}" \
   --project="${PROJECT_ID}" \

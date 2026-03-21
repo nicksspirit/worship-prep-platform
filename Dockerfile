@@ -13,6 +13,10 @@ FROM python:3.13-slim-bookworm AS build
 
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /code

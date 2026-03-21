@@ -54,6 +54,13 @@ export const Layout = (props: Props) => {
                 <meta charSet="utf-8" />
                 <title>{props.title}</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+                
+                {/* Favicons */}
+                <link rel="apple-touch-icon" sizes="180x180" href={`${STATIC_URL}apple-touch-icon.png`} />
+                <link rel="icon" type="image/png" sizes="32x32" href={`${STATIC_URL}favicon-32x32.png`} />
+                <link rel="icon" type="image/png" sizes="16x16" href={`${STATIC_URL}favicon-16x16.png`} />
+                <link rel="manifest" href={`${STATIC_URL}site.webmanifest`} />
+                <link rel="shortcut icon" href={`${STATIC_URL}favicon.ico`} />
 
                 {/* Development: inject critical CSS to prevent FOUC */}
                 {isDev && <style dangerouslySetInnerHTML={{ __html: devCriticalCSS }} />}
@@ -70,13 +77,8 @@ export const Layout = (props: Props) => {
                         
                         <div className="relative flex w-1/3 justify-center">
                             {/* Centered Circular Logo overlapping the bottom border */}
-                            <div className="absolute top-1/2 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 bg-chapel-secondary-500 shadow-sm">
-                                <svg className="h-8 w-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fillOpacity="0.3"/>
-                                    {/* Abstract Dove/Cross */}
-                                    <path d="M11 7h2v3h3v2h-3v5h-2v-5H8v-2h3V7z" />
-                                    <path d="M7 14c1.5 2 4 3 5 3s3.5-1 5-3c-1.5 1-4 1.5-5 1.5S8.5 15 7 14z" />
-                                </svg>
+                            <div className="absolute top-1/2 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 shadow-sm bg-white overflow-hidden">
+                                <img src={`${STATIC_URL}rccgcm_logo.png`} alt="RCCG Chapel of Mercy Logo" className="h-full w-full object-cover" />
                             </div>
                         </div>
 

@@ -7,6 +7,7 @@
 #
 # Optional:
 #   _REGION, _AR_REPOSITORY, _IMAGE_NAME, service/job names
+#   _ALLOWED_HOSTS, _CSRF_TRUSTED_ORIGINS (default to wildcard-safe Cloud Run values)
 #
 # Secret Manager (for docker build + runtime): SUPABASE_S3_ACCESS_KEY, SUPABASE_S3_SECRET_KEY
 # plus DATABASE_URL, DIRECT_URL, SECRET_KEY, GOOGLE_*, N8N_INTAKE_API_KEY as referenced below.
@@ -22,6 +23,8 @@ substitutions:
   _SUPABASE_STORAGE_BUCKET: ""
   _SUPABASE_S3_ENDPOINT: ""
   _SUPABASE_S3_REGION: us-east-1
+  # Keep wildcard Cloud Run values here so new service URLs continue to work
+  # unless a caller explicitly overrides them.
   _ALLOWED_HOSTS: ".run.app,localhost,127.0.0.1"
   _CSRF_TRUSTED_ORIGINS: "https://*.run.app"
 

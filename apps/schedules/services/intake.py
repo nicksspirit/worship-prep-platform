@@ -306,6 +306,7 @@ def _intake_schedule_sync(
         submission_source = SubmissionSource.EMAIL
     else:
         submission_source = SubmissionSource.UNKNOWN
+
     submission = ContentSubmission.objects.create(
         source=submission_source,
         sender_phone=payload.sender_phone,
