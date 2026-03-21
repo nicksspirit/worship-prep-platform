@@ -71,9 +71,6 @@ if DJANGO_ENV == "prod":
 
 SITE_ID = env.int("SITE_ID", default=1)
 
-# Public base URL for links in emails (no trailing slash). If unset, built from django.contrib.sites.
-SITE_BASE_URL = env.str("SITE_BASE_URL", default="").rstrip("/")
-
 INSTALLED_APPS = [
     # 3rd party apps (unfold must be before django.contrib.admin)
     "unfold.apps.DefaultAppConfig",

@@ -125,6 +125,23 @@ class InvitationRequestAdmin(ModelAdmin):
             level=messages.SUCCESS,
         )
 
+    def save_model(self, request, obj, form, change):
+        original_status = None
+        original_access_level = ""
+        if change:
+            original = InvitationRequest.objects.get(pk=obj.pk)
+            original_status = original.status
+            original_access_level = original.access_level
+
+        if obj.status != RequestStatus.PENDING and (
+            not change
+            or obj.status != original_status
+            or obj.access_level != original_access_level
+        ):
+            obj.reviewed_by = request.user
+
+        super().save_model(request, obj, form, change)
+
     def _approve_and_send(self, request, queryset, access_level: str) -> None:
         mixin = CleanEmailMixin()
         sent = 0

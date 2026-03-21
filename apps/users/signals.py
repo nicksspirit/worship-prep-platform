@@ -1,96 +1,90 @@
-"""Signal handlers for user lifecycle (django-invitations integration)."""
+"""Signal handlers for invitation review and role assignment."""
 
 import logging
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from django.contrib.sites.models import Site
+from django.core.mail import EmailMessage
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
-from django.utils.translation import gettext as _
 
 from invitations.signals import invite_accepted
 
-from apps.users.models import AccessLevel, InvitationRequest, RequestStatus
+from apps.users.models import AccessLevel, InvitationRequest, RequestStatus, User
 
 logger = logging.getLogger(__name__)
 
 
-def _public_base_url() -> str:
-    """Base URL for building links in outbound email (SITE_BASE_URL or django.contrib.sites)."""
-    configured = getattr(settings, "SITE_BASE_URL", "") or ""
-    if configured:
-        return configured.rstrip("/")
-    try:
-        from django.contrib.sites.models import Site
+def _build_invitation_request_review_url(invitation_request_id: int) -> str:
+    path = reverse(
+        "admin:users_invitationrequest_change",
+        args=[invitation_request_id],
+    )
+    domain = Site.objects.get_current().domain.strip()
+    if not domain:
+        return path
 
-        site = Site.objects.get_current()
-        domain = (site.domain or "").strip()
-        if domain.startswith("http://") or domain.startswith("https://"):
-            return domain.rstrip("/")
-        local = domain.startswith("127.") or "localhost" in domain
-        scheme = "http" if local else "https"
-        return f"{scheme}://{domain}".rstrip("/")
+    scheme = "http" if domain.startswith(("localhost", "127.0.0.1")) else "https"
+    return f"{scheme}://{domain}{path}"
+
+
+def _send_invitation_request_notification(invitation_request_id: int) -> None:
+    invitation_request = InvitationRequest.objects.filter(
+        pk=invitation_request_id
+    ).first()
+    if invitation_request is None:
+        return
+
+    admin_emails = list(
+        User.objects.filter(is_active=True, is_staff=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
+    )
+    if not admin_emails:
+        return
+
+    review_url = _build_invitation_request_review_url(invitation_request.pk)
+    message = (
+        "A new invitation request has been submitted and is waiting for review.\n\n"
+        f"Name: {invitation_request.first_name} {invitation_request.last_name}\n"
+        f"Email: {invitation_request.email}\n"
+        f"Message: {invitation_request.message or '(none)'}\n\n"
+        f"Review request: {review_url}\n"
+    )
+
+    try:
+        EmailMessage(
+            subject="Worship Prep: invitation request needs review",
+            body=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[],
+            bcc=admin_emails,
+        ).send(fail_silently=False)
     except Exception:
-        return "http://127.0.0.1:8000"
+        logger.exception(
+            "Failed to send invitation request review notification for request %s",
+            invitation_request.pk,
+        )
 
 
 @receiver(post_save, sender=InvitationRequest)
-def notify_staff_on_new_invitation_request(
+def notify_admins_about_invitation_request(
     sender,
     instance: InvitationRequest,
     created: bool,
     **kwargs,
 ) -> None:
-    """Email all active staff when a new invitation request is submitted."""
+    """Notify active staff users when a new invitation request is submitted."""
     if not created or instance.status != RequestStatus.PENDING:
         return
 
-    User = get_user_model()
-    recipients = list(
-        User.objects.filter(is_staff=True, is_active=True)
-        .exclude(email="")
-        .values_list("email", flat=True)
+    transaction.on_commit(
+        lambda invitation_request_id=instance.pk: _send_invitation_request_notification(
+            invitation_request_id
+        )
     )
-    if not recipients:
-        return
-
-    base = _public_base_url()
-    list_path = reverse("admin:users_invitationrequest_changelist")
-    detail_path = reverse("admin:users_invitationrequest_change", args=[instance.pk])
-    list_url = f"{base}{list_path}"
-    detail_url = f"{base}{detail_path}"
-
-    subject = _("New invitation request: %(email)s") % {"email": instance.email}
-    body = _(
-        "A new invitation request was submitted and needs review.\n\n"
-        "Requester email: %(email)s\n"
-        "Name: %(first)s %(last)s\n"
-        "Message (optional):\n%(message)s\n\n"
-        "Review in admin (list):\n%(list_url)s\n\n"
-        "Open this request:\n%(detail_url)s\n"
-    ) % {
-        "email": instance.email,
-        "first": instance.first_name,
-        "last": instance.last_name,
-        "message": instance.message or _("(none)"),
-        "list_url": list_url,
-        "detail_url": detail_url,
-    }
-
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipients,
-            fail_silently=False,
-        )
-    except Exception:
-        logger.exception(
-            "Failed to send invitation-request notification email to staff"
-        )
 
 
 @receiver(invite_accepted)
@@ -101,7 +95,6 @@ def assign_staff_from_invitation_request(
     **kwargs,
 ) -> None:
     """When an invite is accepted, apply access level from the linked invitation request."""
-    User = get_user_model()
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
         return
