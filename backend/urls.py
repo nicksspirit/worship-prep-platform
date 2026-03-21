@@ -30,6 +30,7 @@ urlpatterns = [
     path("ready/", DjangoReadyView.as_view(), name="ready"),
     path("admin/", admin.site.urls),
     path("accounts/login/", SignInView.as_view(), name="account_login"),
+    path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),
     path("", include("apps.schedules.urls")),
     path("", include("apps.users.urls")),

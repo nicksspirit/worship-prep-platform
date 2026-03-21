@@ -71,6 +71,9 @@ if DJANGO_ENV == "prod":
 
 SITE_ID = env.int("SITE_ID", default=1)
 
+# Public base URL for links in emails (no trailing slash). If unset, built from django.contrib.sites.
+SITE_BASE_URL = env.str("SITE_BASE_URL", default="").rstrip("/")
+
 INSTALLED_APPS = [
     # 3rd party apps (unfold must be before django.contrib.admin)
     "unfold.apps.DefaultAppConfig",
@@ -78,6 +81,7 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
+    "invitations",  # must come after allauth
     "reactivated",
     "django_structlog",
     "health_check",
@@ -132,6 +136,7 @@ TEMPLATES = [
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
+                "apps.common.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.csrf",
                 "django.template.context_processors.request",
@@ -257,6 +262,23 @@ SOCIALACCOUNT_PROVIDERS = {
 
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 
+ACCOUNT_ADAPTER = "invitations.models.InvitationsAdapter"
+
+INVITATIONS_ADAPTER = ACCOUNT_ADAPTER
+INVITATIONS_INVITATION_EXPIRY = 7
+INVITATIONS_INVITATION_ONLY = True
+INVITATIONS_CONFIRM_INVITE_ON_GET = True
+INVITATIONS_ACCEPT_INVITE_AFTER_SIGNUP = True
+INVITATIONS_SIGNUP_REDIRECT = "account_signup"
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = env.str("EMAIL_HOST", "")
+EMAIL_PORT = env.int("EMAIL_PORT", 587)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", True)
+EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", "Worship Prep <noreply@example.com>")
+
 N8N_INTAKE_API_KEY = env.str("N8N_INTAKE_API_KEY", default="intake-key-for-testing")
 
 BOLT_PROCESSES = env.int("BOLT_PROCESSES", default=1)
@@ -342,6 +364,16 @@ UNFOLD = {
                         "title": _("Users"),
                         "icon": "person",
                         "link": reverse_lazy("admin:users_user_changelist"),
+                    },
+                    {
+                        "title": _("Invitations"),
+                        "icon": "mail",
+                        "link": reverse_lazy("admin:invitations_invitation_changelist"),
+                    },
+                    {
+                        "title": _("Invitation Requests"),
+                        "icon": "mark_email_unread",
+                        "link": reverse_lazy("admin:users_invitationrequest_changelist"),
                     },
                     {
                         "title": _("Groups"),

@@ -16,6 +16,63 @@ from apps.common.models import BaseModel
 _T = ty.TypeVar("_T", bound="models.Model")
 
 
+class AccessLevel(models.TextChoices):
+    """Access tier granted when an invitation request is approved."""
+
+    MEMBER = "member", _("Member")
+    ADMIN = "admin", _("Admin")
+
+
+class RequestStatus(models.TextChoices):
+    """Lifecycle state for a public invitation request."""
+
+    PENDING = "pending", _("Pending")
+    APPROVED = "approved", _("Approved")
+    REJECTED = "rejected", _("Rejected")
+
+
+class InvitationRequest(BaseModel):
+    """Public request for an account; staff approve and send a django-invitations invite."""
+
+    email = models.EmailField(max_length=254, unique=True)
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    message = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=RequestStatus.choices,
+        default=RequestStatus.PENDING,
+        db_index=True,
+    )
+    access_level = models.CharField(
+        max_length=20,
+        choices=AccessLevel.choices,
+        blank=True,
+        default="",
+    )
+    reviewed_by = models.ForeignKey(
+        "users.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="invitation_requests_reviewed",
+    )
+    invitation = models.OneToOneField(
+        "invitations.Invitation",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="invitation_request",
+    )
+
+    class Meta(TypedModelMeta):
+        verbose_name = _("Invitation request")
+        verbose_name_plural = _("Invitation requests")
+
+    def __str__(self) -> str:
+        return f"{self.email} ({self.get_status_display()})"
+
+
 class HasMeta(ty.Protocol):
     Meta: ty.ClassVar[ty.Any]
 
@@ -176,6 +233,13 @@ class User(AbstractUser, BaseModel):
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def avatar_url(self) -> str | None:
+        social_account = self.socialaccount_set.first()
+        if social_account and social_account.extra_data:
+            return social_account.extra_data.get("picture")
+        return None
 
     def clean(self):
         super().clean()

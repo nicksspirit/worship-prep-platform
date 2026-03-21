@@ -18,8 +18,21 @@ class SignInPage(NamedTuple):
     title: str
     login_form: LoginForm
     login_value: str | None
-    signup_url: str | None
+    request_invitation_url: str
     reset_password_url: str
     google_login_url: str
     next_value: str | None
     redirect_field_name: str
+
+
+@template
+class RequestInvitationPage(NamedTuple):
+    title: str
+    success: bool
+    sign_in_url: str
+    non_field_errors: list[str]
+    email: str
+    first_name: str
+    last_name: str
+    message: str
+    field_errors: dict[str, str]

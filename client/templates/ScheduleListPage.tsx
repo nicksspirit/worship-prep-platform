@@ -1,4 +1,5 @@
 import React from "react";
+import {Context} from "@reactivated";
 import {Layout} from "../Layout";
 
 type EmptyState = {
@@ -25,6 +26,7 @@ type ScheduleListPageProps = {
 };
 
 export const Template = (props: ScheduleListPageProps) => {
+    const {STATIC_URL} = React.useContext(Context);
     return (
         <Layout title={props.title}>
             <div className="min-h-screen bg-chapel-neutral-50 text-chapel-neutral-950">
@@ -112,8 +114,9 @@ export const Template = (props: ScheduleListPageProps) => {
                     )}
                 </main>
 
-                <footer className="border-t border-chapel-neutral-300 py-12 px-6 lg:px-12 text-center text-xs font-bold uppercase tracking-[0.2em] text-chapel-neutral-500 bg-white">
-                    Redeemed Christian Church of God • Chapel of Mercy
+                <footer className="border-t border-chapel-neutral-300 py-12 px-6 lg:px-12 flex flex-col items-center justify-center text-center text-xs font-bold uppercase tracking-[0.2em] text-chapel-neutral-500 bg-white">
+                    <img src={`${STATIC_URL}rccg-for-web.png`} alt="RCCG Logo" className="h-16 w-auto mb-6 opacity-80" />
+                    <p>Chapel of Mercy is a subsidiary of the Redeemed Christian Church of God</p>
                 </footer>
             </div>
         </Layout>

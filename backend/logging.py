@@ -90,6 +90,11 @@ LOGGING = {
         "level": LOG_LEVEL,
     },
     "loggers": {
+        "reactivated.fields": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django_structlog": {
             "handlers": ["console"],
             "level": "INFO",

@@ -322,6 +322,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-invitations"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bd/fe/b4d8a441d2cf9ea6c8e6babae3fe0726567b9696ec521f6753b39ad47587/django_invitations-2.1.0.tar.gz", hash = "sha256:88df42bfc20aa846116c5216d81ce916c303303c0249a74f1b1867e260e6814c", size = 27976, upload-time = "2023-11-22T20:51:04.395Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/4b/df5573059df97434a413a756757e0a1baeaa0562590f21575a8f83c843af/django_invitations-2.1.0-py3-none-any.whl", hash = "sha256:321d4430f06927be146f82c15ba153872d75185e7accd387bfe1773c1130d30f", size = 42789, upload-time = "2023-11-22T20:50:37.929Z" },
+]
+
+[[package]]
 name = "django-ipware"
 version = "7.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -997,6 +1009,7 @@ dependencies = [
     { name = "django-bolt" },
     { name = "django-cors-headers" },
     { name = "django-health-check" },
+    { name = "django-invitations" },
     { name = "django-structlog" },
     { name = "django-stubs-ext" },
     { name = "django-typer" },
@@ -1034,6 +1047,7 @@ requires-dist = [
     { name = "django-bolt", specifier = ">=0.6.0" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-health-check", specifier = ">=3.20.0" },
+    { name = "django-invitations", specifier = ">=2.1.0" },
     { name = "django-structlog", specifier = ">=9.1.0" },
     { name = "django-stubs-ext", specifier = ">=5.2.7" },
     { name = "django-typer", specifier = ">=3.4.0" },
