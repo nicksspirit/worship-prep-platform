@@ -127,7 +127,6 @@ The important values are:
 - `DIRECT_URL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `N8N_INTAKE_API_KEY`
 - `SUPABASE_STORAGE_BUCKET`
 - `SUPABASE_S3_ENDPOINT`
 - `SUPABASE_S3_ACCESS_KEY`
@@ -215,7 +214,6 @@ Cloud Build and Cloud Run expect the following secrets in Google Secret Manager:
 - `SECRET_KEY`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `N8N_INTAKE_API_KEY`
 - `SUPABASE_S3_ACCESS_KEY`
 - `SUPABASE_S3_SECRET_KEY`
 
@@ -241,7 +239,6 @@ printf '%s' "$DIRECT_URL" | gcloud secrets create DIRECT_URL --data-file=-
 printf '%s' "$SECRET_KEY" | gcloud secrets create SECRET_KEY --data-file=-
 printf '%s' "$GOOGLE_CLIENT_ID" | gcloud secrets create GOOGLE_CLIENT_ID --data-file=-
 printf '%s' "$GOOGLE_CLIENT_SECRET" | gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=-
-printf '%s' "$N8N_INTAKE_API_KEY" | gcloud secrets create N8N_INTAKE_API_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_ACCESS_KEY" | gcloud secrets create SUPABASE_S3_ACCESS_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_SECRET_KEY" | gcloud secrets create SUPABASE_S3_SECRET_KEY --data-file=-
 ```
@@ -254,10 +251,29 @@ printf '%s' "$DIRECT_URL" | gcloud secrets versions add DIRECT_URL --data-file=-
 printf '%s' "$SECRET_KEY" | gcloud secrets versions add SECRET_KEY --data-file=-
 printf '%s' "$GOOGLE_CLIENT_ID" | gcloud secrets versions add GOOGLE_CLIENT_ID --data-file=-
 printf '%s' "$GOOGLE_CLIENT_SECRET" | gcloud secrets versions add GOOGLE_CLIENT_SECRET --data-file=-
-printf '%s' "$N8N_INTAKE_API_KEY" | gcloud secrets versions add N8N_INTAKE_API_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_ACCESS_KEY" | gcloud secrets versions add SUPABASE_S3_ACCESS_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_SECRET_KEY" | gcloud secrets versions add SUPABASE_S3_SECRET_KEY --data-file=-
 ```
+
+## Step 4b: Issue and Store The N8N API Key
+
+The Bolt API no longer reads a shared API key from Django environment variables.
+Instead, create a scoped machine key from Django admin after deployment:
+
+1. Sign in to Django admin as an administrator.
+2. Create a new API key for N8N with only the scopes it needs:
+   - `schedules.read`
+   - `schedules.write`
+   - `songs.write`
+3. Copy the plaintext key immediately. It is only shown once.
+4. Store that key in your N8N secret source, preferably as `WPP_API_KEY`.
+5. Configure the N8N HTTP nodes to send it in the `X-API-Key` header.
+
+When rotating the key later:
+
+1. Rotate it from Django admin.
+2. Update the N8N secret value.
+3. Re-run a schedule lookup, schedule intake, and song intake smoke test.
 
 To confirm the secrets exist:
 

@@ -5,7 +5,7 @@ from django.utils.deprecation import MiddlewareMixin
 
 class ApiCsrfExemptMiddleware(MiddlewareMixin):
     """
-    Exempts /api/v1/ from CSRF for machine-to-machine API key auth (e.g. n8n).
+    Exempts /api/v1/ from CSRF for machine-to-machine API key auth.
 
     django-bolt uses Bolt request.state["_csrf_exempt"] for CSRF bypass, so we set
     both Django request.csrf_exempt and Bolt request.state["_csrf_exempt"].

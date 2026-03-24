@@ -276,8 +276,6 @@ EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", "Worship Prep <noreply@example.com>")
 
-N8N_INTAKE_API_KEY = env.str("N8N_INTAKE_API_KEY", default="intake-key-for-testing")
-
 BOLT_PROCESSES = env.int("BOLT_PROCESSES", default=1)
 
 # Unfold Admin Configuration

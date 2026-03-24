@@ -12,12 +12,17 @@ from apps.schedules.models import ScheduleItem, ServiceSchedule
 from apps.songs.api import intake_song_endpoint
 from apps.songs.models import Song, SongAssignment
 from apps.songs.schemas import SongIntakePayload, SongIntakeResponse
+from apps.users.api_keys import issue_api_key
+from apps.users.models import APIKeyScope
 
 
-@override_settings(N8N_INTAKE_API_KEY="test-intake-key")
 class SongIntakeTests(TestCase):
     def setUp(self):
         super().setUp()
+        _, self.api_key = issue_api_key(
+            name="Song intake test key",
+            scopes=[APIKeyScope.SONGS_WRITE],
+        )
         self.media_root = tempfile.mkdtemp()
         self.media_override = override_settings(MEDIA_ROOT=self.media_root)
         self.media_override.enable()
@@ -41,7 +46,7 @@ class SongIntakeTests(TestCase):
     def test_requires_api_key(self):
         response = async_to_sync(intake_song_endpoint)(
             payload=self._payload(),
-            n8n_api_key=None,
+            api_key=None,
         )
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 401)
@@ -49,7 +54,7 @@ class SongIntakeTests(TestCase):
     def test_creates_song(self):
         response = async_to_sync(intake_song_endpoint)(
             payload=self._payload(),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, SongIntakeResponse)
         self.assertFalse(response.is_existing)
@@ -75,7 +80,7 @@ class SongIntakeTests(TestCase):
                 schedule_date=dt.date(2026, 3, 22),
                 item_type="worship_song",
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, SongIntakeResponse)
         self.assertTrue(response.linked_to_schedule)
@@ -104,7 +109,7 @@ class SongIntakeTests(TestCase):
                 position=4,
                 group_type="praise",
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         self.assertIsInstance(response, SongIntakeResponse)

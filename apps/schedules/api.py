@@ -7,7 +7,6 @@ from django.db import connections
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.urls import reverse
-from django.utils.crypto import constant_time_compare
 from django_bolt import BoltAPI, JSON, Request
 from django_bolt.auth import IsAuthenticated
 from django_bolt.health import add_health_check, register_health_checks
@@ -28,6 +27,8 @@ from apps.schedules.services.preview import (
     get_upcoming_schedule_date,
     list_recent_schedule_summaries_async,
 )
+from apps.users.api_keys import API_KEY_HEADER, authorize_api_key
+from apps.users.models import APIKeyScope
 
 DJANGO_ENV = getattr(settings, "DJANGO_ENV", "local")
 
@@ -104,10 +105,14 @@ api = BoltAPI(
 async def intake_schedule_endpoint(
     payload: ScheduleIntakePayload,
     request: Request | None = None,
-    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+    api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ):
-    authorized = authorize_n8n_request(n8n_api_key)
-    if authorized is not None:
+    authorized = await authorize_api_key(
+        api_key,
+        request=request,
+        required_scopes=(APIKeyScope.SCHEDULES_WRITE,),
+    )
+    if isinstance(authorized, JSON):
         return authorized
 
     try:
@@ -129,10 +134,14 @@ async def intake_schedule_endpoint(
 async def patch_schedule_endpoint(
     payload: ScheduleIntakePayload,
     request: Request | None = None,
-    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+    api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ):
-    authorized = authorize_n8n_request(n8n_api_key)
-    if authorized is not None:
+    authorized = await authorize_api_key(
+        api_key,
+        request=request,
+        required_scopes=(APIKeyScope.SCHEDULES_WRITE,),
+    )
+    if isinstance(authorized, JSON):
         return authorized
 
     try:
@@ -159,10 +168,14 @@ async def patch_schedule_endpoint(
 )
 async def schedule_lookup_list_endpoint(
     request: Request | None = None,
-    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+    api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ):
-    authorized = authorize_n8n_request(n8n_api_key)
-    if authorized is not None:
+    authorized = await authorize_api_key(
+        api_key,
+        request=request,
+        required_scopes=(APIKeyScope.SCHEDULES_READ,),
+    )
+    if isinstance(authorized, JSON):
         return authorized
 
     if _request_flag_is_true(request, "upcoming"):
@@ -187,10 +200,13 @@ async def schedule_lookup_list_endpoint(
 )
 async def schedule_lookup_detail_endpoint(
     date: str,
-    n8n_api_key: Annotated[str | None, Header(alias="X-N8N-Api-Key")] = None,
+    api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ):
-    authorized = authorize_n8n_request(n8n_api_key)
-    if authorized is not None:
+    authorized = await authorize_api_key(
+        api_key,
+        required_scopes=(APIKeyScope.SCHEDULES_READ,),
+    )
+    if isinstance(authorized, JSON):
         return authorized
 
     try:
@@ -224,17 +240,6 @@ async def schedule_preview_endpoint(date: str):
         return JSON({"detail": f"No published or ready schedule for {date}."}, status_code=404)
 
     return preview
-
-
-def authorize_n8n_request(n8n_api_key: str | None):
-    expected_key = getattr(settings, "N8N_INTAKE_API_KEY", "")
-    if not expected_key or not n8n_api_key:
-        return JSON({"detail": "Unauthorized"}, status_code=401)
-
-    if not constant_time_compare(n8n_api_key, expected_key):
-        return JSON({"detail": "Unauthorized"}, status_code=401)
-
-    return None
 
 
 def _request_flag_is_true(request: Request | None, key: str) -> bool:

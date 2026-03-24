@@ -1,9 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .models import InvitationRequest, User
+from .models import APIKeyScope, IntegrationApiKey, InvitationRequest, User
 
 
 class UserCreationForm(forms.ModelForm):
@@ -83,3 +84,39 @@ class UserChangeForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["email", "password", "is_active", "is_staff"]
+
+
+class IntegrationApiKeyAdminForm(forms.ModelForm):
+    """Admin form for issuing and updating integration API keys."""
+
+    scopes = forms.MultipleChoiceField(
+        choices=APIKeyScope.choices,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        help_text=_("Select the API scopes this key should be allowed to use."),
+    )
+
+    class Meta:
+        model = IntegrationApiKey
+        fields = ["name", "scopes", "expires_on", "notes"]
+        widgets = {
+            "expires_on": forms.DateTimeInput(attrs={"type": "datetime-local"}),
+            "notes": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["scopes"].initial = list(self.instance.scopes or [])
+
+    def clean_expires_on(self):
+        expires_on = self.cleaned_data.get("expires_on")
+        if expires_on is not None and expires_on <= timezone.now():
+            raise ValidationError(_("Expiration must be in the future."))
+        return expires_on
+
+    def save(self, commit=True):
+        instance: IntegrationApiKey = super().save(commit=False)
+        instance.scopes = self.cleaned_data["scopes"]
+        if commit:
+            instance.save()
+        return instance

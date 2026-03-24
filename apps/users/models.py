@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import models
 from django.db.models import QuerySet
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
@@ -29,6 +30,35 @@ class RequestStatus(models.TextChoices):
     PENDING = "pending", _("Pending")
     APPROVED = "approved", _("Approved")
     REJECTED = "rejected", _("Rejected")
+
+
+class APIKeyScope(models.TextChoices):
+    """Scopes available to machine-to-machine API keys."""
+
+    SCHEDULES_READ = "schedules.read", _("Schedules: Read")
+    SCHEDULES_WRITE = "schedules.write", _("Schedules: Write")
+    SONGS_WRITE = "songs.write", _("Songs: Write")
+    PREVIEW_READ = "preview.read", _("Preview: Read")
+
+
+def normalize_api_key_scopes(raw_scopes: ty.Iterable[str] | None) -> list[str]:
+    """Normalize a collection of API key scopes."""
+
+    normalized = sorted(
+        {
+            str(scope).strip()
+            for scope in raw_scopes or []
+            if str(scope).strip()
+        }
+    )
+    allowed = {choice.value for choice in APIKeyScope}
+    invalid = [scope for scope in normalized if scope not in allowed]
+    if invalid:
+        raise ValidationError(
+            _("Unknown API key scopes: %(scopes)s")
+            % {"scopes": ", ".join(invalid)}
+        )
+    return normalized
 
 
 class InvitationRequest(BaseModel):
@@ -247,3 +277,69 @@ class User(AbstractUser, BaseModel):
 
     def __str__(self) -> str:
         return f"{self.full_name} <{self.email}>"
+
+
+class IntegrationApiKey(BaseModel):
+    """Database-backed API key for machine-to-machine integrations."""
+
+    name = models.CharField(max_length=150)
+    key_prefix = models.CharField(max_length=32, unique=True, editable=False)
+    hashed_key = models.CharField(max_length=128, editable=False)
+    scopes = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    expires_on = models.DateTimeField(null=True, blank=True)
+    revoked_on = models.DateTimeField(null=True, blank=True)
+    last_used_on = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        "users.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_api_keys",
+    )
+    rotated_from = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rotated_api_keys",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta(TypedModelMeta):
+        verbose_name = _("API key")
+        verbose_name_plural = _("API keys")
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.key_prefix})"
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_on is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_on is not None and self.expires_on <= timezone.now()
+
+    @property
+    def status(self) -> str:
+        if self.is_revoked:
+            return "revoked"
+        if self.is_expired:
+            return "expired"
+        if not self.is_active:
+            return "inactive"
+        return "active"
+
+    def clean(self):
+        super().clean()
+        self.name = " ".join(self.name.split()).strip()
+        self.scopes = normalize_api_key_scopes(self.scopes)
+        if self.revoked_on and self.is_active:
+            self.is_active = False
+
+    def revoke(self, *, timestamp=None):
+        """Revoke the API key in-memory."""
+
+        self.is_active = False
+        self.revoked_on = timestamp or timezone.now()
