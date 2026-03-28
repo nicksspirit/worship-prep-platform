@@ -183,6 +183,7 @@ async def schedule_lookup_list_endpoint(
         request=request,
         required_scopes=(APIKeyScope.SCHEDULES_READ,),
     )
+
     if isinstance(authorized, JSON):
         return authorized
 

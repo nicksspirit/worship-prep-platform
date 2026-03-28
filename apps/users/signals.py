@@ -1,6 +1,6 @@
 """Signal handlers for invitation review and role assignment."""
 
-import logging
+import structlog
 
 from django.conf import settings
 from django.contrib.sites.models import Site
@@ -14,7 +14,7 @@ from invitations.signals import invite_accepted
 
 from apps.users.models import AccessLevel, InvitationRequest, RequestStatus, User
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _build_invitation_request_review_url(invitation_request_id: int) -> str:

@@ -1,4 +1,4 @@
-import logging
+import structlog
 from typing import Annotated
 
 from django_bolt import BoltAPI, JSON, Request
@@ -12,7 +12,7 @@ from apps.songs.services.intake import intake_song
 from apps.users.api_keys import API_KEY_HEADER, authorize_api_key
 from apps.users.models import APIKeyScope
 
-logger = logging.getLogger("apps.songs.inbound")
+logger = structlog.get_logger("apps.songs.inbound")
 
 
 api = BoltAPI(

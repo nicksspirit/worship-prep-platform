@@ -25,6 +25,7 @@ def simplify_logger_name(
     logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
 ) -> dict[str, Any]:
     """Replace verbose logger names with shorter aliases."""
+
     name_map = {
         "django_structlog.middlewares.request": "http.request",
         "django.utils.autoreload": "autoreload",
@@ -33,9 +34,11 @@ def simplify_logger_name(
         "apps.schedules.inbound": "api.schedules",
         "apps.songs.inbound": "api.songs",
     }
+
     if "logger" in event_dict:
         original = event_dict["logger"]
         event_dict["logger"] = name_map.get(original, original)
+
     return event_dict
 
 
