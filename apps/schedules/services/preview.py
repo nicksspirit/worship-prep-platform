@@ -7,7 +7,7 @@ from asgiref.sync import sync_to_async
 from django.db.models import Count, Q
 
 from apps.schedules.choices import ServiceScheduleStatus
-from apps.schedules.models import ScheduleItem, ServiceSchedule
+from apps.schedules.models import ServiceSchedule
 from apps.schedules.schemas import (
     ScheduleItemDetail,
     ScheduleListItem,
@@ -33,6 +33,7 @@ def get_upcoming_schedule_date(today: dt.date | None = None) -> dt.date:
     """Return the next Sunday on or after the provided date."""
     current_date = today or dt.date.today()
     days_until_sunday = (6 - current_date.weekday()) % 7
+
     return current_date + dt.timedelta(days=days_until_sunday)
 
 
@@ -61,12 +62,13 @@ def _get_preview_schedule(
     include_unpublished: bool = False,
 ) -> PreviewResult | None:
     """Fetch schedule by date and previous/next visible dates."""
-    schedule_filters = {"date": date}
+    queryset = ServiceSchedule.objects.filter(date=date)
+
     if not include_unpublished:
-        schedule_filters["status__in"] = VISIBLE_SCHEDULE_STATUSES
+        queryset = queryset.filter(status__in=VISIBLE_SCHEDULE_STATUSES)
 
     schedule = (
-        ServiceSchedule.objects.filter(**schedule_filters)
+        queryset
         .prefetch_related(
             "schedule_items__song_assignments__song",
             "schedule_items__assigned_contact",

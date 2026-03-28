@@ -26,6 +26,14 @@ class ScheduleIntakePayload(msgspec.Struct, kw_only=True):
     items: list[AgendaItemPayload] = []
 
 
+class PreviewUrlHeaders(msgspec.Struct):
+    """Forwarded and Host headers for building absolute preview URLs behind proxies."""
+
+    x_forwarded_proto: str | None = None
+    x_forwarded_host: str | None = None
+    host: str | None = None
+
+
 class IntakeResponse(msgspec.Struct, kw_only=True):
     schedule_id: str
     date: str
@@ -34,6 +42,12 @@ class IntakeResponse(msgspec.Struct, kw_only=True):
     items_updated: int
     confirmation_text: str
     preview_url: str
+
+
+class ScheduleListQuery(msgspec.Struct):
+    """Query parameters for ``GET /schedules``."""
+
+    upcoming: bool = False
 
 
 class ScheduleListItem(msgspec.Struct, kw_only=True):

@@ -1,7 +1,6 @@
 import datetime as dt
 import shutil
 import tempfile
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import msgspec
@@ -13,6 +12,7 @@ from django.urls import reverse
 from django_bolt import JSON
 
 from apps.schedules.api import (
+    build_preview_url,
     intake_schedule_endpoint,
     patch_schedule_endpoint,
     schedule_lookup_detail_endpoint,
@@ -20,7 +20,13 @@ from apps.schedules.api import (
 )
 from apps.schedules.choices import ServiceScheduleStatus
 from apps.schedules.models import Contact, ContentSubmission, ScheduleItem, ServiceSchedule
-from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload, SchedulePreviewResponse
+from apps.schedules.schemas import (
+    IntakeResponse,
+    PreviewUrlHeaders,
+    ScheduleIntakePayload,
+    ScheduleListQuery,
+    SchedulePreviewResponse,
+)
 from apps.schedules.services.intake import intake_schedule
 from apps.schedules.services.preview import get_schedule_preview
 from apps.schedules.views import build_empty_state, build_schedule_preview_page, format_service_date
@@ -29,6 +35,60 @@ from apps.users.api_keys import issue_api_key
 from apps.users.models import APIKeyScope
 
 User = get_user_model()
+
+_PREVIEW_DATE = dt.date(2026, 2, 15)
+_PREVIEW_PATH = "/schedule/2026-02-15/preview/"
+
+
+class BuildPreviewUrlTests(TestCase):
+    """Unit tests for ``build_preview_url`` using ``PreviewUrlHeaders``."""
+
+    def test_returns_relative_path_when_headers_none(self):
+        url = build_preview_url(_PREVIEW_DATE, preview_headers=None)
+        self.assertEqual(url, _PREVIEW_PATH)
+
+    def test_returns_relative_path_when_no_host_in_headers(self):
+        url = build_preview_url(_PREVIEW_DATE, preview_headers=PreviewUrlHeaders())
+        self.assertEqual(url, _PREVIEW_PATH)
+
+    def test_builds_absolute_url_with_forwarded_headers(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="app.example.com",
+            ),
+        )
+        self.assertEqual(url, f"https://app.example.com{_PREVIEW_PATH}")
+
+    def test_prefers_x_forwarded_host_over_host(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="cdn.example.com",
+                host="origin.internal:8000",
+            ),
+        )
+        self.assertEqual(url, f"https://cdn.example.com{_PREVIEW_PATH}")
+
+    def test_falls_back_to_host_header(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="http",
+                host="localhost:8000",
+            ),
+        )
+        self.assertEqual(url, f"http://localhost:8000{_PREVIEW_PATH}")
+
+    def test_defaults_proto_to_https_when_missing(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(x_forwarded_host="only-host.example"),
+        )
+        self.assertEqual(url, f"https://only-host.example{_PREVIEW_PATH}")
+
 
 class ScheduleIntakeTests(TestCase):
     def setUp(self):
@@ -90,6 +150,21 @@ class ScheduleIntakeTests(TestCase):
         schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
         self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
         self.assertEqual(ContentSubmission.objects.count(), 1)
+
+    def test_intake_preview_url_uses_forwarded_headers_when_provided(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(),
+            api_key=self.api_key,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="worship.example.com",
+            ),
+        )
+        self.assertIsInstance(response, IntakeResponse)
+        self.assertEqual(
+            response.preview_url,
+            "https://worship.example.com/schedule/2026-02-15/preview/",
+        )
 
     def test_duplicate_source_message_id_is_idempotent(self):
         request_payload = self._payload()
@@ -524,7 +599,10 @@ class ScheduleLookupEndpointTests(TestCase):
         )
 
     def test_list_endpoint_requires_api_key(self):
-        response = async_to_sync(schedule_lookup_list_endpoint)(api_key=None)
+        response = async_to_sync(schedule_lookup_list_endpoint)(
+            ScheduleListQuery(),
+            api_key=None,
+        )
 
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 401)
@@ -554,7 +632,10 @@ class ScheduleLookupEndpointTests(TestCase):
             status=ServiceScheduleStatus.IN_PROGRESS,
         )
 
-        response = async_to_sync(schedule_lookup_list_endpoint)(api_key=self.api_key)
+        response = async_to_sync(schedule_lookup_list_endpoint)(
+            ScheduleListQuery(),
+            api_key=self.api_key,
+        )
 
         self.assertEqual(len(response), 5)
         self.assertEqual([item.date for item in response], [
@@ -580,11 +661,9 @@ class ScheduleLookupEndpointTests(TestCase):
             title="Opening Prayer",
         )
 
-        request = SimpleNamespace(query={"upcoming": "true"})
-
         with patch("apps.schedules.api.get_upcoming_schedule_date", return_value=dt.date(2026, 3, 15)):
             response = async_to_sync(schedule_lookup_list_endpoint)(
-                request=request,
+                ScheduleListQuery(upcoming=True),
                 api_key=self.api_key,
             )
 

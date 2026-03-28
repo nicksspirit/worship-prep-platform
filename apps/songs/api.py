@@ -6,6 +6,7 @@ from django_bolt.openapi import OpenAPIConfig
 from django_bolt.param_functions import Header
 
 from apps.schedules.api import build_preview_url
+from apps.schedules.schemas import PreviewUrlHeaders
 from apps.songs.schemas import SongIntakePayload, SongIntakeResponse
 from apps.songs.services.intake import intake_song
 from apps.users.api_keys import API_KEY_HEADER, authorize_api_key
@@ -35,6 +36,7 @@ async def intake_song_endpoint(
     payload: SongIntakePayload,
     request: Request | None = None,
     api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
+    preview_headers: Annotated[PreviewUrlHeaders, Header()] = PreviewUrlHeaders(),
 ):
     authorized = await authorize_api_key(
         api_key,
@@ -53,7 +55,7 @@ async def intake_song_endpoint(
 
     preview_url = None
     if payload.schedule_date is not None:
-        preview_url = build_preview_url(payload.schedule_date, request=request)
+        preview_url = build_preview_url(payload.schedule_date, preview_headers=preview_headers)
 
     return SongIntakeResponse(
         song_id=str(result.song.pk),

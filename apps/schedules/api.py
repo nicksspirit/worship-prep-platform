@@ -13,14 +13,19 @@ from django_bolt.health import add_health_check, register_health_checks
 from django_bolt.logging import LoggingConfig
 from django_bolt.middleware import CompressionConfig
 from django_bolt.openapi import OpenAPIConfig
-from django_bolt.param_functions import Header
+from django_bolt.param_functions import Header, Query
 
 from apps.schedules.exceptions import (
     DuplicateScheduleItemTypeError,
     DuplicateSubmissionError,
     ScheduleNotFoundError,
 )
-from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload
+from apps.schedules.schemas import (
+    IntakeResponse,
+    PreviewUrlHeaders,
+    ScheduleIntakePayload,
+    ScheduleListQuery,
+)
 from apps.schedules.services.intake import intake_schedule, patch_schedule
 from apps.schedules.services.preview import (
     get_schedule_preview_async,
@@ -106,6 +111,7 @@ async def intake_schedule_endpoint(
     payload: ScheduleIntakePayload,
     request: Request | None = None,
     api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
+    preview_headers: Annotated[PreviewUrlHeaders, Header()] = PreviewUrlHeaders(),
 ):
     authorized = await authorize_api_key(
         api_key,
@@ -121,7 +127,7 @@ async def intake_schedule_endpoint(
         return JSON({"detail": str(exc)}, status_code=409)
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
-    return build_intake_response(result, request=request, status_code=201)
+    return build_intake_response(result, preview_headers=preview_headers, status_code=201)
 
 
 @api.patch(
@@ -135,6 +141,7 @@ async def patch_schedule_endpoint(
     payload: ScheduleIntakePayload,
     request: Request | None = None,
     api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
+    preview_headers: Annotated[PreviewUrlHeaders, Header()] = PreviewUrlHeaders(),
 ):
     authorized = await authorize_api_key(
         api_key,
@@ -153,7 +160,7 @@ async def patch_schedule_endpoint(
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
 
-    return build_intake_response(result, request=request, status_code=200)
+    return build_intake_response(result, preview_headers=preview_headers, status_code=200)
 
 
 @api.get(
@@ -167,6 +174,7 @@ async def patch_schedule_endpoint(
     ),
 )
 async def schedule_lookup_list_endpoint(
+    schedule_list_query: Annotated[ScheduleListQuery, Query()],
     request: Request | None = None,
     api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
 ):
@@ -178,9 +186,12 @@ async def schedule_lookup_list_endpoint(
     if isinstance(authorized, JSON):
         return authorized
 
-    if _request_flag_is_true(request, "upcoming"):
+    if schedule_list_query.upcoming:
         upcoming_date = get_upcoming_schedule_date()
-        preview = await get_schedule_preview_async(upcoming_date, include_unpublished=True)
+        preview = await get_schedule_preview_async(
+            upcoming_date, include_unpublished=True
+        )
+
         if not preview:
             return JSON(
                 {"detail": f"No schedule found for {upcoming_date.isoformat()}."},
@@ -237,47 +248,25 @@ async def schedule_preview_endpoint(date: str):
 
     preview = await get_schedule_preview_async(parsed)
     if not preview:
-        return JSON({"detail": f"No published or ready schedule for {date}."}, status_code=404)
+        return JSON(
+            {"detail": f"No published or ready schedule for {date}."}, status_code=404
+        )
 
     return preview
 
 
-def _request_flag_is_true(request: Request | None, key: str) -> bool:
-    if request is None or not getattr(request, "query", None):
-        return False
-
-    value = request.query.get(key)
-    if isinstance(value, list):
-        value = value[-1] if value else None
-    if value is None:
-        return False
-
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
 def build_preview_url(
-    schedule_date: dt.date,
-    *,
-    request: Request | None = None,
+    schedule_date: dt.date, *, preview_headers: PreviewUrlHeaders | None = None
 ) -> str:
     preview_path = reverse(
         "service_preview",
         kwargs={"date": schedule_date.isoformat()},
     )
-    if request is None:
+    if preview_headers is None:
         return preview_path
 
-    forwarded_proto = (
-        request.headers.get("x-forwarded-proto")
-        or request.headers.get("X-Forwarded-Proto")
-        or "https"
-    )
-    host = (
-        request.headers.get("x-forwarded-host")
-        or request.headers.get("X-Forwarded-Host")
-        or request.headers.get("host")
-        or request.headers.get("Host")
-    )
+    forwarded_proto = preview_headers.x_forwarded_proto or "https"
+    host = preview_headers.x_forwarded_host or preview_headers.host
     if not host:
         return preview_path
 
@@ -287,7 +276,7 @@ def build_preview_url(
 def build_intake_response(
     result,
     *,
-    request: Request | None = None,
+    preview_headers: PreviewUrlHeaders | None = None,
     status_code: int,
 ) -> IntakeResponse:
     confirmation_text = (
@@ -301,7 +290,9 @@ def build_intake_response(
         items_created=result.items_created,
         items_updated=result.items_updated,
         confirmation_text=confirmation_text,
-        preview_url=build_preview_url(result.schedule.date, request=request),
+        preview_url=build_preview_url(
+            result.schedule.date, preview_headers=preview_headers
+        ),
     )
 
 
