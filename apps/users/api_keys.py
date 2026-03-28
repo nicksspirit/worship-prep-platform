@@ -163,8 +163,6 @@ def _bind_api_key_context(
     if isinstance(request_state, dict):
         request_state.update(context)
 
-    setattr(request, "api_key_auth", authenticated_key)
-
 
 async def authorize_api_key(
     api_key: str | None,
