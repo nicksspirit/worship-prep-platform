@@ -2,15 +2,15 @@ services:
   django:
     container_name: wpp-app
     build:
-      context: .
-      target: local
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - .:/code
+      - ..:/code
       - /code/node_modules
       - /venv
-    env_file: .env
+    env_file: ../.env
     environment:
       - DJANGO_ENV=local
       - DEBUG=True
@@ -25,15 +25,15 @@ services:
   bolt:
     container_name: wpp-api
     build:
-      context: .
-      target: local
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "8001:8001"
     volumes:
-      - .:/code
+      - ..:/code
       - /code/node_modules
       - /venv
-    env_file: .env
+    env_file: ../.env
     environment:
       - DJANGO_ENV=local
       - DEBUG=True

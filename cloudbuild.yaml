@@ -51,6 +51,7 @@ steps:
       - -ceu
       - |
         docker build \
+          -f docker/Dockerfile \
           --target=prod \
           --build-arg=SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET} \
           --build-arg=SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT} \
