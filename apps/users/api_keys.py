@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 from dataclasses import dataclass
 from typing import Iterable
@@ -16,6 +17,8 @@ API_KEY_PREFIX_NAMESPACE = "wpp_live"
 API_KEY_PUBLIC_ID_BYTES = 6
 API_KEY_SECRET_BYTES = 32
 API_KEY_HASH_SALT = "worship_prep_platform.api_keys"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -174,28 +177,87 @@ async def authorize_api_key(
 
     normalized = str(api_key or "").strip()
     if not normalized:
+        logger.warning(
+            "API key auth failed: missing or empty X-API-Key",
+            extra={"reason": "missing_header"},
+        )
         return JSON({"detail": "Missing X-API-Key header."}, status_code=401)
 
     prefix = parse_api_key_prefix(normalized)
     if prefix is None:
+        logger.warning(
+            "API key auth failed: invalid key format (expected wpp_live_<hex>.<secret>)",
+            extra={
+                "reason": "invalid_format",
+                "present_length": len(normalized),
+                "has_separator": "." in normalized,
+            },
+        )
         return JSON({"detail": "Invalid API key."}, status_code=401)
 
     stored_key = await IntegrationApiKey.objects.filter(key_prefix=prefix).afirst()
     if stored_key is None:
+        logger.warning(
+            "API key auth failed: no key registered for prefix",
+            extra={"reason": "unknown_prefix", "key_prefix": prefix},
+        )
         return JSON({"detail": "Invalid API key."}, status_code=401)
 
     if not constant_time_compare(hash_api_key(normalized), stored_key.hashed_key):
+        logger.warning(
+            "API key auth failed: secret does not match stored hash",
+            extra={
+                "reason": "hash_mismatch",
+                "key_prefix": prefix,
+                "integration_api_key_id": stored_key.pk,
+            },
+        )
         return JSON({"detail": "Invalid API key."}, status_code=401)
 
     if stored_key.is_revoked or not stored_key.is_active:
+        logger.warning(
+            "API key auth failed: key revoked or inactive",
+            extra={
+                "reason": "revoked_or_inactive",
+                "key_prefix": prefix,
+                "integration_api_key_id": stored_key.pk,
+                "is_active": stored_key.is_active,
+                "revoked_on": stored_key.revoked_on.isoformat()
+                if stored_key.revoked_on
+                else None,
+            },
+        )
         return JSON({"detail": "API key has been revoked."}, status_code=401)
 
     if stored_key.is_expired:
+        logger.warning(
+            "API key auth failed: key past expiration",
+            extra={
+                "reason": "expired",
+                "key_prefix": prefix,
+                "integration_api_key_id": stored_key.pk,
+                "expires_on": stored_key.expires_on.isoformat()
+                if stored_key.expires_on
+                else None,
+            },
+        )
         return JSON({"detail": "API key has expired."}, status_code=401)
 
     required = set(normalize_api_key_scopes(required_scopes))
     granted = set(stored_key.scopes)
     if not required.issubset(granted):
+        missing = sorted(required - granted)
+        logger.warning(
+            "API key auth failed: insufficient scope",
+            extra={
+                "reason": "insufficient_scope",
+                "key_prefix": prefix,
+                "integration_api_key_id": stored_key.pk,
+                "required_scopes": sorted(required),
+                "granted_scopes": sorted(granted),
+                "missing_scopes": missing,
+            },
+        )
         return JSON({"detail": "API key does not have the required scope."}, status_code=403)
 
     now = timezone.now()
