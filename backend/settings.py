@@ -375,6 +375,11 @@ UNFOLD = {
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_group_changelist"),
                     },
+                    {
+                        "title": _("API Keys"),
+                        "icon": "vpn_key",
+                        "link": reverse_lazy("admin:users_integrationapikey_changelist"),
+                    },
                 ],
             },
             {

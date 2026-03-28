@@ -267,8 +267,10 @@ class User(AbstractUser, BaseModel):
     @property
     def avatar_url(self) -> str | None:
         social_account = self.socialaccount_set.first()
+
         if social_account and social_account.extra_data:
             return social_account.extra_data.get("picture")
+
         return None
 
     def clean(self):
