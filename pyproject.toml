@@ -67,5 +67,24 @@ bolt = "python manage.py runbolt --dev"
 makemig = "python manage.py makemigrations"
 migrate = "python manage.py migrate"
 
+[tool.poe.tasks.deploy]
+help = "Deploy the app and API to Cloud Run"
+shell = """
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+export GCP_PROJECT_ID="${GCP_PROJECT_ID:-worship-prep-portal}"
+export GCP_REGION="${GCP_REGION:-us-west1}"
+export RUNTIME_SA="${RUNTIME_SA:-wpp-runtime@worship-prep-portal.iam.gserviceaccount.com}"
+export SUPABASE_STORAGE_BUCKET="${SUPABASE_STORAGE_BUCKET:-wpp-media}"
+if [ -z "${SUPABASE_S3_ENDPOINT:-}" ] && [ -n "${SUPABASE_URL:-}" ]; then
+  export SUPABASE_S3_ENDPOINT="${SUPABASE_URL%/}/storage/v1/s3"
+fi
+export SUPABASE_S3_REGION="${SUPABASE_S3_REGION:-us-east-1}"
+./deploy/deploy.sh
+"""
+
 [tool.pyrefly]
 untyped_def_behavior = "skip-and-infer-return-any"

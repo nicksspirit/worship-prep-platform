@@ -298,7 +298,24 @@ This means future Cloud Run `*.run.app` URLs continue to work without per-releas
 
 ## Step 6: Run the Deployment
 
-Load your `.env` first so all required values are available:
+The fastest path is to use the Poe shortcut:
+
+```bash
+poe deploy
+```
+
+What `poe deploy` does for you:
+
+- loads `.env` automatically when present
+- defaults `GCP_PROJECT_ID` to `worship-prep-portal`
+- defaults `GCP_REGION` to `us-west1`
+- defaults `RUNTIME_SA` to `wpp-runtime@worship-prep-portal.iam.gserviceaccount.com`
+- defaults `SUPABASE_STORAGE_BUCKET` to `wpp-media`
+- derives `SUPABASE_S3_ENDPOINT` from `SUPABASE_URL` when needed
+- defaults `SUPABASE_S3_REGION` to `us-east-1`
+- runs `./deploy/deploy.sh`
+
+If you want to run the deploy script manually instead, load your `.env` first so all required values are available:
 
 ```bash
 set -a
@@ -618,18 +635,10 @@ For normal future deployments, use this sequence:
 
 ```bash
 git pull
-set -a
-source .env
-set +a
-
-export GCP_PROJECT_ID=worship-prep-portal
-export GCP_REGION=us-west1
-export RUNTIME_SA=wpp-runtime@worship-prep-portal.iam.gserviceaccount.com
-
-./deploy/deploy.sh
+poe deploy
 ```
 
-This assumes `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ENDPOINT`, and `SUPABASE_S3_REGION` are already in your `.env`. If they are not, export them before running the script (see Step 6).
+This assumes `.env` exists or that equivalent environment variables are already exported. If `SUPABASE_S3_ENDPOINT` is not set, `poe deploy` derives it from `SUPABASE_URL`. If you prefer not to use the shortcut, you can still follow the manual `./deploy/deploy.sh` flow from Step 6.
 
 Typical build duration is around 5 minutes.
 
