@@ -17,8 +17,8 @@ class AgendaItemPayload(msgspec.Struct, kw_only=True):
 class ScheduleIntakePayload(msgspec.Struct, kw_only=True):
     source: str = "unknown"
     target_date: dt.date
-    raw_content: str
-    sender_name: str
+    raw_content: str | None = None
+    sender_name: str | None = None
     sender_phone: str | None = None
     sender_email: str | None = None
     source_message_id: str | None = None

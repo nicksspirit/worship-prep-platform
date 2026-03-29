@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from asgiref.sync import sync_to_async
 from django.db import transaction
 
-from apps.schedules.choices import ScheduleItemType
+from apps.schedules.choices import ScheduleItemType, ServiceScheduleStatus
 from apps.schedules.models import ScheduleItem, ServiceSchedule
+from apps.schedules.services.intake import default_schedule_title
 from apps.songs.models import Song, SongAssignment
 from apps.songs.schemas import SongIntakePayload
 
@@ -45,29 +46,63 @@ def _find_similar_song(title: str) -> Song | None:
     return best_match
 
 
+def _normalize_song_item_type(item_type: str | None) -> str | None:
+    raw_type = (item_type or "").strip().lower()
+    if raw_type in (ScheduleItemType.WORSHIP_SONG, ScheduleItemType.HYMN):
+        return raw_type
+    if not raw_type:
+        return ScheduleItemType.WORSHIP_SONG
+    return None
+
+
+def _default_schedule_item_title(item_type: str) -> str:
+    if item_type == ScheduleItemType.HYMN:
+        return "Congregational Hymn"
+    return "Praise & Worship"
+
+
 def _get_or_create_schedule_item(
     schedule_date,
     item_type: str | None,
 ) -> ScheduleItem | None:
-    """Get the matching ScheduleItem for worship_song or hymn type."""
-    if not schedule_date or not item_type:
+    """Get or create the matching schedule context for worship songs or hymns."""
+    if not schedule_date:
         return None
 
-    raw_type = (item_type or "").strip().lower()
-    if raw_type not in (ScheduleItemType.WORSHIP_SONG, ScheduleItemType.HYMN):
+    raw_type = _normalize_song_item_type(item_type)
+    if raw_type is None:
         return None
 
-    schedule = ServiceSchedule.objects.filter(date=schedule_date).first()
-    if not schedule:
-        return None
+    schedule, created = ServiceSchedule.objects.get_or_create(
+        date=schedule_date,
+        defaults={
+            "title": default_schedule_title(schedule_date),
+            "status": ServiceScheduleStatus.IN_PROGRESS,
+        },
+    )
+    if not created and schedule.status == ServiceScheduleStatus.DRAFT:
+        schedule.status = ServiceScheduleStatus.IN_PROGRESS
+        schedule.save(update_fields=["status", "updated_on"])
 
-    return (
-        ScheduleItem.objects.filter(
-            schedule=schedule,
-            item_type=raw_type,
-        )
+    schedule_item = (
+        ScheduleItem.objects.filter(schedule=schedule, item_type=raw_type)
         .order_by("position")
         .first()
+    )
+    if schedule_item is not None:
+        return schedule_item
+
+    next_position = (
+        ScheduleItem.objects.filter(schedule=schedule)
+        .order_by("-position")
+        .values_list("position", flat=True)
+        .first()
+    )
+    return ScheduleItem.objects.create(
+        schedule=schedule,
+        position=1 if next_position is None else next_position + 1,
+        item_type=raw_type,
+        title=_default_schedule_item_title(raw_type),
     )
 
 

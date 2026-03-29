@@ -238,6 +238,7 @@ async def authorize_api_key(
 
     required = set(normalize_api_key_scopes(required_scopes))
     granted = set(stored_key.scopes)
+
     if not required.issubset(granted):
         missing = sorted(required - granted)
         logger.warning(

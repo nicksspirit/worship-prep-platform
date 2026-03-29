@@ -102,6 +102,15 @@ def default_schedule_title(target_date: dt.date) -> str:
     return f"Sunday Service - {target_date.strftime('%B')} {target_date.day}, {target_date.year}"
 
 
+def default_sender_name(source: str | None) -> str:
+    normalized_source = (source or "unknown").strip().lower()
+    if normalized_source == SubmissionSource.WHATSAPP:
+        return "WhatsApp Intake Agent"
+    if normalized_source == SubmissionSource.EMAIL:
+        return "Email Intake Agent"
+    return "Automated Intake"
+
+
 def infer_item_type(item: AgendaItemPayload) -> str:
     if item.item_type:
         raw = item.item_type.strip().lower()
@@ -163,6 +172,18 @@ def upsert_schedule_item(
     schedule: ServiceSchedule,
     item_data: ScheduleItemData,
 ) -> bool:
+    def shift_items_from_position(start_position: int, *, exclude_pk: str | None = None) -> None:
+        occupied_items = (
+            ScheduleItem.objects.select_for_update()
+            .filter(schedule=schedule, position__gte=start_position)
+            .order_by("-position")
+        )
+        for occupied_item in occupied_items:
+            if exclude_pk is not None and str(occupied_item.pk) == exclude_pk:
+                continue
+            occupied_item.position += 1
+            occupied_item.save(update_fields=["position", "updated_on"])
+
     schedule_item = (
         ScheduleItem.objects.select_for_update()
         .filter(schedule=schedule, item_type=item_data.item_type)
@@ -174,6 +195,9 @@ def upsert_schedule_item(
             .filter(schedule=schedule, position=item_data.position)
             .first()
         )
+        if schedule_item is not None and schedule_item.item_type != item_data.item_type:
+            shift_items_from_position(item_data.position)
+            schedule_item = None
 
     if schedule_item is None:
         ScheduleItem.objects.create(
@@ -188,6 +212,16 @@ def upsert_schedule_item(
             notes=item_data.notes,
         )
         return True
+
+    if schedule_item.position != item_data.position:
+        conflicting_item = (
+            ScheduleItem.objects.select_for_update()
+            .filter(schedule=schedule, position=item_data.position)
+            .exclude(pk=schedule_item.pk)
+            .first()
+        )
+        if conflicting_item is not None:
+            shift_items_from_position(item_data.position, exclude_pk=str(schedule_item.pk))
 
     schedule_item.position = item_data.position
     schedule_item.item_type = item_data.item_type
@@ -221,6 +255,7 @@ def _intake_schedule_sync(
 ) -> IntakeResult:
     builtins_payload = msgspec.to_builtins(payload)
     submission_message_id = payload.source_message_id if allow_create else None
+    sender_name = payload.sender_name or default_sender_name(payload.source)
 
     validate_unique_item_types(payload.items)
 
@@ -299,6 +334,11 @@ def _intake_schedule_sync(
             for idx, item in enumerate(payload.items, start=1)
         ]
     )
+    raw_content = payload.raw_content or parsed_body
+    if not raw_content:
+        raw_content = (
+            f"Partial schedule intake for {payload.target_date.isoformat()}"
+        )
     source_value = (payload.source or "unknown").lower()
     if source_value == "whatsapp":
         submission_source = SubmissionSource.WHATSAPP
@@ -311,12 +351,12 @@ def _intake_schedule_sync(
         source=submission_source,
         sender_phone=payload.sender_phone,
         sender_email=payload.sender_email,
-        sender_name=payload.sender_name,
+        sender_name=sender_name,
         source_message_id=submission_message_id,
-        raw_content=payload.raw_content,
+        raw_content=raw_content,
         parsed_content_type=ParsedContentType.AGENDA,
         parsed_title=payload.title,
-        parsed_body=parsed_body or payload.raw_content,
+        parsed_body=parsed_body or raw_content,
         parsed_payload=builtins_payload,
         target_date=payload.target_date,
         status=SubmissionStatus.MATCHED,

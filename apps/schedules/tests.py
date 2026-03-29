@@ -30,7 +30,9 @@ from apps.schedules.schemas import (
 from apps.schedules.services.intake import intake_schedule
 from apps.schedules.services.preview import get_schedule_preview
 from apps.schedules.views import build_empty_state, build_schedule_preview_page, format_service_date
+from apps.songs.api import intake_song_endpoint
 from apps.songs.models import Song, SongAssignment
+from apps.songs.schemas import SongIntakePayload
 from apps.users.api_keys import issue_api_key
 from apps.users.models import APIKeyScope
 
@@ -97,6 +99,10 @@ class ScheduleIntakeTests(TestCase):
             name="Schedule intake test key",
             scopes=[APIKeyScope.SCHEDULES_WRITE],
         )
+        _, self.song_api_key = issue_api_key(
+            name="Song intake test key",
+            scopes=[APIKeyScope.SONGS_WRITE],
+        )
 
     def _payload(self, **overrides) -> ScheduleIntakePayload:
         payload = {
@@ -128,6 +134,17 @@ class ScheduleIntakeTests(TestCase):
         }
         payload.update(overrides)
         return msgspec.convert(payload, type=ScheduleIntakePayload)
+
+    def _song_payload(self, **overrides) -> SongIntakePayload:
+        payload = {
+            "song_title": "All Glory, Laud, and Honor",
+            "raw_lyrics": "All glory, laud, and honor...",
+            "formatted_lyrics": "[Verse 1]\nAll glory, laud, and honor...",
+            "filename": "All_Glory_Laud_and_Honor.txt",
+            "slide_count": 2,
+        }
+        payload.update(overrides)
+        return msgspec.convert(payload, type=SongIntakePayload)
 
     def test_requires_api_key(self):
         response = async_to_sync(intake_schedule_endpoint)(
@@ -399,6 +416,76 @@ class ScheduleIntakeTests(TestCase):
 
         schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
         self.assertEqual(schedule.title, "Sunday Service - February 15, 2026")
+
+    def test_accepts_minimal_partial_payload_without_raw_content_or_sender_name(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-minimal-partial",
+                raw_content=None,
+                sender_name=None,
+                items=[
+                    {
+                        "title": "Praise & Worship",
+                        "leader_name": "THE VOGS",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, IntakeResponse)
+        self.assertEqual(response.created_or_updated, "created")
+        self.assertEqual(response.items_created, 1)
+
+        submission = ContentSubmission.objects.get(source_message_id="wamid-minimal-partial")
+        self.assertEqual(submission.sender_name, "WhatsApp Intake Agent")
+        self.assertEqual(submission.raw_content, "1. Praise & Worship")
+        self.assertEqual(submission.parsed_body, "1. Praise & Worship")
+
+    def test_song_first_flow_can_create_schedule_then_schedule_intake_enriches_same_date(self):
+        song_response = async_to_sync(intake_song_endpoint)(
+            payload=self._song_payload(
+                schedule_date=dt.date(2026, 3, 29),
+                item_type="hymn",
+                position=1,
+            ),
+            api_key=self.song_api_key,
+        )
+        self.assertTrue(song_response.linked_to_schedule)
+
+        schedule_response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-enrich-song-first",
+                target_date="2026-03-29",
+                raw_content=None,
+                sender_name=None,
+                title="Sunday Service - March 29, 2026",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "MIN. VICTOR UMUKORO",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(schedule_response, IntakeResponse)
+        self.assertEqual(schedule_response.created_or_updated, "updated")
+        self.assertEqual(ServiceSchedule.objects.count(), 1)
+
+        schedule = ServiceSchedule.objects.get(date=dt.date(2026, 3, 29))
+        self.assertEqual(schedule.title, "Sunday Service - March 29, 2026")
+        self.assertEqual(schedule.status, ServiceScheduleStatus.IN_PROGRESS)
+        self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
+
+        hymn_item = ScheduleItem.objects.get(schedule=schedule, item_type="hymn")
+        self.assertEqual(hymn_item.title, "Congregational Hymn")
+        self.assertEqual(hymn_item.song_assignments.count(), 1)
+
+        prayer_item = ScheduleItem.objects.get(schedule=schedule, item_type="opening_prayer")
+        self.assertEqual(prayer_item.assigned_contact.name, "Min. Victor Umukoro")
 
     def test_patch_requires_existing_schedule(self):
         response = async_to_sync(patch_schedule_endpoint)(

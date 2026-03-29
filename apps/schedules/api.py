@@ -105,7 +105,11 @@ api = BoltAPI(
     status_code=201,
     tags=["schedules"],
     summary="Ingest Sunday schedule",
-    description="Creates or updates the target Sunday schedule from a parsed agenda payload.",
+    description=(
+        "Creates or updates the target Sunday schedule from a parsed agenda payload. "
+        "Supports partial machine-generated updates, including minimal item lists "
+        "when a full raw transcript or sender name is unavailable."
+    ),
 )
 async def intake_schedule_endpoint(
     payload: ScheduleIntakePayload,
@@ -135,7 +139,11 @@ async def intake_schedule_endpoint(
     status_code=200,
     tags=["schedules"],
     summary="Update Sunday schedule",
-    description="Applies a partial update to an existing Sunday schedule using the parsed agenda payload.",
+    description=(
+        "Applies a partial update to an existing Sunday schedule using the parsed "
+        "agenda payload. Minimal machine-generated payloads are accepted as long "
+        "as the target date and any provided items are valid."
+    ),
 )
 async def patch_schedule_endpoint(
     payload: ScheduleIntakePayload,
@@ -196,7 +204,7 @@ async def schedule_lookup_list_endpoint(
         if not preview:
             return JSON(
                 {"detail": f"No schedule found for {upcoming_date.isoformat()}."},
-                status_code=404,
+                status_code=200,
             )
         return preview
 
