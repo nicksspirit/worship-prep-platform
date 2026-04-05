@@ -8,6 +8,8 @@ from typing import Any, cast
 import structlog
 from environs import Env
 
+type EventDict = dict[str, Any]
+
 env = Env()
 
 DJANGO_ENV = env.str("DJANGO_ENV", default="local")
@@ -15,15 +17,15 @@ LOG_LEVEL = "DEBUG" if DJANGO_ENV == "local" else "INFO"
 
 
 def drop_none_values(
-    logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+    logger: logging.Logger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """Remove keys with None values to reduce log noise (console only)."""
     return {k: v for k, v in event_dict.items() if v is not None}
 
 
 def simplify_logger_name(
-    logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+    logger: logging.Logger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """Replace verbose logger names with shorter aliases."""
 
     name_map = {

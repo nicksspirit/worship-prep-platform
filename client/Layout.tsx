@@ -77,7 +77,7 @@ export const Layout = (props: Props) => {
                         
                         <div className="relative flex w-1/3 justify-center">
                             {/* Centered Circular Logo overlapping the bottom border */}
-                            <div className="absolute top-1/2 flex h-[4.5rem] w-[4.5rem] -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 shadow-sm bg-white overflow-hidden p-1.5">
+                            <div className="absolute top-1/2 flex h-18 w-18 -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 shadow-sm bg-white overflow-hidden p-1.5">
                                 <img src={`${STATIC_URL}rccgcm_logo.png`} alt="RCCG Chapel of Mercy Logo" className="h-full w-full object-contain scale-[1.3]" />
                             </div>
                         </div>
@@ -99,7 +99,7 @@ export const Layout = (props: Props) => {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
-                                    <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-white border border-chapel-neutral-200 rounded-box w-52 mt-2">
+                                    <ul tabIndex={0} className="dropdown-content z-1 menu p-2 shadow bg-white border border-chapel-neutral-200 rounded-box w-52 mt-2">
                                         {user.is_staff && (
                                             <li>
                                                 <a href="/admin/" className="w-full text-left text-chapel-neutral-700 hover:text-chapel-primary-600 font-medium px-4 py-2">Admin Portal</a>
