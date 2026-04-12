@@ -6,13 +6,11 @@ import logging
 from typing import Any, cast
 
 import structlog
-from environs import Env
+
+from backend.settings import DJANGO_ENV
 
 type EventDict = dict[str, Any]
 
-env = Env()
-
-DJANGO_ENV = env.str("DJANGO_ENV", default="local")
 LOG_LEVEL = "DEBUG" if DJANGO_ENV == "local" else "INFO"
 
 
