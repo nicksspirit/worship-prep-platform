@@ -18,6 +18,7 @@ from apps.schedules.exceptions import (
     DuplicateScheduleItemTypeError,
     DuplicateSubmissionError,
     ScheduleNotFoundError,
+    SchedulePayloadValidationError,
 )
 from apps.schedules.models import (
     Contact,
@@ -32,6 +33,8 @@ KNOWN_CONTACT_ALIASES = {
     "the pastor": ("Pastor Ronke Majekodunmi", ContactRole.PASTOR),
     "the vogs": ("Voice of God Singers", ContactRole.CHOIR),
 }
+VALID_ITEM_TYPES = tuple(choice for choice, _ in ScheduleItemType.choices)
+VALID_ITEM_TYPE_SET = set(VALID_ITEM_TYPES)
 
 
 @dataclass
@@ -55,6 +58,14 @@ class ScheduleItemData:
     notes: str
 
 
+@dataclass(frozen=True)
+class ValidatedAgendaItem:
+    payload: AgendaItemPayload
+    item_type: str
+    start_time: dt.time | None
+    end_time: dt.time | None
+
+
 def parse_optional_time(value: str | None) -> dt.time | None:
     if not value:
         return None
@@ -69,6 +80,12 @@ def parse_optional_time(value: str | None) -> dt.time | None:
         return None
 
     return dt.time(hour=hour, minute=minute)
+
+
+def format_optional_time(value: dt.time | None) -> str | None:
+    if value is None:
+        return None
+    return value.strftime("%H:%M")
 
 
 def normalize_name(raw: str) -> str:
@@ -111,33 +128,67 @@ def default_sender_name(source: str | None) -> str:
     return "Automated Intake"
 
 
-def infer_item_type(item: AgendaItemPayload) -> str:
-    if item.item_type:
-        raw = item.item_type.strip().lower()
-        valid_values = {choice for choice, _ in ScheduleItemType.choices}
-        if raw in valid_values:
-            return raw
+def build_item_label(item: AgendaItemPayload, fallback_position: int) -> str:
+    position = item.position or fallback_position
+    normalized_title = " ".join(item.title.split()).strip()
+    if normalized_title:
+        return f"Item {position} ({normalized_title})"
+    return f"Item {position}"
 
-    title = item.title.lower()
-    if "sunday school" in title:
-        return ScheduleItemType.SUNDAY_SCHOOL
-    if "final prayer" in title or "closing prayer" in title or "benediction" in title:
-        return ScheduleItemType.CLOSING_PRAYER
-    if "prayer" in title:
-        return ScheduleItemType.OPENING_PRAYER
-    if "hymn" in title:
-        return ScheduleItemType.HYMN
-    if "song" in title or "worship" in title or "praise" in title:
-        return ScheduleItemType.WORSHIP_SONG
-    if "scripture" in title or "reading" in title:
-        return ScheduleItemType.SCRIPTURE_READING
-    if "sermon" in title or "word" in title:
-        return ScheduleItemType.SERMON
-    if "announcement" in title or "welcome" in title or "comtv" in title:
-        return ScheduleItemType.ANNOUNCEMENTS
-    if "offering" in title or "tithe" in title:
-        return ScheduleItemType.OFFERING
-    return ScheduleItemType.SPECIAL_ITEM
+
+def validate_schedule_items(items: list[AgendaItemPayload]) -> list[ValidatedAgendaItem]:
+    errors: list[str] = []
+    validated_items: list[ValidatedAgendaItem] = []
+    allowed_values = ", ".join(VALID_ITEM_TYPES)
+
+    for fallback_position, item in enumerate(items, start=1):
+        item_label = build_item_label(item, fallback_position)
+        raw_item_type = (item.item_type or "").strip().lower()
+        if not raw_item_type:
+            errors.append(
+                f"{item_label}: item_type is required. Allowed values: {allowed_values}."
+            )
+            normalized_item_type = None
+        elif raw_item_type not in VALID_ITEM_TYPE_SET:
+            errors.append(
+                f"{item_label}: invalid item_type '{item.item_type}'. "
+                f"Allowed values: {allowed_values}."
+            )
+            normalized_item_type = None
+        else:
+            normalized_item_type = raw_item_type
+
+        start_time = parse_optional_time(item.time_start)
+        if item.time_start and start_time is None:
+            errors.append(
+                f"{item_label}: time_start must use HH:MM 24-hour format or be null. "
+                f"Received '{item.time_start}'."
+            )
+
+        end_time = parse_optional_time(item.time_end)
+        if item.time_end and end_time is None:
+            errors.append(
+                f"{item_label}: time_end must use HH:MM 24-hour format or be null. "
+                f"Received '{item.time_end}'."
+            )
+
+        if normalized_item_type is not None:
+            validated_items.append(
+                ValidatedAgendaItem(
+                    payload=item,
+                    item_type=normalized_item_type,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+            )
+
+    if errors:
+        raise SchedulePayloadValidationError(
+            "Schedule payload validation failed.",
+            errors,
+        )
+
+    return validated_items
 
 
 def get_or_create_contact(leader_name: str | None, phone: str | None) -> Contact | None:
@@ -156,15 +207,14 @@ def get_or_create_contact(leader_name: str | None, phone: str | None) -> Contact
     return contact
 
 
-def validate_unique_item_types(items: list[AgendaItemPayload]) -> None:
+def validate_unique_item_types(items: list[ValidatedAgendaItem]) -> None:
     seen_item_types: set[str] = set()
     for item in items:
-        item_type = infer_item_type(item)
-        if item_type in seen_item_types:
+        if item.item_type in seen_item_types:
             raise DuplicateScheduleItemTypeError(
-                f"Schedule items must be unique per type. Duplicate type: '{item_type}'."
+                f"Schedule items must be unique per type. Duplicate type: '{item.item_type}'."
             )
-        seen_item_types.add(item_type)
+        seen_item_types.add(item.item_type)
 
 
 def upsert_schedule_item(
@@ -253,11 +303,19 @@ def _intake_schedule_sync(
     *,
     allow_create: bool,
 ) -> IntakeResult:
+    validated_items = validate_schedule_items(payload.items)
+    validate_unique_item_types(validated_items)
+
     builtins_payload = msgspec.to_builtins(payload)
+    for builtins_item, validated_item in zip(
+        builtins_payload["items"], validated_items
+    ):
+        builtins_item["item_type"] = validated_item.item_type
+        builtins_item["time_start"] = format_optional_time(validated_item.start_time)
+        builtins_item["time_end"] = format_optional_time(validated_item.end_time)
+
     submission_message_id = payload.source_message_id if allow_create else None
     sender_name = payload.sender_name or default_sender_name(payload.source)
-
-    validate_unique_item_types(payload.items)
 
     existing_submission = None
     if allow_create and submission_message_id:
@@ -304,13 +362,14 @@ def _intake_schedule_sync(
 
     items_created = 0
     items_updated = 0
-    for index, item in enumerate(payload.items, start=1):
+    for index, validated_item in enumerate(validated_items, start=1):
+        item = validated_item.payload
         item_data = ScheduleItemData(
             position=item.position or index,
-            item_type=infer_item_type(item),
+            item_type=validated_item.item_type,
             title=item.title,
-            start_time=parse_optional_time(item.time_start),
-            end_time=parse_optional_time(item.time_end),
+            start_time=validated_item.start_time,
+            end_time=validated_item.end_time,
             is_required=item.is_required,
             assigned_contact=get_or_create_contact(
                 item.leader_name, payload.sender_phone

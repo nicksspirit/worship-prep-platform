@@ -19,6 +19,7 @@ from apps.schedules.exceptions import (
     DuplicateScheduleItemTypeError,
     DuplicateSubmissionError,
     ScheduleNotFoundError,
+    SchedulePayloadValidationError,
 )
 from apps.schedules.schemas import (
     IntakeResponse,
@@ -127,6 +128,8 @@ async def intake_schedule_endpoint(
 
     try:
         result = await intake_schedule(payload)
+    except SchedulePayloadValidationError as exc:
+        return JSON({"detail": exc.detail, "errors": exc.errors}, status_code=400)
     except DuplicateScheduleItemTypeError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
     except DuplicateSubmissionError as exc:
@@ -161,6 +164,8 @@ async def patch_schedule_endpoint(
 
     try:
         result = await patch_schedule(payload)
+    except SchedulePayloadValidationError as exc:
+        return JSON({"detail": exc.detail, "errors": exc.errors}, status_code=400)
     except DuplicateScheduleItemTypeError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
     except ScheduleNotFoundError as exc:

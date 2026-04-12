@@ -8,3 +8,12 @@ class DuplicateSubmissionError(Exception):
 
 class DuplicateScheduleItemTypeError(Exception):
     """Raised when a schedule would contain more than one item of the same type."""
+
+
+class SchedulePayloadValidationError(Exception):
+    """Raised when an inbound schedule payload fails validation."""
+
+    def __init__(self, detail: str, errors: list[str]) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.errors = errors

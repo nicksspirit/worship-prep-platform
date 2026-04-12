@@ -44,6 +44,11 @@ class IntakeResponse(msgspec.Struct, kw_only=True):
     preview_url: str
 
 
+class ValidationErrorResponse(msgspec.Struct, kw_only=True):
+    detail: str
+    errors: list[str] = []
+
+
 class ScheduleListQuery(msgspec.Struct):
     """Query parameters for ``GET /schedules``."""
 

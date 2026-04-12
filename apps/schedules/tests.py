@@ -146,6 +146,9 @@ class ScheduleIntakeTests(TestCase):
         payload.update(overrides)
         return msgspec.convert(payload, type=SongIntakePayload)
 
+    def _json_body(self, response: JSON) -> dict:
+        return response.data
+
     def test_requires_api_key(self):
         response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(),
@@ -308,7 +311,7 @@ class ScheduleIntakeTests(TestCase):
         self.assertEqual(ServiceSchedule.objects.count(), 0)
         self.assertEqual(ScheduleItem.objects.count(), 0)
 
-    def test_partial_item_parsing_infers_type(self):
+    def test_rejects_payload_when_item_type_missing(self):
         payload = self._payload(
             items=[
                 {
@@ -322,11 +325,57 @@ class ScheduleIntakeTests(TestCase):
             payload=payload,
             api_key=self.api_key,
         )
-        self.assertIsInstance(response, IntakeResponse)
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertIn("validation failed", body["detail"].lower())
+        self.assertTrue(any("item_type is required" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
 
-        item = ScheduleItem.objects.get(position=1)
-        self.assertEqual(item.item_type, "sermon")
-        self.assertIsNone(item.start_time)
+    def test_rejects_payload_with_invalid_item_type(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-invalid-item-type",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Congregational Song",
+                        "leader_name": "Voice of God Singers",
+                        "item_type": "congregational_song",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertTrue(any("invalid item_type" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
+
+    def test_rejects_payload_with_invalid_time_format(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-invalid-time",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "Min. Samuel Ojoh",
+                        "item_type": "opening_prayer",
+                        "time_start": "10:30am",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertTrue(any("time_start" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
 
     def test_normalizes_known_aliases_and_preserves_honorifics(self):
         payload = self._payload(
@@ -336,16 +385,19 @@ class ScheduleIntakeTests(TestCase):
                     "position": 1,
                     "title": "Praise & Worship",
                     "leader_name": "THE VOGS",
+                    "item_type": "worship_song",
                 },
                 {
                     "position": 2,
                     "title": "Final Prayers",
                     "leader_name": "THE PASTOR",
+                    "item_type": "closing_prayer",
                 },
                 {
                     "position": 3,
                     "title": "Opening Prayer",
                     "leader_name": "MIN. VICTOR UMUKORO",
+                    "item_type": "opening_prayer",
                 },
             ],
         )
@@ -362,19 +414,21 @@ class ScheduleIntakeTests(TestCase):
         )
         self.assertTrue(Contact.objects.filter(name="Min. Victor Umukoro", role="minister").exists())
 
-    def test_infers_new_schedule_item_types(self):
+    def test_accepts_explicit_hymn_and_worship_song_item_types(self):
         payload = self._payload(
-            source_message_id="wamid-item-types",
+            source_message_id="wamid-explicit-item-types",
             items=[
                 {
                     "position": 1,
-                    "title": "Sunday School",
-                    "leader_name": "Min. Tolu Daramola",
+                    "title": "Praise & Worship",
+                    "leader_name": "THE VOGS",
+                    "item_type": "worship_song",
                 },
                 {
                     "position": 2,
-                    "title": "Benediction",
-                    "leader_name": "THE PASTOR",
+                    "title": "Congregational Song",
+                    "leader_name": "Voice of God Singers",
+                    "item_type": "hymn",
                 },
             ],
         )
@@ -385,8 +439,8 @@ class ScheduleIntakeTests(TestCase):
         )
         self.assertIsInstance(response, IntakeResponse)
 
-        self.assertEqual(ScheduleItem.objects.get(position=1).item_type, "sunday_school")
-        self.assertEqual(ScheduleItem.objects.get(position=2).item_type, "closing_prayer")
+        self.assertEqual(ScheduleItem.objects.get(position=1).item_type, "worship_song")
+        self.assertEqual(ScheduleItem.objects.get(position=2).item_type, "hymn")
 
     def test_source_optional_defaults_to_unknown(self):
         payload = self._payload(source_message_id="wamid-source-optional")
@@ -427,6 +481,7 @@ class ScheduleIntakeTests(TestCase):
                     {
                         "title": "Praise & Worship",
                         "leader_name": "THE VOGS",
+                        "item_type": "worship_song",
                     }
                 ],
             ),
@@ -465,6 +520,7 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
@@ -509,6 +565,7 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
@@ -535,6 +592,7 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
@@ -550,6 +608,7 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. KENECHI ADEDIJI",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
@@ -578,11 +637,13 @@ class ScheduleIntakeTests(TestCase):
                     "time_end": "10:36",
                     "title": "Opening Prayer",
                     "leader_name": "MIN. VICTOR UMUKORO",
+                    "item_type": "opening_prayer",
                 },
                 {
                     "position": 3,
                     "title": "Final Prayers",
                     "leader_name": "THE PASTOR",
+                    "item_type": "closing_prayer",
                 },
             ],
         )
