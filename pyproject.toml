@@ -63,7 +63,7 @@ executor = "uv"
 
 [tool.poe.tasks]
 manage = "python manage.py"
-dev = "python manage.py runserver"
+dev = "python manage.py runserver 8001"
 bolt = "python manage.py runbolt --dev"
 makemig = "python manage.py makemigrations"
 migrate = "python manage.py migrate"
