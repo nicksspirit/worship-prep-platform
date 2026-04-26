@@ -151,9 +151,6 @@ class ContentSubmission(BaseModel):
     status = models.CharField(
         max_length=20, choices=SubmissionStatus.choices, default=SubmissionStatus.PENDING
     )
-    matched_item = models.ForeignKey(
-        ScheduleItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="submissions"
-    )
     created_schedule = models.ForeignKey(
         ServiceSchedule,
         on_delete=models.SET_NULL,

@@ -134,6 +134,7 @@ async def intake_schedule_endpoint(
         return JSON({"detail": str(exc)}, status_code=409)
     except DuplicateSubmissionError as exc:
         return JSON({"detail": str(exc)}, status_code=409)
+
     return build_intake_response(result, preview_headers=preview_headers, status_code=201)
 
 
