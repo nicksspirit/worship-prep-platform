@@ -3,7 +3,7 @@ workflow_id: "oQdiLHbdYm7wGgbD"
 workflow_name: "Song Lyrics Intake Sub-Workflow"
 sync_source: "live n8n workflow"
 sync_status: "synced"
-last_synced: "2026-04-12"
+last_synced: "2026-01-30"
 ---
 
 ```mermaid

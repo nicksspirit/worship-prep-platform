@@ -9,7 +9,7 @@ prompt_type: "define"
 
 ## User prompt
 
-=Normalize and split the worship lyrics bundle below into individual songs for downstream processing.
+Normalize and split the worship lyrics bundle below into individual songs for downstream processing.
 
 Raw bundle:
 {{ $json.raw_lyrics }}

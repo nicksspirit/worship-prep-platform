@@ -9,7 +9,7 @@ prompt_type: "define"
 
 ## User prompt
 
-=Parse this worship schedule and submit it to the API using a single method choice.
+Parse this worship schedule and submit it to the API using a single method choice.
 
 Raw content:
 {{ $json.raw_content }}

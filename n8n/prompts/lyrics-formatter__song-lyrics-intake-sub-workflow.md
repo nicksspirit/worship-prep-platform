@@ -9,7 +9,7 @@ prompt_type: "define"
 
 ## User prompt
 
-=You are formatting a single worship song for projection.
+You are formatting a single worship song for projection.
 
 Song title guess: {{ $json.song_title }}
 Service category: {{ $json.group_type }}
