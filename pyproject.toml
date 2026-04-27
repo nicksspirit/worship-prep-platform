@@ -37,6 +37,7 @@ prod = [
 test = [
     "pytest>=8.4.0",
     "pytest-django>=4.11.0",
+    "testcontainers[postgres]>=4.0.0",
     { include-group = "dev" },
 ]
 
@@ -58,11 +59,18 @@ line-length = 90
 target-version = "py313"
 
 
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "backend.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["apps"]
+
+
 [tool.poe]
 executor = "uv"
 
 [tool.poe.tasks]
 manage = "python manage.py"
+test = { cmd = "pytest", env = { DJANGO_ENV = "test" }, help = "Run test suite (requires Docker)" }
 dev = "python manage.py runserver 8001"
 bolt = "python manage.py runbolt --dev"
 makemig = "python manage.py makemigrations"

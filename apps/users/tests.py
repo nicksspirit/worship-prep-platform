@@ -165,11 +165,12 @@ class IntegrationApiKeyAdminTests(TestCase):
 
 class IntegrationApiKeyAdminFormTests(TestCase):
     def test_form_accepts_single_scope_string_payload(self):
+        expires_on = (timezone.localdate() + timedelta(days=90)).isoformat()
         form = IntegrationApiKeyAdminForm(
             data={
                 "name": "Single scope key",
                 "scopes": APIKeyScope.SCHEDULES_READ,
-                "expires_on": "2026-03-31",
+                "expires_on": expires_on,
                 "notes": "demo",
             }
         )
@@ -178,11 +179,12 @@ class IntegrationApiKeyAdminFormTests(TestCase):
         self.assertEqual(form.cleaned_data["scopes"], [APIKeyScope.SCHEDULES_READ])
 
     def test_form_accepts_comma_separated_scope_payload(self):
+        expires_on = (timezone.localdate() + timedelta(days=90)).isoformat()
         form = IntegrationApiKeyAdminForm(
             data={
                 "name": "CSV scope key",
                 "scopes": f"{APIKeyScope.SCHEDULES_READ},{APIKeyScope.SONGS_WRITE}",
-                "expires_on": "2026-03-31",
+                "expires_on": expires_on,
                 "notes": "demo",
             }
         )
@@ -194,11 +196,12 @@ class IntegrationApiKeyAdminFormTests(TestCase):
         )
 
     def test_form_stores_date_expiration_at_end_of_day(self):
+        expiry_date = timezone.localdate() + timedelta(days=90)
         form = IntegrationApiKeyAdminForm(
             data={
                 "name": "Date expiry key",
                 "scopes": [APIKeyScope.SCHEDULES_READ],
-                "expires_on": "2026-03-31",
+                "expires_on": expiry_date.isoformat(),
                 "notes": "demo",
             }
         )
@@ -206,7 +209,7 @@ class IntegrationApiKeyAdminFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         api_key = form.save(commit=False)
 
-        self.assertEqual(api_key.expires_on.date().isoformat(), "2026-03-31")
+        self.assertEqual(api_key.expires_on.date().isoformat(), expiry_date.isoformat())
         self.assertEqual(api_key.expires_on.timetz().replace(tzinfo=None), time.max)
 
     def test_form_rejects_past_expiration_date(self):
