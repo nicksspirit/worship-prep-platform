@@ -17,13 +17,21 @@ class AgendaItemPayload(msgspec.Struct, kw_only=True):
 class ScheduleIntakePayload(msgspec.Struct, kw_only=True):
     source: str = "unknown"
     target_date: dt.date
-    raw_content: str
-    sender_name: str
+    raw_content: str | None = None
+    sender_name: str | None = None
     sender_phone: str | None = None
     sender_email: str | None = None
     source_message_id: str | None = None
     title: str | None = None
     items: list[AgendaItemPayload] = []
+
+
+class PreviewUrlHeaders(msgspec.Struct):
+    """Forwarded and Host headers for building absolute preview URLs behind proxies."""
+
+    x_forwarded_proto: str | None = None
+    x_forwarded_host: str | None = None
+    host: str | None = None
 
 
 class IntakeResponse(msgspec.Struct, kw_only=True):
@@ -34,6 +42,17 @@ class IntakeResponse(msgspec.Struct, kw_only=True):
     items_updated: int
     confirmation_text: str
     preview_url: str
+
+
+class ValidationErrorResponse(msgspec.Struct, kw_only=True):
+    detail: str
+    errors: list[str] = []
+
+
+class ScheduleListQuery(msgspec.Struct):
+    """Query parameters for ``GET /schedules``."""
+
+    upcoming: bool = False
 
 
 class ScheduleListItem(msgspec.Struct, kw_only=True):

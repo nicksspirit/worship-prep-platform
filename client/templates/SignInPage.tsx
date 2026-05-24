@@ -27,7 +27,7 @@ type SignInPageProps = {
         iterator?: string[];
     };
     login_value: string | null;
-    signup_url: string | null;
+    request_invitation_url: string;
     reset_password_url: string;
     google_login_url: string;
     next_value: string | null;
@@ -68,14 +68,11 @@ export const Template = (props: SignInPageProps) => {
 
     return (
         <Layout title={props.title}>
-            <div className="flex min-h-screen w-full flex-col lg:flex-row bg-chapel-neutral-50 text-chapel-neutral-950 overflow-hidden">
+            <div className="flex min-h-[calc(100vh-5rem)] w-full flex-col lg:flex-row bg-chapel-neutral-50 text-chapel-neutral-950 overflow-hidden">
                 
                 {/* Left Side: Editorial Typography & Imagery */}
                 <div className="bg-grain relative flex flex-col justify-between w-full lg:w-[45%] bg-chapel-neutral-200 px-8 py-12 lg:p-16 border-b lg:border-b-0 lg:border-r border-chapel-neutral-950">
-                    <div className="relative z-10">
-                        <div className="mb-24 text-xs font-bold uppercase tracking-[0.25em] text-chapel-primary-500">
-                            Chapel of Mercy
-                        </div>
+                    <div className="relative z-10 pt-16">
                         
                         <h1 className="font-serif text-[4rem] lg:text-[6rem] leading-[0.9] tracking-tight mb-8">
                             Worship <br />
@@ -171,7 +168,7 @@ export const Template = (props: SignInPageProps) => {
 
                             <div className="flex flex-col gap-6 pt-4">
                                 <button type="submit" className="minimal-btn w-full">
-                                    Authenticate
+                                    Sign In
                                 </button>
                                 
                                 <a href={props.reset_password_url} className="text-xs font-bold uppercase tracking-widest text-chapel-neutral-500 hover:text-chapel-neutral-950 text-center transition-colors">
@@ -197,9 +194,18 @@ export const Template = (props: SignInPageProps) => {
                                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                                 </svg>
-                                Authenticate via Google
+                                Sign In via Google
                             </button>
                         </form>
+
+                        <div className="mt-10 text-center">
+                            <a
+                                href={props.request_invitation_url}
+                                className="text-xs font-bold uppercase tracking-widest text-chapel-primary-500 hover:text-chapel-neutral-950 transition-colors border-b border-chapel-primary-500/40 hover:border-chapel-neutral-950 pb-0.5"
+                            >
+                                Request Invitation
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

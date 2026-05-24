@@ -32,6 +32,11 @@
         ```bash
         poe migrate
         ```
+    - Run the automated test suite (starts a throwaway Postgres via **Testcontainers**; **Docker must be running**):
+        ```bash
+        poe test
+        ```
+        The Docker `test` image runs `pytest` with `DJANGO_ENV=test`; mount the host Docker socket (e.g. `-v /var/run/docker.sock:/var/run/docker.sock`) if you execute that image locally, otherwise Testcontainers cannot start Postgres inside the container.
 
 ## Package Management
 - All dependencies are managed in **pyproject.toml**.

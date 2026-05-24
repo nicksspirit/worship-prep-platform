@@ -1,7 +1,6 @@
 import datetime as dt
 import shutil
 import tempfile
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import msgspec
@@ -13,6 +12,7 @@ from django.urls import reverse
 from django_bolt import JSON
 
 from apps.schedules.api import (
+    build_preview_url,
     intake_schedule_endpoint,
     patch_schedule_endpoint,
     schedule_lookup_detail_endpoint,
@@ -20,17 +20,90 @@ from apps.schedules.api import (
 )
 from apps.schedules.choices import ServiceScheduleStatus
 from apps.schedules.models import Contact, ContentSubmission, ScheduleItem, ServiceSchedule
-from apps.schedules.schemas import IntakeResponse, ScheduleIntakePayload, SchedulePreviewResponse
+from apps.schedules.schemas import (
+    IntakeResponse,
+    PreviewUrlHeaders,
+    ScheduleIntakePayload,
+    ScheduleListQuery,
+    SchedulePreviewResponse,
+)
 from apps.schedules.services.intake import intake_schedule
 from apps.schedules.services.preview import get_schedule_preview
 from apps.schedules.views import build_empty_state, build_schedule_preview_page, format_service_date
+from apps.songs.api import intake_song_endpoint
 from apps.songs.models import Song, SongAssignment
+from apps.songs.schemas import SongIntakePayload
+from apps.users.api_keys import issue_api_key
+from apps.users.models import APIKeyScope
 
 User = get_user_model()
 
+_PREVIEW_DATE = dt.date(2026, 2, 15)
+_PREVIEW_PATH = "/schedule/2026-02-15/preview/"
 
-@override_settings(N8N_INTAKE_API_KEY="test-intake-key")
+
+class BuildPreviewUrlTests(TestCase):
+    """Unit tests for ``build_preview_url`` using ``PreviewUrlHeaders``."""
+
+    def test_returns_relative_path_when_headers_none(self):
+        url = build_preview_url(_PREVIEW_DATE, preview_headers=None)
+        self.assertEqual(url, _PREVIEW_PATH)
+
+    def test_returns_relative_path_when_no_host_in_headers(self):
+        url = build_preview_url(_PREVIEW_DATE, preview_headers=PreviewUrlHeaders())
+        self.assertEqual(url, _PREVIEW_PATH)
+
+    def test_builds_absolute_url_with_forwarded_headers(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="app.example.com",
+            ),
+        )
+        self.assertEqual(url, f"https://app.example.com{_PREVIEW_PATH}")
+
+    def test_prefers_x_forwarded_host_over_host(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="cdn.example.com",
+                host="origin.internal:8000",
+            ),
+        )
+        self.assertEqual(url, f"https://cdn.example.com{_PREVIEW_PATH}")
+
+    def test_falls_back_to_host_header(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="http",
+                host="localhost:8000",
+            ),
+        )
+        self.assertEqual(url, f"http://localhost:8000{_PREVIEW_PATH}")
+
+    def test_defaults_proto_to_https_when_missing(self):
+        url = build_preview_url(
+            _PREVIEW_DATE,
+            preview_headers=PreviewUrlHeaders(x_forwarded_host="only-host.example"),
+        )
+        self.assertEqual(url, f"https://only-host.example{_PREVIEW_PATH}")
+
+
 class ScheduleIntakeTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        _, self.api_key = issue_api_key(
+            name="Schedule intake test key",
+            scopes=[APIKeyScope.SCHEDULES_WRITE],
+        )
+        _, self.song_api_key = issue_api_key(
+            name="Song intake test key",
+            scopes=[APIKeyScope.SONGS_WRITE],
+        )
+
     def _payload(self, **overrides) -> ScheduleIntakePayload:
         payload = {
             "source": "whatsapp",
@@ -62,10 +135,24 @@ class ScheduleIntakeTests(TestCase):
         payload.update(overrides)
         return msgspec.convert(payload, type=ScheduleIntakePayload)
 
+    def _song_payload(self, **overrides) -> SongIntakePayload:
+        payload = {
+            "song_title": "All Glory, Laud, and Honor",
+            "raw_lyrics": "All glory, laud, and honor...",
+            "formatted_lyrics": "[Verse 1]\nAll glory, laud, and honor...",
+            "filename": "All_Glory_Laud_and_Honor.txt",
+            "slide_count": 2,
+        }
+        payload.update(overrides)
+        return msgspec.convert(payload, type=SongIntakePayload)
+
+    def _json_body(self, response: JSON) -> dict:
+        return response.data
+
     def test_requires_api_key(self):
         response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(),
-            n8n_api_key=None,
+            api_key=None,
         )
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 401)
@@ -73,7 +160,7 @@ class ScheduleIntakeTests(TestCase):
     def test_creates_schedule_and_submission(self):
         response = async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "created")
@@ -84,15 +171,30 @@ class ScheduleIntakeTests(TestCase):
         self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
         self.assertEqual(ContentSubmission.objects.count(), 1)
 
+    def test_intake_preview_url_uses_forwarded_headers_when_provided(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(),
+            api_key=self.api_key,
+            preview_headers=PreviewUrlHeaders(
+                x_forwarded_proto="https",
+                x_forwarded_host="worship.example.com",
+            ),
+        )
+        self.assertIsInstance(response, IntakeResponse)
+        self.assertEqual(
+            response.preview_url,
+            "https://worship.example.com/schedule/2026-02-15/preview/",
+        )
+
     def test_duplicate_source_message_id_is_idempotent(self):
         request_payload = self._payload()
         async_to_sync(intake_schedule_endpoint)(
             payload=request_payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         response = async_to_sync(intake_schedule_endpoint)(
             payload=request_payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "existing")
@@ -102,7 +204,7 @@ class ScheduleIntakeTests(TestCase):
     def test_duplicate_source_message_id_with_different_payload_returns_conflict(self):
         async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-conflict"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         response = async_to_sync(intake_schedule_endpoint)(
@@ -110,7 +212,7 @@ class ScheduleIntakeTests(TestCase):
                 source_message_id="wamid-conflict",
                 title="Different Sunday Service",
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 409)
@@ -119,7 +221,7 @@ class ScheduleIntakeTests(TestCase):
         first = self._payload(source_message_id="wamid-first")
         async_to_sync(intake_schedule_endpoint)(
             payload=first,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         second = self._payload(
@@ -138,7 +240,7 @@ class ScheduleIntakeTests(TestCase):
         )
         response = async_to_sync(intake_schedule_endpoint)(
             payload=second,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "updated")
@@ -150,7 +252,7 @@ class ScheduleIntakeTests(TestCase):
     def test_updates_existing_schedule_item_by_type_when_position_changes(self):
         async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-initial-position"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         response = async_to_sync(intake_schedule_endpoint)(
@@ -167,7 +269,7 @@ class ScheduleIntakeTests(TestCase):
                     }
                 ],
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         self.assertIsInstance(response, IntakeResponse)
@@ -201,7 +303,7 @@ class ScheduleIntakeTests(TestCase):
                     },
                 ],
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         self.assertIsInstance(response, JSON)
@@ -209,7 +311,7 @@ class ScheduleIntakeTests(TestCase):
         self.assertEqual(ServiceSchedule.objects.count(), 0)
         self.assertEqual(ScheduleItem.objects.count(), 0)
 
-    def test_partial_item_parsing_infers_type(self):
+    def test_rejects_payload_when_item_type_missing(self):
         payload = self._payload(
             items=[
                 {
@@ -221,13 +323,59 @@ class ScheduleIntakeTests(TestCase):
         )
         response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
-        self.assertIsInstance(response, IntakeResponse)
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertIn("validation failed", body["detail"].lower())
+        self.assertTrue(any("item_type is required" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
 
-        item = ScheduleItem.objects.get(position=1)
-        self.assertEqual(item.item_type, "sermon")
-        self.assertIsNone(item.start_time)
+    def test_rejects_payload_with_invalid_item_type(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-invalid-item-type",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Congregational Song",
+                        "leader_name": "Voice of God Singers",
+                        "item_type": "congregational_song",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertTrue(any("invalid item_type" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
+
+    def test_rejects_payload_with_invalid_time_format(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-invalid-time",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "Min. Samuel Ojoh",
+                        "item_type": "opening_prayer",
+                        "time_start": "10:30am",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, JSON)
+        self.assertEqual(response.status_code, 400)
+        body = self._json_body(response)
+        self.assertTrue(any("time_start" in error for error in body["errors"]))
+        self.assertEqual(ServiceSchedule.objects.count(), 0)
 
     def test_normalizes_known_aliases_and_preserves_honorifics(self):
         payload = self._payload(
@@ -237,23 +385,26 @@ class ScheduleIntakeTests(TestCase):
                     "position": 1,
                     "title": "Praise & Worship",
                     "leader_name": "THE VOGS",
+                    "item_type": "worship_song",
                 },
                 {
                     "position": 2,
                     "title": "Final Prayers",
                     "leader_name": "THE PASTOR",
+                    "item_type": "closing_prayer",
                 },
                 {
                     "position": 3,
                     "title": "Opening Prayer",
                     "leader_name": "MIN. VICTOR UMUKORO",
+                    "item_type": "opening_prayer",
                 },
             ],
         )
 
         response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
 
@@ -263,31 +414,33 @@ class ScheduleIntakeTests(TestCase):
         )
         self.assertTrue(Contact.objects.filter(name="Min. Victor Umukoro", role="minister").exists())
 
-    def test_infers_new_schedule_item_types(self):
+    def test_accepts_explicit_hymn_and_worship_song_item_types(self):
         payload = self._payload(
-            source_message_id="wamid-item-types",
+            source_message_id="wamid-explicit-item-types",
             items=[
                 {
                     "position": 1,
-                    "title": "Sunday School",
-                    "leader_name": "Min. Tolu Daramola",
+                    "title": "Praise & Worship",
+                    "leader_name": "THE VOGS",
+                    "item_type": "worship_song",
                 },
                 {
                     "position": 2,
-                    "title": "Benediction",
-                    "leader_name": "THE PASTOR",
+                    "title": "Congregational Song",
+                    "leader_name": "Voice of God Singers",
+                    "item_type": "hymn",
                 },
             ],
         )
 
         response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
 
-        self.assertEqual(ScheduleItem.objects.get(position=1).item_type, "sunday_school")
-        self.assertEqual(ScheduleItem.objects.get(position=2).item_type, "closing_prayer")
+        self.assertEqual(ScheduleItem.objects.get(position=1).item_type, "worship_song")
+        self.assertEqual(ScheduleItem.objects.get(position=2).item_type, "hymn")
 
     def test_source_optional_defaults_to_unknown(self):
         payload = self._payload(source_message_id="wamid-source-optional")
@@ -297,7 +450,7 @@ class ScheduleIntakeTests(TestCase):
 
         response = async_to_sync(intake_schedule_endpoint)(
             payload=payload_no_source,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         submission = ContentSubmission.objects.get(source_message_id="wamid-source-optional")
@@ -311,17 +464,89 @@ class ScheduleIntakeTests(TestCase):
 
         response = async_to_sync(intake_schedule_endpoint)(
             payload=payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
 
         schedule = ServiceSchedule.objects.get(date=dt.date(2026, 2, 15))
         self.assertEqual(schedule.title, "Sunday Service - February 15, 2026")
 
+    def test_accepts_minimal_partial_payload_without_raw_content_or_sender_name(self):
+        response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-minimal-partial",
+                raw_content=None,
+                sender_name=None,
+                items=[
+                    {
+                        "title": "Praise & Worship",
+                        "leader_name": "THE VOGS",
+                        "item_type": "worship_song",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(response, IntakeResponse)
+        self.assertEqual(response.created_or_updated, "created")
+        self.assertEqual(response.items_created, 1)
+
+        submission = ContentSubmission.objects.get(source_message_id="wamid-minimal-partial")
+        self.assertEqual(submission.sender_name, "WhatsApp Intake Agent")
+        self.assertEqual(submission.raw_content, "1. Praise & Worship")
+        self.assertEqual(submission.parsed_body, "1. Praise & Worship")
+
+    def test_song_first_flow_can_create_schedule_then_schedule_intake_enriches_same_date(self):
+        song_response = async_to_sync(intake_song_endpoint)(
+            payload=self._song_payload(
+                schedule_date=dt.date(2026, 3, 29),
+                item_type="hymn",
+                position=1,
+            ),
+            api_key=self.song_api_key,
+        )
+        self.assertTrue(song_response.linked_to_schedule)
+
+        schedule_response = async_to_sync(intake_schedule_endpoint)(
+            payload=self._payload(
+                source_message_id="wamid-enrich-song-first",
+                target_date="2026-03-29",
+                raw_content=None,
+                sender_name=None,
+                title="Sunday Service - March 29, 2026",
+                items=[
+                    {
+                        "position": 1,
+                        "title": "Opening Prayer",
+                        "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
+                    }
+                ],
+            ),
+            api_key=self.api_key,
+        )
+
+        self.assertIsInstance(schedule_response, IntakeResponse)
+        self.assertEqual(schedule_response.created_or_updated, "updated")
+        self.assertEqual(ServiceSchedule.objects.count(), 1)
+
+        schedule = ServiceSchedule.objects.get(date=dt.date(2026, 3, 29))
+        self.assertEqual(schedule.title, "Sunday Service - March 29, 2026")
+        self.assertEqual(schedule.status, ServiceScheduleStatus.IN_PROGRESS)
+        self.assertEqual(ScheduleItem.objects.filter(schedule=schedule).count(), 2)
+
+        hymn_item = ScheduleItem.objects.get(schedule=schedule, item_type="hymn")
+        self.assertEqual(hymn_item.title, "Congregational Hymn")
+        self.assertEqual(hymn_item.song_assignments.count(), 1)
+
+        prayer_item = ScheduleItem.objects.get(schedule=schedule, item_type="opening_prayer")
+        self.assertEqual(prayer_item.assigned_contact.name, "Min. Victor Umukoro")
+
     def test_patch_requires_existing_schedule(self):
         response = async_to_sync(patch_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-patch-missing"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 404)
@@ -329,7 +554,7 @@ class ScheduleIntakeTests(TestCase):
     def test_patch_can_reuse_raw_message_id_from_create_without_being_blocked(self):
         async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-shared"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         response = async_to_sync(patch_schedule_endpoint)(
@@ -340,10 +565,11 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "updated")
@@ -355,7 +581,7 @@ class ScheduleIntakeTests(TestCase):
     def test_patch_allows_repeated_updates_with_same_raw_message_id(self):
         async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-repeat-patch-create"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         first_response = async_to_sync(patch_schedule_endpoint)(
@@ -366,10 +592,11 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. VICTOR UMUKORO",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(first_response, IntakeResponse)
 
@@ -381,10 +608,11 @@ class ScheduleIntakeTests(TestCase):
                         "position": 1,
                         "title": "Opening Prayer",
                         "leader_name": "MIN. KENECHI ADEDIJI",
+                        "item_type": "opening_prayer",
                     }
                 ],
             ),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(second_response, IntakeResponse)
         self.assertEqual(second_response.created_or_updated, "updated")
@@ -396,7 +624,7 @@ class ScheduleIntakeTests(TestCase):
     def test_patch_updates_existing_schedule_without_creating_new_schedule(self):
         async_to_sync(intake_schedule_endpoint)(
             payload=self._payload(source_message_id="wamid-patch-base"),
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         patch_payload = self._payload(
@@ -409,18 +637,20 @@ class ScheduleIntakeTests(TestCase):
                     "time_end": "10:36",
                     "title": "Opening Prayer",
                     "leader_name": "MIN. VICTOR UMUKORO",
+                    "item_type": "opening_prayer",
                 },
                 {
                     "position": 3,
                     "title": "Final Prayers",
                     "leader_name": "THE PASTOR",
+                    "item_type": "closing_prayer",
                 },
             ],
         )
 
         response = async_to_sync(patch_schedule_endpoint)(
             payload=patch_payload,
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
         self.assertIsInstance(response, IntakeResponse)
         self.assertEqual(response.created_or_updated, "updated")
@@ -508,11 +738,19 @@ class SchedulePreviewTests(TestCase):
         self.assertEqual(len(result.items), 1)
         self.assertEqual(result.items[0].title, "Opening Prayer")
 
-
-@override_settings(N8N_INTAKE_API_KEY="test-intake-key")
 class ScheduleLookupEndpointTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        _, self.api_key = issue_api_key(
+            name="Schedule lookup test key",
+            scopes=[APIKeyScope.SCHEDULES_READ],
+        )
+
     def test_list_endpoint_requires_api_key(self):
-        response = async_to_sync(schedule_lookup_list_endpoint)(n8n_api_key=None)
+        response = async_to_sync(schedule_lookup_list_endpoint)(
+            ScheduleListQuery(),
+            api_key=None,
+        )
 
         self.assertIsInstance(response, JSON)
         self.assertEqual(response.status_code, 401)
@@ -542,7 +780,10 @@ class ScheduleLookupEndpointTests(TestCase):
             status=ServiceScheduleStatus.IN_PROGRESS,
         )
 
-        response = async_to_sync(schedule_lookup_list_endpoint)(n8n_api_key="test-intake-key")
+        response = async_to_sync(schedule_lookup_list_endpoint)(
+            ScheduleListQuery(),
+            api_key=self.api_key,
+        )
 
         self.assertEqual(len(response), 5)
         self.assertEqual([item.date for item in response], [
@@ -568,12 +809,10 @@ class ScheduleLookupEndpointTests(TestCase):
             title="Opening Prayer",
         )
 
-        request = SimpleNamespace(query={"upcoming": "true"})
-
         with patch("apps.schedules.api.get_upcoming_schedule_date", return_value=dt.date(2026, 3, 15)):
             response = async_to_sync(schedule_lookup_list_endpoint)(
-                request=request,
-                n8n_api_key="test-intake-key",
+                ScheduleListQuery(upcoming=True),
+                api_key=self.api_key,
             )
 
         self.assertIsInstance(response, SchedulePreviewResponse)
@@ -595,7 +834,7 @@ class ScheduleLookupEndpointTests(TestCase):
 
         response = async_to_sync(schedule_lookup_detail_endpoint)(
             date="2026-04-05",
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         self.assertIsInstance(response, SchedulePreviewResponse)
@@ -605,7 +844,7 @@ class ScheduleLookupEndpointTests(TestCase):
     def test_detail_endpoint_rejects_invalid_date(self):
         response = async_to_sync(schedule_lookup_detail_endpoint)(
             date="04-05-2026",
-            n8n_api_key="test-intake-key",
+            api_key=self.api_key,
         )
 
         self.assertIsInstance(response, JSON)

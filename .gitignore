@@ -6,9 +6,17 @@ dist/
 wheels/
 *.egg-info
 .venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
 
 # Django
 db.sqlite3
+**/settings/environments/.local.py
+
 public/
 node_modules/
 
@@ -22,3 +30,4 @@ patches/
 
 # AI
 .aider*
+.cursor/plans/
