@@ -1,4 +1,5 @@
 import React from "react";
+import {Context} from "@reactivated";
 
 // Four Song Catalog directions on one throwaway route; D captures the selected refinement.
 type View = "search" | "detail" | "preview";
@@ -194,35 +195,145 @@ function SearchField({
     );
 }
 
-function ProjectionStage({onBack, variant}: {onBack: () => void; variant: Variant}) {
+function ProjectionStage({onBack}: {onBack: () => void}) {
+    const {STATIC_URL} = React.useContext(Context);
     const [slide, setSlide] = React.useState(0);
+    const [fitScale, setFitScale] = React.useState(1);
+    const [reduceMotion, setReduceMotion] = React.useState(false);
+    const stageRef = React.useRef<HTMLDivElement>(null);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
     const next = () => setSlide((value) => Math.min(value + 1, sampleSlides.length - 1));
     const previous = () => setSlide((value) => Math.max(value - 1, 0));
 
     React.useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
             if (event.key === "Escape") onBack();
-            if (event.key === "ArrowRight" || event.key === " ") next();
-            if (event.key === "ArrowLeft") previous();
+            if (event.key === "ArrowRight" || event.key === " ") {
+                event.preventDefault();
+                next();
+            }
+            if (event.key === "ArrowLeft") {
+                event.preventDefault();
+                previous();
+            }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [onBack]);
 
+    React.useEffect(() => {
+        const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const updatePreference = () => setReduceMotion(preference.matches);
+        updatePreference();
+        preference.addEventListener("change", updatePreference);
+        return () => preference.removeEventListener("change", updatePreference);
+    }, []);
+
+    React.useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (reduceMotion) {
+            video.pause();
+            if (video.readyState >= 1) video.currentTime = Math.min(0.25, video.duration || 0.25);
+            return;
+        }
+        void video.play().catch(() => undefined);
+    }, [reduceMotion]);
+
+    React.useEffect(() => {
+        const stage = stageRef.current;
+        if (!stage) return;
+
+        const calculateFit = () => {
+            const measurements = Array.from(
+                stage.querySelectorAll<HTMLElement>(".projection-stage__measurement"),
+            );
+            if (!measurements.length) return;
+
+            const innerWidth = stage.clientWidth * 0.9802;
+            const innerHeight = stage.clientHeight * 0.9796;
+            const effectAllowance = stage.clientWidth * 0.014;
+            const scales = measurements.map((measurement) => {
+                const widthScale = (innerWidth - effectAllowance) / measurement.scrollWidth;
+                const heightScale = (innerHeight - effectAllowance) / measurement.scrollHeight;
+                return Math.min(1, widthScale, heightScale);
+            });
+            setFitScale(Math.max(0.3, Math.min(...scales)));
+        };
+
+        calculateFit();
+        const observer = new ResizeObserver(calculateFit);
+        observer.observe(stage);
+        return () => observer.disconnect();
+    }, []);
+
+    const currentLines = sampleSlides[slide];
     return (
-        <section className={`projection-stage projection-stage--${variant}`}>
-            <header>
+        <section className="projection-preview">
+            <header className="projection-preview__header">
                 <button onClick={onBack}><Arrow direction="left" /> Exit preview</button>
-                <span>Approximate projection · 16:9</span>
+                <span>Approximate EasyWorship preview · 16:9</span>
                 <span>{slide + 1} / {sampleSlides.length}</span>
             </header>
-            <div className="projection-stage__screen">
-                <div className="projection-stage__glow" />
-                <div className="projection-stage__lyrics" key={slide}>
-                    {sampleSlides[slide].map((line) => <p key={line}>{line}</p>)}
+
+            <figure className="projection-preview__frame">
+                <div
+                    ref={stageRef}
+                    className="projection-stage"
+                    role="img"
+                    aria-label={`Projection preview: ${currentLines.join(". ")}`}
+                    data-media-fit="zoom"
+                    style={{"--ew-fit-scale": fitScale} as React.CSSProperties}
+                >
+                    <video
+                        ref={videoRef}
+                        className="projection-stage__background"
+                        autoPlay={!reduceMotion}
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-hidden="true"
+                        onLoadedMetadata={(event) => {
+                            if (reduceMotion) {
+                                event.currentTarget.pause();
+                                event.currentTarget.currentTime = 0.25;
+                            }
+                        }}
+                    >
+                        <source
+                            src={`${STATIC_URL}prototype/default-song-background.mp4`}
+                            type="video/mp4"
+                        />
+                    </video>
+
+                    <div className="projection-stage__lyrics">
+                        <p className="projection-stage__lyric-block">
+                            {currentLines.map((line, index) => (
+                                <span className="projection-stage__line" key={`${slide}-${index}`}>
+                                    {line}
+                                </span>
+                            ))}
+                        </p>
+                    </div>
+
+                    <div className="projection-stage__measurements" aria-hidden="true">
+                        {sampleSlides.map((lines, index) => (
+                            <p className="projection-stage__measurement" key={index}>
+                                {lines.map((line, lineIndex) => (
+                                    <span className="projection-stage__line" key={lineIndex}>
+                                        {line}
+                                    </span>
+                                ))}
+                            </p>
+                        ))}
+                    </div>
                 </div>
-            </div>
-            <footer>
+            </figure>
+
+            <footer className="projection-preview__controls">
                 <button onClick={previous} disabled={slide === 0}><Arrow direction="left" /> Previous</button>
                 <div>
                     {sampleSlides.map((_, index) => (
@@ -230,6 +341,7 @@ function ProjectionStage({onBack, variant}: {onBack: () => void; variant: Varian
                             key={index}
                             aria-label={`Go to slide ${index + 1}`}
                             className={slide === index ? "is-active" : ""}
+                            aria-current={slide === index ? "true" : undefined}
                             onClick={() => setSlide(index)}
                         />
                     ))}
@@ -256,7 +368,7 @@ function Lyrics() {
 function VariantA({view, setView}: {view: View; setView: (view: View) => void}) {
     const [query, setQuery] = React.useState("morning");
     const filtered = songs.filter((song) => song.match.includes(query.toLowerCase()));
-    if (view === "preview") return <ProjectionStage variant="a" onBack={() => setView("detail")} />;
+    if (view === "preview") return <ProjectionStage onBack={() => setView("detail")} />;
 
     if (view === "detail") {
         const song = songs[0];
@@ -320,7 +432,7 @@ function VariantA({view, setView}: {view: View; setView: (view: View) => void}) 
 
 function VariantB({view, setView}: {view: View; setView: (view: View) => void}) {
     const [query, setQuery] = React.useState("mercy");
-    if (view === "preview") return <ProjectionStage variant="b" onBack={() => setView("detail")} />;
+    if (view === "preview") return <ProjectionStage onBack={() => setView("detail")} />;
     const selected = songs[0];
     return (
         <main className="catalog-b">
@@ -383,7 +495,7 @@ function VariantB({view, setView}: {view: View; setView: (view: View) => void}) 
 
 function VariantC({view, setView}: {view: View; setView: (view: View) => void}) {
     const [query, setQuery] = React.useState("");
-    if (view === "preview") return <ProjectionStage variant="c" onBack={() => setView("detail")} />;
+    if (view === "preview") return <ProjectionStage onBack={() => setView("detail")} />;
     if (view === "detail") {
         const song = songs[0];
         return (
@@ -442,7 +554,7 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
     });
 
     if (view === "preview") {
-        return <ProjectionStage variant="d" onBack={() => setView("detail")} />;
+        return <ProjectionStage onBack={() => setView("detail")} />;
     }
 
     if (view === "detail") {
