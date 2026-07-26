@@ -302,7 +302,15 @@ a {
   line-height: 1.65;
 }
 .catalog-d__search-block {
-  margin-top: 4.5rem;
+  margin-top: .55rem;
+}
+.catalog-d__freshness {
+  margin: 4.5rem 0 0;
+  color: #777468;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .catalog-d__suggestions {
   display: flex;
@@ -335,12 +343,24 @@ a {
 .catalog-d__result-meta {
   display: flex;
   justify-content: space-between;
-  border-bottom: 1px solid #aaa698;
   padding: 2.75rem 0 .9rem;
   color: #777468;
   font-size: .68rem;
   font-weight: 700;
   letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.catalog-d__column-headings {
+  display: grid;
+  grid-template-columns: minmax(13rem, .75fr) minmax(16rem, 1.25fr) 2.5rem;
+  gap: clamp(2rem, 5vw, 5rem);
+  border-top: 1px solid #aaa698;
+  border-bottom: 1px solid #c7c3b6;
+  padding: .75rem .25rem;
+  color: #777468;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
 .catalog-d__results > button {
@@ -375,17 +395,7 @@ a {
   font-size: .78rem;
 }
 .catalog-d__excerpt {
-  display: grid;
-  grid-template-columns: 5rem 1fr;
-  align-items: start;
-  gap: 1rem;
-}
-.catalog-d__excerpt small {
-  color: #8a867a;
-  font-size: .62rem;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  display: block;
 }
 .catalog-d__excerpt > span {
   color: #56544d;
@@ -510,9 +520,14 @@ a {
   .catalog-d__detail-grid { grid-template-columns: 1fr; gap: 2.5rem; }
   .catalog-d__masthead > div { margin-top: 1.75rem; }
   .catalog-d__masthead > div > p { max-width: 36ch; }
-  .catalog-d__search-block { margin-top: 3rem; }
+  .catalog-d__freshness { margin-top: 3rem; }
   .catalog-d__result-meta { padding-top: 2rem; }
-  .catalog-d__result-meta span:last-child { display: none; }
+  .catalog-d__column-headings {
+    grid-template-columns: 1fr 2.5rem;
+    gap: 1.25rem;
+  }
+  .catalog-d__column-headings span:first-child { display: none; }
+  .catalog-d__column-headings span:nth-child(2) { grid-column: 1; }
   .catalog-d__results > button {
     grid-template-columns: 1fr 2.5rem;
     gap: 1.25rem;
@@ -520,8 +535,6 @@ a {
   }
   .catalog-d__excerpt {
     grid-column: 1;
-    grid-template-columns: 1fr;
-    gap: .3rem;
   }
   .catalog-d__open { grid-column: 2; grid-row: 1 / 3; }
   .catalog-d--detail article > header { align-items: start; flex-direction: column; }

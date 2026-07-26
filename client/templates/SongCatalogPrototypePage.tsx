@@ -502,6 +502,7 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                 </div>
             </header>
 
+            <p className="catalog-d__freshness">Catalog updated 12 days ago</p>
             <section className="catalog-d__search-block" aria-label="Song search">
                 <SearchField query={query} setQuery={setQuery} />
                 <div className="catalog-d__suggestions">
@@ -516,9 +517,13 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
 
             <div className="catalog-d__result-meta" aria-live="polite">
                 <span>{filtered.length} {filtered.length === 1 ? "song" : "songs"}</span>
-                <span>Catalog updated 12 days ago</span>
             </div>
 
+            <div className="catalog-d__column-headings" aria-hidden="true">
+                <span>Song</span>
+                <span>Lyric preview</span>
+                <span />
+            </div>
             <section className="catalog-d__results" aria-label="Search results">
                 {filtered.length ? filtered.map((song) => (
                     <button key={song.id} onClick={() => setView("detail")}>
@@ -527,7 +532,6 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                             <small>{getAuthor(song)}</small>
                         </span>
                         <span className="catalog-d__excerpt">
-                            <small>Lyric excerpt</small>
                             <span>{song.excerpt}</span>
                         </span>
                         <span className="catalog-d__open" aria-hidden="true">
