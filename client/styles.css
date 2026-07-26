@@ -263,6 +263,207 @@ a {
 .catalog-c--detail aside small { display: block; margin-top: .8rem; color: #789085; text-align: center; }
 @keyframes catalog-rise { from { opacity: 0; transform: translateY(16px); } }
 
+/* Variant D — selected direction: editorial index with recognition-first excerpts. */
+.catalog-d {
+  min-height: 100vh;
+  background: #f2efe7;
+  color: #28271f;
+  padding: clamp(3rem, 7vw, 7rem) max(6vw, calc((100vw - 1160px) / 2)) 8rem;
+  font-family: "Instrument Sans", sans-serif;
+}
+.catalog-d__masthead {
+  border-top: 1px solid #aaa698;
+  padding-top: 1.5rem;
+}
+.catalog-d__masthead > .catalog-kicker {
+  color: #777363;
+}
+.catalog-d__masthead > div {
+  display: grid;
+  grid-template-columns: 1.4fr .6fr;
+  align-items: end;
+  gap: 4rem;
+  margin-top: 2.5rem;
+}
+.catalog-d__masthead h1 {
+  margin: 0;
+  font: 500 clamp(3.6rem, 7vw, 6rem)/.88 "Cormorant Garamond", serif;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+.catalog-d__masthead h1 i {
+  color: #8a2f3e;
+  font-weight: 400;
+}
+.catalog-d__masthead > div > p {
+  max-width: 30ch;
+  margin: 0 0 .55rem;
+  color: #666359;
+  line-height: 1.65;
+}
+.catalog-d__search-block {
+  margin-top: 4.5rem;
+}
+.catalog-d__suggestions {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding-top: .85rem;
+  color: #777468;
+  font-size: .72rem;
+}
+.catalog-d__suggestions > span {
+  margin-right: .15rem;
+  font-weight: 700;
+}
+.catalog-d__suggestions button {
+  border: 1px solid #c6c1b4;
+  border-radius: 999px;
+  background: transparent;
+  padding: .35rem .65rem;
+  color: #57554d;
+  font: 600 .7rem "Instrument Sans", sans-serif;
+  transition: border-color .2s, background .2s, color .2s;
+}
+.catalog-d__suggestions button:hover,
+.catalog-d__suggestions button:focus-visible {
+  border-color: #8a2f3e;
+  background: #8a2f3e;
+  color: white;
+  outline: none;
+}
+.catalog-d__result-meta {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #aaa698;
+  padding: 2.75rem 0 .9rem;
+  color: #777468;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.catalog-d__results > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(13rem, .75fr) minmax(16rem, 1.25fr) 2.5rem;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+  border: 0;
+  border-bottom: 1px solid #c7c3b6;
+  background: transparent;
+  padding: 1.8rem .25rem;
+  color: inherit;
+  text-align: left;
+  transition: background .25s;
+}
+.catalog-d__results > button:hover {
+  background: rgb(255 255 255 / 48%);
+}
+.catalog-d__results > button:focus-visible {
+  outline: 2px solid #8a2f3e;
+  outline-offset: 3px;
+}
+.catalog-d__song b {
+  display: block;
+  font: 600 1.85rem/1.1 "Cormorant Garamond", serif;
+}
+.catalog-d__song small {
+  display: block;
+  margin-top: .45rem;
+  color: #716e64;
+  font-size: .78rem;
+}
+.catalog-d__excerpt {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  align-items: baseline;
+  gap: 1rem;
+}
+.catalog-d__excerpt small {
+  color: #8a867a;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.catalog-d__excerpt > span {
+  color: #56544d;
+  font: italic 1.25rem/1.35 "Cormorant Garamond", serif;
+}
+.catalog-d__open {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid #c4c0b4;
+  border-radius: 50%;
+  transition: border-color .2s, background .2s, color .2s, transform .2s;
+}
+.catalog-d__results > button:hover .catalog-d__open {
+  border-color: #8a2f3e;
+  background: #8a2f3e;
+  color: white;
+  transform: translateX(.25rem);
+}
+.catalog-d .catalog-empty > button {
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  padding: .35rem 0;
+  color: #8a2f3e;
+  font: 700 .75rem "Instrument Sans", sans-serif;
+}
+.catalog-d--detail nav button {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 700 .7rem "Instrument Sans", sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.catalog-d--detail article {
+  margin-top: 4rem;
+}
+.catalog-d--detail article > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  border-bottom: 1px solid #aaa698;
+  padding-bottom: 2.5rem;
+}
+.catalog-d--detail h1 {
+  margin: .8rem 0 0;
+  font: 500 clamp(4rem, 7vw, 6rem)/.9 "Cormorant Garamond", serif;
+  letter-spacing: -.04em;
+}
+.catalog-d__detail-grid {
+  display: grid;
+  grid-template-columns: 1.4fr .6fr;
+  gap: 7rem;
+  padding: 4rem 0 8rem;
+}
+.catalog-d__detail-grid > aside {
+  border-left: 1px solid #c4c0b4;
+  padding-left: 2rem;
+}
+.catalog-d dl div {
+  border-bottom: 1px solid #d0ccc1;
+  padding: 1rem 0;
+}
+.catalog-d dt {
+  color: #777468;
+  font-size: .68rem;
+  text-transform: uppercase;
+}
+.catalog-d dd {
+  margin: .25rem 0 0;
+}
+
 /* Shared approximate 16:9 projection surface. */
 .projection-stage { min-height: 100vh; background: #090b0c; color: white; font-family: "Instrument Sans", sans-serif; }
 .projection-stage > header, .projection-stage > footer { display: grid; height: 4.2rem; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; padding: 0 1.5rem; color: #8d9497; font-size: .67rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
@@ -300,6 +501,30 @@ a {
   .catalog-c__cards { grid-template-columns: 1fr; }
   .catalog-c--detail article > aside { grid-row: 2; }
   .catalog-c__paper { grid-row: 3; }
+  .catalog-d__masthead > div,
+  .catalog-d__detail-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  .catalog-d__masthead > div { margin-top: 1.75rem; }
+  .catalog-d__masthead > div > p { max-width: 36ch; }
+  .catalog-d__search-block { margin-top: 3rem; }
+  .catalog-d__result-meta { padding-top: 2rem; }
+  .catalog-d__result-meta span:last-child { display: none; }
+  .catalog-d__results > button {
+    grid-template-columns: 1fr 2.5rem;
+    gap: 1.25rem;
+    padding: 1.5rem .25rem;
+  }
+  .catalog-d__excerpt {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+    gap: .3rem;
+  }
+  .catalog-d__open { grid-column: 2; grid-row: 1 / 3; }
+  .catalog-d--detail article > header { align-items: start; flex-direction: column; }
+  .catalog-d__detail-grid > aside {
+    border-top: 1px solid #c4c0b4;
+    border-left: 0;
+    padding: 2rem 0 0;
+  }
   .projection-stage > header, .projection-stage > footer { padding: 0 .8rem; }
   .projection-stage > header > span:first-of-type { display: none; }
 }

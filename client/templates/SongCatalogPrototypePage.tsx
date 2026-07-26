@@ -1,7 +1,8 @@
 import React from "react";
 
+// Four Song Catalog directions on one throwaway route; D captures the selected refinement.
 type View = "search" | "detail" | "preview";
-type Variant = "a" | "b" | "c";
+type Variant = "a" | "b" | "c" | "d";
 
 type Song = {
     id: string;
@@ -11,6 +12,7 @@ type Song = {
     updated: string;
     previewable: boolean;
     match: string;
+    excerpt: string;
 };
 
 const songs: Song[] = [
@@ -22,6 +24,7 @@ const songs: Song[] = [
         updated: "12 days ago",
         previewable: true,
         match: "dawn breaking mercy morning",
+        excerpt: "Dawn is breaking, mercy meets us here…",
     },
     {
         id: "ew-0881",
@@ -31,6 +34,7 @@ const songs: Song[] = [
         updated: "2 months ago",
         previewable: false,
         match: "mercy morning",
+        excerpt: "Mercy like the morning, new with every light…",
     },
     {
         id: "ew-1250",
@@ -40,6 +44,7 @@ const songs: Song[] = [
         updated: "4 months ago",
         previewable: false,
         match: "creation sings",
+        excerpt: "All creation sings, heaven and earth reply…",
     },
     {
         id: "ew-2017",
@@ -49,6 +54,7 @@ const songs: Song[] = [
         updated: "8 months ago",
         previewable: true,
         match: "morning faithful",
+        excerpt: "Morning by morning, faithfulness I see…",
     },
 ];
 
@@ -90,7 +96,7 @@ function usePrototypeRoute() {
         const initial = new URLSearchParams(window.location.search);
         const initialVariant = initial.get("variant");
         const initialView = initial.get("view");
-        if (["a", "b", "c"].includes(initialVariant || "")) {
+        if (["a", "b", "c", "d"].includes(initialVariant || "")) {
             setVariantState(initialVariant as Variant);
         }
         if (["search", "detail", "preview"].includes(initialView || "")) {
@@ -101,7 +107,9 @@ function usePrototypeRoute() {
     React.useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
             if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-            const order: Variant[] = ["a", "b", "c"];
+            const target = event.target as HTMLElement | null;
+            if (target?.matches("input, textarea, [contenteditable='true']")) return;
+            const order: Variant[] = ["a", "b", "c", "d"];
             const offset = event.key === "ArrowRight" ? 1 : -1;
             const next = order[(order.indexOf(variant) + offset + order.length) % order.length];
             update(next, view);
@@ -138,11 +146,14 @@ function PrototypeSwitcher({
         a: "Hymnal Index",
         b: "Control Room",
         c: "Sunday Window",
+        d: "Hymnal Excerpts",
     };
+    if (import.meta.env.PROD) return null;
+
     return (
         <aside className="catalog-switcher" aria-label="Prototype variants">
             <span className="catalog-switcher__eyebrow">Prototype</span>
-            {(["a", "b", "c"] as Variant[]).map((item) => (
+            {(["a", "b", "c", "d"] as Variant[]).map((item) => (
                 <button
                     key={item}
                     className={variant === item ? "is-active" : ""}
@@ -415,6 +426,124 @@ function VariantC({view, setView}: {view: View; setView: (view: View) => void}) 
     );
 }
 
+function VariantD({view, setView}: {view: View; setView: (view: View) => void}) {
+    const [query, setQuery] = React.useState("");
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = songs.filter((song) => {
+        const searchableText = [
+            song.title,
+            song.author,
+            song.match,
+            song.excerpt,
+        ].join(" ").toLowerCase();
+        return !normalizedQuery || searchableText.includes(normalizedQuery);
+    });
+
+    if (view === "preview") {
+        return <ProjectionStage variant="d" onBack={() => setView("detail")} />;
+    }
+
+    if (view === "detail") {
+        const song = songs[0];
+        return (
+            <main className="catalog-d catalog-d--detail">
+                <nav>
+                    <button onClick={() => setView("search")}>
+                        <Arrow direction="left" /> Back to songs
+                    </button>
+                </nav>
+                <article>
+                    <header>
+                        <div>
+                            <p className="catalog-kicker">
+                                Song no. 0142 · EasyWorship catalog
+                            </p>
+                            <h1>{song.title}</h1>
+                            <p className="catalog-byline">Written by {song.author}</p>
+                        </div>
+                        <button
+                            className="catalog-preview-button"
+                            onClick={() => setView("preview")}
+                        >
+                            <span>▶</span> Preview projection
+                        </button>
+                    </header>
+                    <div className="catalog-d__detail-grid">
+                        <Lyrics />
+                        <aside>
+                            <p className="catalog-kicker">Song details</p>
+                            <dl>
+                                <div><dt>Author</dt><dd>{song.author}</dd></div>
+                                <div><dt>Copyright</dt><dd>{song.copyright}</dd></div>
+                                <div><dt>Last changed</dt><dd>{song.updated}</dd></div>
+                                <div><dt>Source ID</dt><dd>{song.id}</dd></div>
+                            </dl>
+                            <p className="catalog-note">
+                                Lyrics are cleaned for reading. Projection preview uses
+                                approximate slide breaks.
+                            </p>
+                        </aside>
+                    </div>
+                </article>
+            </main>
+        );
+    }
+
+    const suggestions = ["mercy", "morning", "creation"];
+    return (
+        <main className="catalog-d">
+            <header className="catalog-d__masthead">
+                <p className="catalog-kicker">Chapel of Mercy · Song Catalog</p>
+                <div>
+                    <h1>Find the song<br /><i>you’re reaching for.</i></h1>
+                    <p>Search by title, author, or any lyric you remember.</p>
+                </div>
+            </header>
+
+            <section className="catalog-d__search-block" aria-label="Song search">
+                <SearchField query={query} setQuery={setQuery} />
+                <div className="catalog-d__suggestions">
+                    <span>Try</span>
+                    {suggestions.map((suggestion) => (
+                        <button key={suggestion} onClick={() => setQuery(suggestion)}>
+                            {suggestion}
+                        </button>
+                    ))}
+                </div>
+            </section>
+
+            <div className="catalog-d__result-meta" aria-live="polite">
+                <span>{filtered.length} {filtered.length === 1 ? "song" : "songs"}</span>
+                <span>Catalog updated 12 days ago</span>
+            </div>
+
+            <section className="catalog-d__results" aria-label="Search results">
+                {filtered.length ? filtered.map((song) => (
+                    <button key={song.id} onClick={() => setView("detail")}>
+                        <span className="catalog-d__song">
+                            <b>{song.title}</b>
+                            <small>{song.author}</small>
+                        </span>
+                        <span className="catalog-d__excerpt">
+                            <small>First verse</small>
+                            <span>{song.excerpt}</span>
+                        </span>
+                        <span className="catalog-d__open" aria-hidden="true">
+                            <Arrow />
+                        </span>
+                    </button>
+                )) : (
+                    <div className="catalog-empty">
+                        <h2>No songs found</h2>
+                        <p>Try one word from the title or lyric.</p>
+                        <button onClick={() => setQuery("")}>Clear search</button>
+                    </div>
+                )}
+            </section>
+        </main>
+    );
+}
+
 export const Template = () => {
     const route = usePrototypeRoute();
     return (
@@ -424,6 +553,7 @@ export const Template = () => {
                 {route.variant === "a" && <VariantA view={route.view} setView={route.setView} />}
                 {route.variant === "b" && <VariantB view={route.view} setView={route.setView} />}
                 {route.variant === "c" && <VariantC view={route.view} setView={route.setView} />}
+                {route.variant === "d" && <VariantD view={route.view} setView={route.setView} />}
             </div>
             <PrototypeSwitcher variant={route.variant} setVariant={route.setVariant} />
         </>
