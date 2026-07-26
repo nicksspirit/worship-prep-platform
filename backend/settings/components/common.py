@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # 1st party apps
     "apps.common",
+    "apps.catalog_prototype",
     "apps.users",
     "apps.schedules",
     "apps.songs",
