@@ -376,8 +376,8 @@ a {
 }
 .catalog-d__excerpt {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
-  align-items: baseline;
+  grid-template-columns: 5rem 1fr;
+  align-items: start;
   gap: 1rem;
 }
 .catalog-d__excerpt small {
@@ -389,7 +389,12 @@ a {
 }
 .catalog-d__excerpt > span {
   color: #56544d;
-  font: italic 1.25rem/1.35 "Cormorant Garamond", serif;
+  display: -webkit-box;
+  overflow: hidden;
+  font: 500 .82rem/1.55 "Instrument Sans", sans-serif;
+  letter-spacing: -.01em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 .catalog-d__open {
   display: grid;

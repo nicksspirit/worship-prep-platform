@@ -7,7 +7,7 @@ type Variant = "a" | "b" | "c" | "d";
 type Song = {
     id: string;
     title: string;
-    author: string;
+    author: string | null;
     copyright: string;
     updated: string;
     previewable: boolean;
@@ -24,7 +24,7 @@ const songs: Song[] = [
         updated: "12 days ago",
         previewable: true,
         match: "dawn breaking mercy morning",
-        excerpt: "Dawn is breaking, mercy meets us here…",
+        excerpt: "Dawn is breaking, mercy meets us here. Hope is waking, love has drawn us near. We lift our voices, morning has begun.",
     },
     {
         id: "ew-0881",
@@ -34,17 +34,17 @@ const songs: Song[] = [
         updated: "2 months ago",
         previewable: false,
         match: "mercy morning",
-        excerpt: "Mercy like the morning, new with every light…",
+        excerpt: "Mercy like the morning, new with every light. Steady through the evening, holding through the night.",
     },
     {
         id: "ew-1250",
         title: "All Creation Sings",
-        author: "Choir archive",
+        author: null,
         copyright: "Rights status unconfirmed",
         updated: "4 months ago",
         previewable: false,
         match: "creation sings",
-        excerpt: "All creation sings, heaven and earth reply…",
+        excerpt: "All creation sings, heaven and earth reply. Every living thing lifts a song on high.",
     },
     {
         id: "ew-2017",
@@ -54,7 +54,7 @@ const songs: Song[] = [
         updated: "8 months ago",
         previewable: true,
         match: "morning faithful",
-        excerpt: "Morning by morning, faithfulness I see…",
+        excerpt: "Morning by morning, faithfulness I see. Strength for today and bright hope carrying me.",
     },
 ];
 
@@ -63,6 +63,8 @@ const sampleSlides = [
     ["Hope is waking", "Love has drawn us near"],
     ["We lift our voices", "Morning has begun"],
 ];
+
+const getAuthor = (song: Song) => song.author?.trim() || "N/A";
 
 const Arrow = ({direction = "right"}: {direction?: "left" | "right"}) => (
     <svg
@@ -266,7 +268,7 @@ function VariantA({view, setView}: {view: View; setView: (view: View) => void}) 
                         <div>
                             <p className="catalog-kicker">Song no. 0142 · EasyWorship catalog</p>
                             <h1>{song.title}</h1>
-                            <p className="catalog-byline">{song.author}</p>
+                            <p className="catalog-byline">{getAuthor(song)}</p>
                         </div>
                         <button className="catalog-preview-button" onClick={() => setView("preview")}>
                             <span>▶</span> Preview projection
@@ -304,7 +306,7 @@ function VariantA({view, setView}: {view: View; setView: (view: View) => void}) 
                 {filtered.length ? filtered.map((song, index) => (
                     <button key={song.id} onClick={() => setView("detail")}>
                         <span className="catalog-a__number">{String(index + 1).padStart(2, "0")}</span>
-                        <span><b>{song.title}</b><small>{song.author}</small></span>
+                        <span><b>{song.title}</b><small>{getAuthor(song)}</small></span>
                         <RightsBadge song={song} />
                         <Arrow />
                     </button>
@@ -340,7 +342,7 @@ function VariantB({view, setView}: {view: View; setView: (view: View) => void}) 
                                 className={index === 0 ? "is-active" : ""}
                                 onClick={() => setView("detail")}
                             >
-                                <span>{song.title}<small>{song.author}</small></span>
+                                <span>{song.title}<small>{getAuthor(song)}</small></span>
                                 <RightsBadge song={song} inverse />
                             </button>
                         ))}
@@ -389,7 +391,7 @@ function VariantC({view, setView}: {view: View; setView: (view: View) => void}) 
                 <button className="catalog-c__back" onClick={() => setView("search")}><Arrow direction="left" /> Songs</button>
                 <article>
                     <div className="catalog-c__title">
-                        <p>Found in your church library</p><h1>{song.title}</h1><span>{song.author} · changed {song.updated}</span>
+                        <p>Found in your church library</p><h1>{song.title}</h1><span>{getAuthor(song)} · changed {song.updated}</span>
                     </div>
                     <div className="catalog-c__paper"><Lyrics /></div>
                     <aside>
@@ -416,7 +418,7 @@ function VariantC({view, setView}: {view: View; setView: (view: View) => void}) 
                     <button key={song.id} onClick={() => setView("detail")} style={{"--delay": `${index * 60}ms`} as React.CSSProperties}>
                         <span className="catalog-c__index">{index + 1}</span>
                         <b>{song.title}</b>
-                        <small>{song.author}</small>
+                        <small>{getAuthor(song)}</small>
                         <RightsBadge song={song} />
                         <span className="catalog-c__arrow"><Arrow /></span>
                     </button>
@@ -459,7 +461,7 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                                 Song no. 0142 · EasyWorship catalog
                             </p>
                             <h1>{song.title}</h1>
-                            <p className="catalog-byline">Written by {song.author}</p>
+                            <p className="catalog-byline">Written by {getAuthor(song)}</p>
                         </div>
                         <button
                             className="catalog-preview-button"
@@ -473,7 +475,7 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                         <aside>
                             <p className="catalog-kicker">Song details</p>
                             <dl>
-                                <div><dt>Author</dt><dd>{song.author}</dd></div>
+                                <div><dt>Author</dt><dd>{getAuthor(song)}</dd></div>
                                 <div><dt>Copyright</dt><dd>{song.copyright}</dd></div>
                                 <div><dt>Last changed</dt><dd>{song.updated}</dd></div>
                                 <div><dt>Source ID</dt><dd>{song.id}</dd></div>
@@ -522,10 +524,10 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                     <button key={song.id} onClick={() => setView("detail")}>
                         <span className="catalog-d__song">
                             <b>{song.title}</b>
-                            <small>{song.author}</small>
+                            <small>{getAuthor(song)}</small>
                         </span>
                         <span className="catalog-d__excerpt">
-                            <small>First verse</small>
+                            <small>Lyric excerpt</small>
                             <span>{song.excerpt}</span>
                         </span>
                         <span className="catalog-d__open" aria-hidden="true">
