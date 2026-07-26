@@ -529,7 +529,7 @@ function VariantD({view, setView}: {view: View; setView: (view: View) => void}) 
                     <button key={song.id} onClick={() => setView("detail")}>
                         <span className="catalog-d__song">
                             <b>{song.title}</b>
-                            <small>{getAuthor(song)}</small>
+                            <small>Author: {getAuthor(song)}</small>
                         </span>
                         <span className="catalog-d__excerpt">
                             <span>{song.excerpt}</span>
