@@ -52,20 +52,26 @@ jobs:
       WPP_TEST_POSTGRES_USER: worship_prep_test
       WPP_TEST_POSTGRES_PASSWORD: worship_prep_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
+      - name: 📥 Check out repository
+        uses: actions/checkout@v4
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - uses: actions/setup-node@v6
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
-      - uses: astral-sh/setup-uv@v7
+      - name: ⚡ Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv sync --group test --frozen
-      - run: npm ci --legacy-peer-deps
-      - name: Build Reactivated renderer
+      - name: 📦 Install dependencies
+        run: uv sync --group test --frozen
+      - name: ⚛️ Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+      - name: ⚛️ Generate Reactivated schema
         run: >-
           uv run python -c
           "from pathlib import Path;
@@ -77,8 +83,15 @@ jobs:
         env:
           DJANGO_ENV: test
           DJANGO_SETTINGS_MODULE: backend.settings
-      - run: npm exec build.client
-      - run: uv run pytest
+      - name: 🏗️ Build Reactivated assets
+        run: npm exec build.client
+      - name: 🗂️ Collect static assets
+        run: uv run python manage.py collectstatic --noinput --verbosity 0
+        env:
+          DJANGO_ENV: test
+      - name: 🧪 Run PostgreSQL tests
+        run: uv run pytest
         env:
           DJANGO_ENV: test
           PYTHONUNBUFFERED: "1"
+          PYTHONWARNINGS: "error:No directory at:UserWarning"
