@@ -4,6 +4,7 @@ import { Context, CSRFToken, reverse } from "@reactivated";
 interface Props {
   title: string;
   children?: React.ReactNode;
+  signedOutHeaderLink?: "staff-sign-in" | "song-search";
 }
 
 // Development-only: Critical inline CSS to prevent Flash of Unstyled Content (FOUC)
@@ -34,6 +35,9 @@ const devCriticalCSS = `
 
 export const Layout = (props: Props) => {
   const { STATIC_URL, user } = React.useContext(Context);
+  const signedOutHeaderLink = props.signedOutHeaderLink === "song-search"
+    ? {href: reverse("catalog:search"), label: "Song search"}
+    : {href: reverse("account_login"), label: "Staff sign in"};
 
   // Only apply FOUC prevention in development
   // In production, Reactivated generates a blocking <link> tag, so CSS loads before paint
@@ -115,10 +119,10 @@ export const Layout = (props: Props) => {
                 </div>
               ) : (
                 <a
-                  href={reverse("account_login")}
+                  href={signedOutHeaderLink.href}
                   className="border-b border-chapel-neutral-400 pb-1 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-chapel-neutral-700 transition-colors hover:border-chapel-primary-500 hover:text-chapel-primary-500 sm:text-xs"
                 >
-                  Staff sign in
+                  {signedOutHeaderLink.label}
                 </a>
               )}
             </div>
