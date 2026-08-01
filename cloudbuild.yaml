@@ -1,45 +1,16 @@
 # Cloud Build: build prod image, push to Artifact Registry, run migrations (Job), deploy services.
 #
-# Required substitutions (set in trigger or deploy/deploy.sh):
-#   _RUNTIME_SA          e.g. wpp-runtime@PROJECT_ID.iam.gserviceaccount.com
-#   _SUPABASE_STORAGE_BUCKET
-#   _SUPABASE_CATALOG_IMPORT_BUCKET
-#   _SUPABASE_S3_ENDPOINT
-#
-# Optional:
-#   _REGION, _AR_REPOSITORY, _IMAGE_NAME, service/job names
-#   _ALLOWED_HOSTS, _CSRF_TRUSTED_ORIGINS (default to wildcard-safe Cloud Run values)
-#
-# Secret Manager (for docker build + runtime): SUPABASE_S3_ACCESS_KEY, SUPABASE_S3_SECRET_KEY
-# plus DATABASE_URL, DIRECT_URL, SECRET_KEY, GOOGLE_*, and EMAIL_HOST_PASSWORD as
-# referenced below.
-
-substitutions:
-  _REGION: us-central1
-  _AR_REPOSITORY: wpp-registry
-  _IMAGE_NAME: wpp-app
-  _RUNTIME_SA: ""
-  _DJANGO_SERVICE: wpp-app
-  _BOLT_SERVICE: wpp-api
-  _MIGRATE_JOB: wpp-migrate
-  _SUPABASE_STORAGE_BUCKET: ""
-  _SUPABASE_CATALOG_IMPORT_BUCKET: ""
-  _SUPABASE_S3_ENDPOINT: ""
-  _SUPABASE_S3_REGION: us-east-1
-  _EMAIL_HOST: ""
-  _EMAIL_PORT: "587"
-  _EMAIL_HOST_USER: ""
-  _DEFAULT_FROM_EMAIL: ""
-  # Keep wildcard Cloud Run values here so new service URLs continue to work
-  # unless a caller explicitly overrides them.
-  _ALLOWED_HOSTS: ".run.app,localhost,127.0.0.1"
-  _CSRF_TRUSTED_ORIGINS: "https://*.run.app"
+# Deployment keys, defaults, runtime env vars, and runtime secrets live in
+# deploy/config.sh. This file is only the Cloud Build step graph.
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  automapSubstitutions: true
 
 availableSecrets:
   secretManager:
+    # Build-time secrets must be exposed here so Cloud Build can mount them
+    # into the docker builder. Runtime secret names live in deploy/config.sh.
     - versionName: projects/${PROJECT_ID}/secrets/SUPABASE_S3_ACCESS_KEY/versions/latest
       env: SUPABASE_S3_ACCESS_KEY
     - versionName: projects/${PROJECT_ID}/secrets/SUPABASE_S3_SECRET_KEY/versions/latest
@@ -56,87 +27,39 @@ steps:
       - DOCKER_BUILDKIT=1
     args:
       - -ceu
-      - |
-        docker build \
-          -f docker/Dockerfile \
-          --target=prod \
-          --build-arg=SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET} \
-          --build-arg=SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET} \
-          --build-arg=SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT} \
-          --build-arg=SUPABASE_S3_ACCESS_KEY="$$SUPABASE_S3_ACCESS_KEY" \
-          --build-arg=SUPABASE_S3_SECRET_KEY="$$SUPABASE_S3_SECRET_KEY" \
-          --build-arg=SUPABASE_S3_REGION=${_SUPABASE_S3_REGION} \
-          -t ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID} \
-          .
+      - ./deploy/cloudbuild.sh build-image
 
   - id: push-image
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - push
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}
+      - -ceu
+      - ./deploy/cloudbuild.sh push-image
 
   - id: deploy-migrate-job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -ceu
-      - |
-        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}"
-        gcloud run jobs deploy "${_MIGRATE_JOB}" \
-          --image="$$IMAGE" \
-          --region="${_REGION}" \
-          --service-account="${_RUNTIME_SA}" \
-          --set-secrets=DIRECT_URL=DIRECT_URL:latest,SECRET_KEY=SECRET_KEY:latest \
-          --command=/bin/bash \
-          --args=deploy/start-migrate.sh \
-          --max-retries=1 \
-          --tasks=1
+      - ./deploy/cloudbuild.sh deploy-migrate-job
 
   - id: run-migrate-job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -ceu
-      - |
-        gcloud run jobs execute "${_MIGRATE_JOB}" \
-          --region="${_REGION}" \
-          --wait
+      - ./deploy/cloudbuild.sh run-migrate-job
 
   - id: deploy-django
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -ceu
-      - |
-        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}"
-        gcloud run deploy "${_DJANGO_SERVICE}" \
-          --image="$$IMAGE" \
-          --region="${_REGION}" \
-          --service-account="${_RUNTIME_SA}" \
-          --allow-unauthenticated \
-          --port=8080 \
-          --set-env-vars='^|^DJANGO_ENV=prod|SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET}|SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET}|SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT}|SUPABASE_S3_REGION=${_SUPABASE_S3_REGION}|EMAIL_HOST=${_EMAIL_HOST}|EMAIL_PORT=${_EMAIL_PORT}|EMAIL_HOST_USER=${_EMAIL_HOST_USER}|DEFAULT_FROM_EMAIL=${_DEFAULT_FROM_EMAIL}|ALLOWED_HOSTS=${_ALLOWED_HOSTS}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}' \
-          --set-secrets=DATABASE_URL=DATABASE_URL:latest,SECRET_KEY=SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPABASE_S3_ACCESS_KEY=SUPABASE_S3_ACCESS_KEY:latest,SUPABASE_S3_SECRET_KEY=SUPABASE_S3_SECRET_KEY:latest,EMAIL_HOST_PASSWORD=EMAIL_HOST_PASSWORD:latest \
-          --command=/bin/bash \
-          --args=deploy/start-django.sh
+      - ./deploy/cloudbuild.sh deploy-django
 
   - id: deploy-bolt
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
       - -ceu
-      - |
-        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}"
-        gcloud run deploy "${_BOLT_SERVICE}" \
-          --image="$$IMAGE" \
-          --region="${_REGION}" \
-          --service-account="${_RUNTIME_SA}" \
-          --allow-unauthenticated \
-          --port=8080 \
-          --set-env-vars='^|^DJANGO_ENV=prod|SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET}|SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET}|SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT}|SUPABASE_S3_REGION=${_SUPABASE_S3_REGION}|EMAIL_HOST=${_EMAIL_HOST}|EMAIL_PORT=${_EMAIL_PORT}|EMAIL_HOST_USER=${_EMAIL_HOST_USER}|DEFAULT_FROM_EMAIL=${_DEFAULT_FROM_EMAIL}|ALLOWED_HOSTS=${_ALLOWED_HOSTS}' \
-          --set-secrets=DATABASE_URL=DATABASE_URL:latest,SECRET_KEY=SECRET_KEY:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPABASE_S3_ACCESS_KEY=SUPABASE_S3_ACCESS_KEY:latest,SUPABASE_S3_SECRET_KEY=SUPABASE_S3_SECRET_KEY:latest,EMAIL_HOST_PASSWORD=EMAIL_HOST_PASSWORD:latest \
-          --command=/bin/bash \
-          --args=deploy/start-bolt.sh
-
-images:
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}
+      - ./deploy/cloudbuild.sh deploy-bolt

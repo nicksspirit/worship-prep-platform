@@ -61,7 +61,9 @@ At a high level, deployment works like this:
 The repo already contains the automation for this in:
 
 - `cloudbuild.yaml`
+- `deploy/config.sh`
 - `deploy/deploy.sh`
+- `deploy/cloudbuild.sh`
 - `deploy/setup-gcp.sh`
 - `deploy/setup-supabase-storage.sh`
 
@@ -305,34 +307,22 @@ What `poe deploy` does for you:
 - defaults `GCP_REGION` to `us-west1`
 - defaults `RUNTIME_SA` to `wpp-runtime@worship-prep-portal.iam.gserviceaccount.com`
 - defaults `SUPABASE_STORAGE_BUCKET` to `wpp-media`
+- defaults `SUPABASE_CATALOG_IMPORT_BUCKET` to `wpp-catalog-imports`
 - derives `SUPABASE_S3_ENDPOINT` from `SUPABASE_URL` when needed
 - defaults `SUPABASE_S3_REGION` to `us-east-1`
 - runs `./deploy/deploy.sh`
 
-If you want to run the deploy script manually instead, load your `.env` first so all required values are available:
+If you want to run the deploy script manually instead, run:
 
 ```bash
-set -a
-source .env
-set +a
+./deploy/deploy.sh
 ```
 
-Export the deployment variables expected by `deploy/deploy.sh`:
+The script loads `.env` automatically when it exists. You only need to export values
+when you want to override the defaults or deploy from a shell without `.env`:
 
 ```bash
-export GCP_PROJECT_ID=worship-prep-portal
-export GCP_REGION=us-west1
-export RUNTIME_SA=wpp-runtime@worship-prep-portal.iam.gserviceaccount.com
-```
-
-If your `.env` already contains the Supabase storage and SMTP values, no additional
-exports are needed—the `source .env` step above makes them available. Otherwise, export
-them explicitly:
-
-```bash
-export SUPABASE_STORAGE_BUCKET=wpp-media
 export SUPABASE_S3_ENDPOINT="https://<PROJECT_REF>.supabase.co/storage/v1/s3"
-export SUPABASE_S3_REGION=us-east-1
 export EMAIL_HOST=smtp.example.com
 export EMAIL_HOST_USER=worship-prep@example.com
 export DEFAULT_FROM_EMAIL='Worship Prep <noreply@example.com>'
@@ -340,15 +330,11 @@ export DEFAULT_FROM_EMAIL='Worship Prep <noreply@example.com>'
 
 The remaining variables (`AR_REPOSITORY`, `IMAGE_NAME`, `DJANGO_SERVICE`, `BOLT_SERVICE`, `MIGRATE_JOB`) default to the project's standard naming and only need to be exported if you've changed them.
 
-You do not need to export `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS`. `deploy/deploy.sh` automatically ensures `.run.app` and `https://*.run.app` are present, even if your `.env` file has narrower values.
+You do not need to export `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS`. `deploy/deploy.sh` automatically ensures `.run.app`, `https://*.run.app`, `app.rccgcm.org`, `api.rccgcm.org`, and their HTTPS origins are present, even if your `.env` file has narrower values.
 
-Run the deployment:
-
-```bash
-./deploy/deploy.sh
-```
-
-**Important:** `deploy/deploy.sh` defaults `GCP_REGION` to `us-central1`, but this project's infrastructure is in `us-west1`. Always export `GCP_REGION=us-west1` before running the script, or your resources will be created in the wrong region.
+To add or rename runtime environment variables or runtime secrets, update
+`deploy/config.sh`. `deploy/deploy.sh` and `deploy/cloudbuild.sh` both read that file
+instead of keeping separate env and secret lists.
 
 What this command does:
 

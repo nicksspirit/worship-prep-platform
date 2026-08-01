@@ -10,13 +10,14 @@ SECRET_KEY = env.str(
 DEBUG = env.bool("DEBUG", default=DJANGO_ENV == "local")
 
 DEFAULT_ALLOWED_HOSTS = [
-    "trojanhq.tplinkdns.com",
     ".run.app",
+    ".rccgcm.org",
     "localhost",
     "127.0.0.1",
 ]
 DEFAULT_CSRF_TRUSTED_ORIGINS = [
     "https://*.run.app",
+    "https://*.rccgcm.org",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
