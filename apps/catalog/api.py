@@ -214,7 +214,7 @@ async def catalog_import(
     return Response(
         CatalogImportResponse(
             run_id=str(result.run.pk),
-            status=result.run.status,
+            status=str(result.run.status),
         ),
         status_code=201 if result.created else 200,
     )

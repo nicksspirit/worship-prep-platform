@@ -26,6 +26,9 @@ func Build(path string, manifest Manifest, songs []SongRecord) (Manifest, error)
 	encoder := json.NewEncoder(&records)
 	encoder.SetEscapeHTML(false)
 	for _, song := range songs {
+		if song.Sections == nil {
+			song.Sections = []Section{}
+		}
 		if err := encoder.Encode(song); err != nil {
 			return Manifest{}, fmt.Errorf("encode song %q: %w", song.Source.SongUID, err)
 		}

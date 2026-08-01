@@ -138,6 +138,7 @@ class CatalogImporterTests(TransactionTestCase):
         package, run_id = self.build_package()
         response = self.post_package(package)
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(json.loads(response.to_bytes())["status"], "completed")
 
         run = CatalogImportRun.objects.get(pk=run_id)
         active_snapshot = CatalogState.objects.get().active_snapshot

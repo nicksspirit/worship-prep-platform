@@ -20,6 +20,12 @@ def harden_supabase_api_exposure(apps, schema_editor):
     )
     quote_name = schema_editor.quote_name
     with schema_editor.connection.cursor() as cursor:
+        cursor.execute("SELECT current_schema()")
+        schema_name = cursor.fetchone()[0]
+        qualified_tables = [
+            f"{quote_name(schema_name)}.{quote_name(table_name)}"
+            for table_name in table_names
+        ]
         cursor.execute(
             """
             SELECT rolname
@@ -30,10 +36,9 @@ def harden_supabase_api_exposure(apps, schema_editor):
         )
         existing_roles = {row[0] for row in cursor.fetchall()}
 
-        for table_name in table_names:
+        for table_name in qualified_tables:
             cursor.execute(
-                f"ALTER TABLE IF EXISTS public.{quote_name(table_name)} "
-                "ENABLE ROW LEVEL SECURITY"
+                f"ALTER TABLE IF EXISTS {table_name} ENABLE ROW LEVEL SECURITY"
             )
 
         if not existing_roles:
@@ -42,21 +47,20 @@ def harden_supabase_api_exposure(apps, schema_editor):
         role_list = ", ".join(
             quote_name(role) for role in SUPABASE_API_ROLES if role in existing_roles
         )
-        table_list = ", ".join(
-            f"public.{quote_name(table_name)}" for table_name in table_names
-        )
+        table_list = ", ".join(qualified_tables)
         cursor.execute(f"REVOKE ALL PRIVILEGES ON TABLE {table_list} FROM {role_list}")
         for object_type in ("SEQUENCES", "FUNCTIONS"):
             cursor.execute(
-                f"REVOKE ALL PRIVILEGES ON ALL {object_type} IN SCHEMA public "
+                f"REVOKE ALL PRIVILEGES ON ALL {object_type} IN SCHEMA "
+                f"{quote_name(schema_name)} "
                 f"FROM {role_list}"
             )
             cursor.execute(
-                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA {quote_name(schema_name)} "
                 f"REVOKE ALL PRIVILEGES ON {object_type} FROM {role_list}"
             )
         cursor.execute(
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA {quote_name(schema_name)} "
             f"REVOKE ALL PRIVILEGES ON TABLES FROM {role_list}"
         )
 

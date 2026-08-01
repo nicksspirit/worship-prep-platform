@@ -145,6 +145,18 @@ The expected meaning of the database URLs is:
 - `DATABASE_URL`: Supabase pooled connection, used by running services
 - `DIRECT_URL`: Supabase direct `5432` connection, used only by migrations
 
+The existing `worship-prep-portal` production database preserves the pre-pivot tables
+in `public`. Both URLs must therefore target the isolated greenfield schema by including
+this query parameter (append it with `&` when the URL already has a query string):
+
+```text
+options=-c%20search_path%3Dwpp_catalog_v1%2Cpublic
+```
+
+Do not encode the space as `+`; libpq treats that value differently and falls back to
+`public`. See [ADR-0008](adr/0008-isolate-greenfield-production-schema.md) for the
+reasoning and migration-ledger bootstrap requirement.
+
 The expected meaning of the storage variables is:
 
 - `SUPABASE_STORAGE_BUCKET`: the media bucket name, usually `wpp-media`

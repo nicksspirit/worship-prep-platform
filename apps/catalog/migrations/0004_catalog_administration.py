@@ -10,9 +10,15 @@ def harden_administration_tables(apps, schema_editor):
         "catalog_catalogsongrights",
         "catalog_lyricsrightschange",
     )
+    quote_name = schema_editor.quote_name
     with schema_editor.connection.cursor() as cursor:
-        for table in tables:
-            cursor.execute(f'ALTER TABLE public."{table}" ENABLE ROW LEVEL SECURITY')
+        cursor.execute("SELECT current_schema()")
+        schema_name = cursor.fetchone()[0]
+        qualified_tables = [
+            f"{quote_name(schema_name)}.{quote_name(table)}" for table in tables
+        ]
+        for table in qualified_tables:
+            cursor.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         cursor.execute(
             "SELECT rolname FROM pg_catalog.pg_roles "
             "WHERE rolname = ANY(%s)",
@@ -20,8 +26,8 @@ def harden_administration_tables(apps, schema_editor):
         )
         roles = [row[0] for row in cursor.fetchall()]
         if roles:
-            role_list = ", ".join(f'"{role}"' for role in roles)
-            table_list = ", ".join(f'public."{table}"' for table in tables)
+            role_list = ", ".join(quote_name(role) for role in roles)
+            table_list = ", ".join(qualified_tables)
             cursor.execute(
                 f"REVOKE ALL PRIVILEGES ON TABLE {table_list} FROM {role_list}"
             )

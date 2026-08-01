@@ -225,6 +225,9 @@ func readSongs(ctx context.Context, database *sql.DB, words map[int64]rawWord) (
 				Code: "structural_anomaly", SongUID: uid, Message: warning,
 			})
 		}
+		if parsed.Sections == nil {
+			parsed.Sections = []contract.Section{}
+		}
 		record := contract.SongRecord{
 			ContractVersion: contract.Version,
 			Source: contract.SongSource{

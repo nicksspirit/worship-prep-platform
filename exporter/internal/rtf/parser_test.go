@@ -49,6 +49,17 @@ func TestParseWarnsAboutSlideCardinalityWithoutRejectingSong(t *testing.T) {
 	}
 }
 
+func TestParseDropsNulUnicodeControls(t *testing.T) {
+	t.Parallel()
+	result, err := Parse(`{\rtf1\ansi Before\u0?After}`, nil)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if got, want := result.CleanedLyrics, "BeforeAfter"; got != want {
+		t.Fatalf("CleanedLyrics = %q, want %q", got, want)
+	}
+}
+
 func TestParseRejectsUnusableLyrics(t *testing.T) {
 	t.Parallel()
 	if _, err := Parse("plain text", nil); err == nil {
