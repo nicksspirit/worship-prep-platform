@@ -1,11 +1,31 @@
+import hashlib
+import io
+import json
+import uuid
+import zipfile
 from importlib.util import find_spec
+from pathlib import Path
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.staticfiles import finders
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase
 from django.urls import reverse
+
+from apps.api_keys.models import APIKeyScope
+from apps.api_keys.services import issue_api_key
+from apps.catalog.importer import rollback_to_snapshot
+from apps.catalog.models import (
+    CatalogEntry,
+    CatalogImportRun,
+    CatalogSnapshot,
+    CatalogState,
+    ImportStatus,
+    RightsStatus,
+)
 
 
 class GreenfieldRuntimeTests(TestCase):
@@ -39,3 +59,133 @@ class GreenfieldRuntimeTests(TestCase):
 
         self.assertTrue({"accounts", "api_keys", "catalog"} <= migrated_apps)
         self.assertTrue({"users", "schedules", "songs"}.isdisjoint(migrated_apps))
+
+
+class CatalogImporterTests(TestCase):
+    def setUp(self):
+        _key, self.plaintext_key = issue_api_key(
+            name="Exporter", scopes=[APIKeyScope.CATALOG_IMPORT]
+        )
+
+    def build_package(self, *, run_id=None, transform_record=None, valid_checksum=True):
+        fixture_dir = (
+            Path(settings.BASE_DIR) / "contracts/catalog-import/v1/fixtures/valid"
+        )
+        manifest = json.loads((fixture_dir / "manifest.json").read_text())
+        record = json.loads((fixture_dir / "songs.ndjson").read_text())
+        manifest["run_id"] = str(run_id or uuid.uuid4())
+        if transform_record:
+            transform_record(record)
+        records = (json.dumps(record, separators=(",", ":")) + "\n").encode()
+        digest = f"sha256:{hashlib.sha256(records).hexdigest()}"
+        manifest["records"].update(
+            bytes=len(records),
+            sha256=digest if valid_checksum else "sha256:" + "0" * 64,
+            fingerprint=digest if valid_checksum else "sha256:" + "0" * 64,
+        )
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("manifest.json", json.dumps(manifest))
+            archive.writestr("songs.ndjson", records)
+        return buffer.getvalue(), manifest["run_id"]
+
+    def post_package(self, package, *, key=None):
+        return self.client.post(
+            reverse("catalog:import"),
+            {"package": SimpleUploadedFile("catalog.zip", package, "application/zip")},
+            HTTP_AUTHORIZATION=f"Bearer {key or self.plaintext_key}",
+        )
+
+    def test_requires_import_scoped_bearer_key(self):
+        package, _run_id = self.build_package()
+        response = self.client.post(
+            reverse("catalog:import"),
+            {"package": SimpleUploadedFile("catalog.zip", package)},
+        )
+        self.assertEqual(response.status_code, 401)
+
+        _search_key, plaintext = issue_api_key(
+            name="Search", scopes=[APIKeyScope.CATALOG_SEARCH]
+        )
+        self.assertEqual(self.post_package(package, key=plaintext).status_code, 401)
+
+    def test_valid_package_creates_private_completed_snapshot(self):
+        package, run_id = self.build_package()
+        response = self.post_package(package)
+        self.assertEqual(response.status_code, 201)
+
+        run = CatalogImportRun.objects.get(pk=run_id)
+        active_snapshot = CatalogState.objects.get().active_snapshot
+        entry = CatalogEntry.objects.get(snapshot=active_snapshot)
+        self.assertEqual(run.status, ImportStatus.COMPLETED)
+        self.assertTrue(run.package_file.name.startswith("packages/"))
+        self.assertTrue(run.report_file.name.startswith("reports/"))
+        self.assertEqual(entry.rights_status, RightsStatus.UNKNOWN)
+        self.assertEqual(entry.title, "Amazing Grace")
+        self.assertIsNotNone(entry.title_search)
+        self.assertIsNotNone(entry.lyrics_search)
+
+    def test_same_run_and_package_is_idempotent_but_conflict_is_rejected(self):
+        run_id = uuid.uuid4()
+        package, _ = self.build_package(run_id=run_id)
+        self.assertEqual(self.post_package(package).status_code, 201)
+        self.assertEqual(self.post_package(package).status_code, 200)
+        self.assertEqual(CatalogSnapshot.objects.count(), 1)
+
+        conflicting, _ = self.build_package(
+            run_id=run_id,
+            transform_record=lambda record: record["metadata"].update(title="Conflict"),
+        )
+        self.assertEqual(self.post_package(conflicting).status_code, 409)
+        self.assertEqual(CatalogSnapshot.objects.count(), 1)
+
+    def test_invalid_package_leaves_active_snapshot_unchanged(self):
+        valid, _ = self.build_package()
+        self.assertEqual(self.post_package(valid).status_code, 201)
+        active = CatalogState.objects.get().active_snapshot
+
+        invalid, run_id = self.build_package(valid_checksum=False)
+        response = self.post_package(invalid)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(CatalogState.objects.get().active_snapshot, active)
+        failed = CatalogImportRun.objects.get(pk=run_id)
+        self.assertEqual(failed.status, ImportStatus.FAILED)
+        self.assertEqual(failed.failure_code, "records_integrity_failed")
+
+    def test_unchanged_song_keeps_freshness_and_rollback_moves_only_pointer(self):
+        first, _ = self.build_package()
+        self.post_package(first)
+        first_snapshot = CatalogState.objects.get().active_snapshot
+        original_freshness = first_snapshot.entries.get().content_changed_at
+
+        second, _ = self.build_package()
+        self.post_package(second)
+        second_snapshot = CatalogState.objects.get().active_snapshot
+        second_freshness = second_snapshot.entries.get().content_changed_at
+        self.assertEqual(second_freshness, original_freshness)
+
+        activation = rollback_to_snapshot(first_snapshot)
+        self.assertEqual(CatalogState.objects.get().active_snapshot, first_snapshot)
+        self.assertEqual(activation.previous_snapshot, second_snapshot)
+        self.assertEqual(CatalogSnapshot.objects.count(), 2)
+
+    def test_changed_song_gets_new_freshness_and_retention_keeps_eight_snapshots(self):
+        first, _ = self.build_package()
+        self.post_package(first)
+        first_entry = CatalogState.objects.get().active_snapshot.entries.get()
+        original_freshness = first_entry.content_changed_at
+
+        def change_song(record):
+            record["metadata"]["title"] = "Amazing Grace (Revised)"
+            record["semantic_fingerprint"]["value"] = "sha256:" + "a" * 64
+
+        changed, _ = self.build_package(transform_record=change_song)
+        self.post_package(changed)
+        changed_entry = CatalogState.objects.get().active_snapshot.entries.get()
+        changed_freshness = changed_entry.content_changed_at
+        self.assertGreater(changed_freshness, original_freshness)
+
+        for _ in range(7):
+            package, _run_id = self.build_package(transform_record=change_song)
+            self.assertEqual(self.post_package(package).status_code, 201)
+        self.assertEqual(CatalogSnapshot.objects.count(), 8)

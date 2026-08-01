@@ -41,6 +41,28 @@ UNFOLD = {
         "show_all_applications": False,
         "navigation": [
             {
+                "title": _("Song Catalog"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Import runs"),
+                        "icon": "cloud_download",
+                        "link": reverse_lazy("admin:catalog_catalogimportrun_changelist"),
+                    },
+                    {
+                        "title": _("Snapshots"),
+                        "icon": "history",
+                        "link": reverse_lazy("admin:catalog_catalogsnapshot_changelist"),
+                    },
+                    {
+                        "title": _("Import events"),
+                        "icon": "diagnosis",
+                        "link": reverse_lazy("admin:catalog_catalogimportevent_changelist"),
+                    },
+                ],
+            },
+            {
                 "title": _("Access Management"),
                 "separator": True,
                 "collapsible": True,

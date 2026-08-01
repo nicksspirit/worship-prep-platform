@@ -29,6 +29,7 @@ urlpatterns = [
     path("health/", health_view, name="health"),
     path("ready/", DjangoReadyView.as_view(), name="ready"),
     path("admin/", admin.site.urls),
+    path("api/v1/catalog/", include("apps.catalog.urls")),
     path("accounts/login/", SignInView.as_view(), name="account_login"),
     path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),

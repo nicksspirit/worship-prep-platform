@@ -1,0 +1,42 @@
+name: Catalog Importer
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/catalog-importer.yml"
+      - "apps/api_keys/**"
+      - "apps/catalog/**"
+      - "backend/**"
+      - "contracts/catalog-import/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/catalog-importer.yml"
+      - "apps/api_keys/**"
+      - "apps/catalog/**"
+      - "backend/**"
+      - "contracts/catalog-import/**"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-tests:
+    name: PostgreSQL tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --group test --frozen
+      - run: uv run pytest
+        env:
+          DJANGO_ENV: test

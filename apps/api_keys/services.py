@@ -5,7 +5,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from django.db import transaction
-from django.utils.crypto import salted_hmac
+from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 
 from apps.api_keys.models import IntegrationApiKey, normalize_api_key_scopes
 
@@ -41,6 +42,27 @@ def parse_api_key_prefix(raw_key: str | None) -> str | None:
     if separator != "." or not prefix.startswith(f"{API_KEY_PREFIX_NAMESPACE}_"):
         return None
     return prefix
+
+
+def authenticate_api_key(
+    raw_key: str | None, *, required_scope: str
+) -> IntegrationApiKey | None:
+    """Authenticate an active API key carrying the required scope."""
+
+    prefix = parse_api_key_prefix(raw_key)
+    if prefix is None:
+        return None
+    api_key = IntegrationApiKey.objects.filter(key_prefix=prefix).first()
+    if (
+        api_key is None
+        or api_key.status != "active"
+        or required_scope not in api_key.scopes
+        or not constant_time_compare(api_key.hashed_key, hash_api_key(str(raw_key)))
+    ):
+        return None
+    api_key.last_used_on = timezone.now()
+    api_key.save(update_fields=["last_used_on", "updated_on"])
+    return api_key
 
 
 def build_api_key(prefix: str, secret: str) -> str:

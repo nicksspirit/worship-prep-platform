@@ -128,6 +128,7 @@ The important values are:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `SUPABASE_STORAGE_BUCKET`
+- `SUPABASE_CATALOG_IMPORT_BUCKET`
 - `SUPABASE_S3_ENDPOINT`
 - `SUPABASE_S3_ACCESS_KEY`
 - `SUPABASE_S3_SECRET_KEY`
@@ -142,6 +143,7 @@ The expected meaning of the database URLs is:
 The expected meaning of the storage variables is:
 
 - `SUPABASE_STORAGE_BUCKET`: the media bucket name, usually `wpp-media`
+- `SUPABASE_CATALOG_IMPORT_BUCKET`: the private package/report bucket, usually `wpp-catalog-imports`
 - `SUPABASE_S3_ENDPOINT`: your Supabase S3 endpoint, in the form `https://<PROJECT_REF>.supabase.co/storage/v1/s3`
 - `SUPABASE_S3_ACCESS_KEY`: S3 access key
 - `SUPABASE_S3_SECRET_KEY`: S3 secret key

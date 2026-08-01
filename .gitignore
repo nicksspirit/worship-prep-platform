@@ -31,3 +31,4 @@ patches/
 # AI
 .aider*
 .cursor/plans/
+var/catalog-imports/
