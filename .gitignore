@@ -31,4 +31,5 @@ patches/
 # AI
 .aider*
 .cursor/plans/
+.playwright-mcp
 var/catalog-imports/
