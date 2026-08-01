@@ -233,7 +233,7 @@ func (p *parser) control() error {
 
 func (p *parser) writeRune(value rune) {
 	current := &p.states[len(p.states)-1]
-	if current.ignored {
+	if current.ignored || value == 0 {
 		return
 	}
 	if current.pendingSkip > 0 && value <= unicode.MaxASCII {
