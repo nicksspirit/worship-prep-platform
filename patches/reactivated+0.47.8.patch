@@ -1,0 +1,12 @@
+diff --git a/node_modules/reactivated/src/generator.mts b/node_modules/reactivated/src/generator.mts
+index 4ca6c96..6fb06ed 100644
+--- a/node_modules/reactivated/src/generator.mts
++++ b/node_modules/reactivated/src/generator.mts
+@@ -388,6 +388,7 @@ compile(types, "this is unused", {additionalProperties: false}).then(async (ts)
+     const statements = [];
+ 
+     if (!fs.existsSync("./reactivated-skip-template-check")) {
++        statements.push("export namespace templates {}");
+         for (const name of Object.keys(templates)) {
+             const propsName = templates[name];
+ 
