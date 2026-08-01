@@ -41,46 +41,14 @@ UNFOLD = {
         "show_all_applications": False,
         "navigation": [
             {
-                "title": _("Worship Planning"),
-                "separator": True,
-                "collapsible": False,
-                "items": [
-                    {
-                        "title": _("Service Schedules"),
-                        "icon": "calendar_today",
-                        "link": reverse_lazy("admin:schedules_serviceschedule_changelist"),
-                    },
-                    {
-                        "title": _("Templates"),
-                        "icon": "description",
-                        "link": reverse_lazy("admin:schedules_scheduletemplate_changelist"),
-                    },
-                    {
-                        "title": _("Submissions"),
-                        "icon": "inbox",
-                        "link": reverse_lazy("admin:schedules_contentsubmission_changelist"),
-                    },
-                    {
-                        "title": _("Contacts"),
-                        "icon": "contacts",
-                        "link": reverse_lazy("admin:schedules_contact_changelist"),
-                    },
-                    {
-                        "title": _("Songs"),
-                        "icon": "music_note",
-                        "link": reverse_lazy("admin:songs_song_changelist"),
-                    },
-                ],
-            },
-            {
-                "title": _("User Management"),
+                "title": _("Access Management"),
                 "separator": True,
                 "collapsible": True,
                 "items": [
                     {
                         "title": _("Users"),
                         "icon": "person",
-                        "link": reverse_lazy("admin:users_user_changelist"),
+                        "link": reverse_lazy("admin:accounts_user_changelist"),
                     },
                     {
                         "title": _("Invitations"),
@@ -90,7 +58,7 @@ UNFOLD = {
                     {
                         "title": _("Invitation Requests"),
                         "icon": "mark_email_unread",
-                        "link": reverse_lazy("admin:users_invitationrequest_changelist"),
+                        "link": reverse_lazy("admin:accounts_invitationrequest_changelist"),
                     },
                     {
                         "title": _("Groups"),
@@ -100,7 +68,7 @@ UNFOLD = {
                     {
                         "title": _("API Keys"),
                         "icon": "vpn_key",
-                        "link": reverse_lazy("admin:users_integrationapikey_changelist"),
+                        "link": reverse_lazy("admin:api_keys_integrationapikey_changelist"),
                     },
                 ],
             },

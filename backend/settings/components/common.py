@@ -24,9 +24,9 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # 1st party apps
     "apps.common",
-    "apps.users",
-    "apps.schedules",
-    "apps.songs",
+    "apps.accounts",
+    "apps.api_keys",
+    "apps.catalog",
 ]
 
 MIDDLEWARE = [

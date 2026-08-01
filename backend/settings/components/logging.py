@@ -31,8 +31,6 @@ def simplify_logger_name(
         "django.utils.autoreload": "autoreload",
         "django.server": "dj.server",
         "django.request": "dj.request",
-        "apps.schedules.inbound": "api.schedules",
-        "apps.songs.inbound": "api.songs",
     }
 
     if "logger" in event_dict:

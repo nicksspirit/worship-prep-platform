@@ -255,26 +255,6 @@ printf '%s' "$SUPABASE_S3_ACCESS_KEY" | gcloud secrets versions add SUPABASE_S3_
 printf '%s' "$SUPABASE_S3_SECRET_KEY" | gcloud secrets versions add SUPABASE_S3_SECRET_KEY --data-file=-
 ```
 
-## Step 4b: Issue and Store The N8N API Key
-
-The Bolt API no longer reads a shared API key from Django environment variables.
-Instead, create a scoped machine key from Django admin after deployment:
-
-1. Sign in to Django admin as an administrator.
-2. Create a new API key for N8N with only the scopes it needs:
-   - `schedules.read`
-   - `schedules.write`
-   - `songs.write`
-3. Copy the plaintext key immediately. It is only shown once.
-4. Store that key in your N8N secret source, preferably as `WPP_API_KEY`.
-5. Configure the N8N HTTP nodes to send it in the `X-API-Key` header.
-
-When rotating the key later:
-
-1. Rotate it from Django admin.
-2. Update the N8N secret value.
-3. Re-run a schedule lookup, schedule intake, and song intake smoke test.
-
 To confirm the secrets exist:
 
 ```bash

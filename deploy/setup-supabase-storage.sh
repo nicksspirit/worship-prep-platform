@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates a private storage bucket in Supabase for Django media (Song.lyrics_file, etc.).
+# Creates the private Supabase bucket used for Catalog Import Packages and reports.
 #
 # Prerequisites: Supabase CLI logged in (`supabase login`) and project linked, or set
 # SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_REF.
