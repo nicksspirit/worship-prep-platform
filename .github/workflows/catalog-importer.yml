@@ -44,6 +44,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # Configure Django before pytest-django snapshots the database settings.
+      DATABASE_URL: postgresql://worship_prep_test:worship_prep_test@127.0.0.1:5432/postgres
       WPP_TEST_POSTGRES_HOST: 127.0.0.1
       WPP_TEST_POSTGRES_PORT: 5432
       WPP_TEST_POSTGRES_DATABASE: postgres
