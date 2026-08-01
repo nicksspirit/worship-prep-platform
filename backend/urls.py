@@ -32,5 +32,6 @@ urlpatterns = [
     path("accounts/login/", SignInView.as_view(), name="account_login"),
     path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),
+    path("", include("apps.catalog.urls")),
     path("", include("apps.accounts.urls")),
 ]

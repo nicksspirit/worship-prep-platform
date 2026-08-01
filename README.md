@@ -8,8 +8,9 @@ This stacked branch contains the greenfield foundation, the portable
 [Catalog Exporter](exporter/), the versioned
 [Catalog Import Package contract](contracts/catalog-import/v1/), immutable Catalog
 Importer snapshots, PostgreSQL search, and the Integration Client read API. Public
-discovery and administration arrive in later stacked pull requests tracked by GitHub
-issue #21.
+Song Catalog search, Song Detail, and Projection Preview are also available without an
+account. Catalog administration arrives in the final stacked pull request tracked by
+GitHub issue #21.
 
 ## Quick Start
 
@@ -73,6 +74,19 @@ The versioned API is served under `/api/v1/` with Bearer-key scopes:
 Machine-readable OpenAPI is available at `/api/v1/docs/openapi.json`. Local development
 serves Swagger UI at `/api/v1/docs`; production serves ReDoc at the same entry point.
 Search continuations are opaque server-provided URLs and expire after 24 hours.
+
+## Public Song Catalog
+
+The root route serves the public Song Catalog through Django and Reactivated. Visitors
+can search titles or lyrics, follow snapshot-pinned result continuations, and open
+rights-aware Song Detail pages. Approved and unknown entries include structured lyrics
+and an accessible approximate 16:9 Projection Preview; restricted entries remain
+metadata-only. Empty search input shows guidance rather than dumping the catalog.
+
+Rendered pages reuse the transport-neutral catalog search/read services directly. They
+do not call the Integration Client API, and restricted lyric fields are removed before
+the Reactivated props are serialized. See
+[ADR-0006](docs/adr/0006-public-catalog-presentation.md).
 
 ## Commands
 
