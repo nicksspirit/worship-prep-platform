@@ -103,3 +103,24 @@ class IntegrationApiKey(BaseModel):
 
         self.is_active = False
         self.revoked_on = timestamp or timezone.now()
+
+
+class IntegrationApiKeyRateWindow(models.Model):
+    """Current fixed rate-limit window for one Integration Client resource."""
+
+    api_key = models.ForeignKey(
+        IntegrationApiKey,
+        on_delete=models.CASCADE,
+        related_name="rate_windows",
+    )
+    bucket = models.CharField(max_length=32)
+    window_started_at = models.DateTimeField()
+    request_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["api_key", "bucket"],
+                name="api_key_unique_rate_bucket",
+            )
+        ]

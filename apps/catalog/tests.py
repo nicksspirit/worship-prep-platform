@@ -5,13 +5,16 @@ import uuid
 import zipfile
 from importlib.util import find_spec
 from pathlib import Path
+from types import SimpleNamespace
 
+from asgiref.sync import async_to_sync
 from django.apps import apps
 from django.conf import settings
 from django.contrib.staticfiles import finders
+from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from django_bolt import UploadFile
 
@@ -62,8 +65,11 @@ class GreenfieldRuntimeTests(TestCase):
         self.assertTrue({"accounts", "api_keys", "catalog"} <= migrated_apps)
         self.assertTrue({"users", "schedules", "songs"}.isdisjoint(migrated_apps))
 
+    def test_models_have_no_unrecorded_migration_changes(self):
+        call_command("makemigrations", check=True, dry_run=True, verbosity=0)
 
-class CatalogImporterTests(TestCase):
+
+class CatalogImporterTests(TransactionTestCase):
     def setUp(self):
         _key, self.plaintext_key = issue_api_key(
             name="Exporter", scopes=[APIKeyScope.CATALOG_IMPORT]
@@ -98,7 +104,13 @@ class CatalogImporterTests(TestCase):
             size=len(package),
             file_data=package,
         )
-        return catalog_import(upload, f"Bearer {key or self.plaintext_key}")
+        response = async_to_sync(catalog_import)(
+            upload,
+            f"Bearer {key or self.plaintext_key}",
+        )
+        if isinstance(response, tuple):
+            return SimpleNamespace(status_code=response[0])
+        return response
 
     def test_json_import_is_registered_only_with_bolt(self):
         routes = {
@@ -113,12 +125,13 @@ class CatalogImporterTests(TestCase):
         upload = UploadFile(
             filename="catalog.zip", size=len(package), file_data=package
         )
-        self.assertEqual(catalog_import(upload, "").status_code, 401)
+        response = async_to_sync(catalog_import)(upload, "")
+        self.assertEqual(response[0], 401)
 
         _search_key, plaintext = issue_api_key(
             name="Search", scopes=[APIKeyScope.CATALOG_SEARCH]
         )
-        self.assertEqual(self.post_package(package, key=plaintext).status_code, 401)
+        self.assertEqual(self.post_package(package, key=plaintext).status_code, 403)
 
     def test_valid_package_creates_private_completed_snapshot(self):
         package, run_id = self.build_package()

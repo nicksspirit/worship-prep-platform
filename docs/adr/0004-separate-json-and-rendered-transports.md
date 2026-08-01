@@ -28,6 +28,10 @@ in an installed app's `api.py`, where Bolt autodiscovery owns routing, validatio
 authentication, response serialization, and OpenAPI metadata. Do not duplicate their
 paths in Django's URLconf or implement them as Django `JsonResponse` views.
 
+Define each app's JSON request and response contracts in `schema.py` using Django
+Bolt's msgspec-backed `Serializer`. Handlers construct those schema types rather than
+ad hoc dictionaries so runtime serialization and generated OpenAPI share one contract.
+
 Serve rendered product UI through Django views and Reactivated templates. Views own
 browser-page concerns such as template props, sessions, redirects, and form flows; they
 do not act as JSON API controllers.
@@ -63,6 +67,7 @@ testing, and deployment behavior across apps.
 ## Consequences
 
 - New JSON APIs have one discoverable home: `apps/<app>/api.py`.
+- Their machine contracts have one discoverable home: `apps/<app>/schema.py`.
 - New rendered pages have one discoverable home: Django/Reactivated views.
 - Transport handlers remain thin and reuse transport-neutral services.
 - The Django and Bolt services can evolve and scale independently.

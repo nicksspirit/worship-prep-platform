@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -115,6 +116,7 @@ class CatalogEntry(models.Model):
     )
     song_uid = models.CharField(max_length=255)
     title = models.CharField(max_length=512)
+    normalized_title = models.CharField(max_length=512)
     authors = models.JSONField(default=list, blank=True)
     copyright_notice = models.TextField(blank=True)
     cleaned_lyrics = models.TextField(blank=True)
@@ -139,7 +141,20 @@ class CatalogEntry(models.Model):
                 fields=["snapshot", "song_uid"], name="catalog_unique_song_per_snapshot"
             )
         ]
-        indexes = [models.Index(fields=["song_uid"])]
+        indexes = [
+            models.Index(fields=["song_uid"]),
+            models.Index(
+                fields=["snapshot", "normalized_title", "song_uid"],
+                name="catalog_page_order_idx",
+            ),
+            GinIndex(fields=["title_search"], name="catalog_title_fts_gin"),
+            GinIndex(fields=["lyrics_search"], name="catalog_lyrics_fts_gin"),
+            GinIndex(
+                fields=["normalized_title"],
+                name="catalog_title_trgm_gin",
+                opclasses=["gin_trgm_ops"],
+            ),
+        ]
         ordering = ["title", "song_uid"]
 
 

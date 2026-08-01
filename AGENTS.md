@@ -66,6 +66,9 @@
 - Serve product and machine-facing JSON APIs with Django Bolt. Register them in an
   app's `api.py`; do not add those routes to Django's URLconf or return them from a
   Django/Reactivated view.
+- Define every Django Bolt JSON request and response contract as a msgspec-backed
+  Django Bolt `Serializer` in the owning app's `schema.py`; handlers must construct
+  those schema types rather than ad hoc response dictionaries.
 - Serve rendered UI with Django views and Reactivated templates. Keep domain and
   application services independent of both transports so an API handler and a view can
   reuse behavior without calling one another.

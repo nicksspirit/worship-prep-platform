@@ -3,12 +3,17 @@ from __future__ import annotations
 import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 
-from apps.api_keys.models import IntegrationApiKey, normalize_api_key_scopes
+from apps.api_keys.models import (
+    IntegrationApiKey,
+    IntegrationApiKeyRateWindow,
+    normalize_api_key_scopes,
+)
 
 API_KEY_PREFIX_NAMESPACE = "wpp_live"
 API_KEY_PUBLIC_ID_BYTES = 6
@@ -23,6 +28,38 @@ class GeneratedAPIKeyMaterial:
     key_prefix: str
     plaintext_key: str
     hashed_key: str
+
+
+class APIKeyAccessError(ValueError):
+    """An Integration Client credential cannot authorize the requested resource."""
+
+    def __init__(self, code: str, message: str, status_code: int):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimitResult:
+    """Outcome and response metadata for one per-key rate-limit check."""
+
+    allowed: bool
+    limit: int
+    remaining: int
+    reset_at: int
+    retry_after: int
+
+    @property
+    def headers(self) -> dict[str, str]:
+        headers = {
+            "X-RateLimit-Limit": str(self.limit),
+            "X-RateLimit-Remaining": str(self.remaining),
+            "X-RateLimit-Reset": str(self.reset_at),
+        }
+        if not self.allowed:
+            headers["Retry-After"] = str(self.retry_after)
+        return headers
 
 
 def hash_api_key(raw_key: str) -> str:
@@ -44,25 +81,90 @@ def parse_api_key_prefix(raw_key: str | None) -> str | None:
     return prefix
 
 
-def authenticate_api_key(
-    raw_key: str | None, *, required_scope: str
-) -> IntegrationApiKey | None:
-    """Authenticate an active API key carrying the required scope."""
+def authorize_api_key(
+    authorization: str | None,
+    *,
+    required_scopes: Iterable[str],
+) -> IntegrationApiKey:
+    """Authenticate a Bearer key and distinguish invalid credentials from scope denial."""
+
+    scheme, separator, raw_key = str(authorization or "").partition(" ")
+    if separator != " " or scheme.lower() != "bearer" or not raw_key:
+        raise APIKeyAccessError(
+            "invalid_api_key",
+            "A valid Integration Client Bearer key is required.",
+            401,
+        )
 
     prefix = parse_api_key_prefix(raw_key)
-    if prefix is None:
-        return None
-    api_key = IntegrationApiKey.objects.filter(key_prefix=prefix).first()
+    api_key = (
+        IntegrationApiKey.objects.filter(key_prefix=prefix).first()
+        if prefix is not None
+        else None
+    )
     if (
         api_key is None
+        or not constant_time_compare(api_key.hashed_key, hash_api_key(raw_key))
         or api_key.status != "active"
-        or required_scope not in api_key.scopes
-        or not constant_time_compare(api_key.hashed_key, hash_api_key(str(raw_key)))
     ):
-        return None
+        raise APIKeyAccessError(
+            "invalid_api_key",
+            "A valid Integration Client Bearer key is required.",
+            401,
+        )
+
+    missing_scopes = sorted(set(required_scopes) - set(api_key.scopes))
+    if missing_scopes:
+        raise APIKeyAccessError(
+            "insufficient_scope",
+            f"This resource requires scope: {', '.join(missing_scopes)}.",
+            403,
+        )
+
     api_key.last_used_on = timezone.now()
     api_key.save(update_fields=["last_used_on", "updated_on"])
     return api_key
+
+
+@transaction.atomic
+def check_rate_limit(
+    api_key: IntegrationApiKey,
+    *,
+    bucket: str,
+    limit: int,
+) -> RateLimitResult:
+    """Consume one request from a database-coordinated one-minute key window."""
+
+    now = timezone.now()
+    window_started_at = now.replace(second=0, microsecond=0)
+    reset_at = window_started_at + timedelta(minutes=1)
+    window, _created = (
+        IntegrationApiKeyRateWindow.objects.select_for_update().get_or_create(
+            api_key=api_key,
+            bucket=bucket,
+            defaults={
+                "window_started_at": window_started_at,
+                "request_count": 0,
+            },
+        )
+    )
+    if window.window_started_at != window_started_at:
+        window.window_started_at = window_started_at
+        window.request_count = 0
+
+    allowed = window.request_count < limit
+    if allowed:
+        window.request_count += 1
+    window.save(update_fields=["window_started_at", "request_count"])
+
+    retry_after = max(1, int((reset_at - now).total_seconds()))
+    return RateLimitResult(
+        allowed=allowed,
+        limit=limit,
+        remaining=max(0, limit - window.request_count),
+        reset_at=int(reset_at.timestamp()),
+        retry_after=retry_after,
+    )
 
 
 def build_api_key(prefix: str, secret: str) -> str:
@@ -75,7 +177,9 @@ def _next_key_prefix() -> str:
     """Generate a unique public key prefix."""
 
     while True:
-        candidate = f"{API_KEY_PREFIX_NAMESPACE}_{secrets.token_hex(API_KEY_PUBLIC_ID_BYTES)}"
+        candidate = (
+            f"{API_KEY_PREFIX_NAMESPACE}_{secrets.token_hex(API_KEY_PUBLIC_ID_BYTES)}"
+        )
         if not IntegrationApiKey.objects.filter(key_prefix=candidate).exists():
             return candidate
 

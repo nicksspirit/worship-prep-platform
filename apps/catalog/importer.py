@@ -27,6 +27,7 @@ from apps.catalog.models import (
     RightsStatus,
     SnapshotStatus,
 )
+from apps.catalog.text import SEARCH_CONFIG, normalize_title
 
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -260,6 +261,7 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
                     snapshot=snapshot,
                     song_uid=source["song_uid"],
                     title=metadata["title"],
+                    normalized_title=normalize_title(metadata["title"]),
                     authors=[metadata["author"]] if metadata["author"] else [],
                     copyright_notice=metadata["copyright"] or "",
                     cleaned_lyrics=record["cleaned_lyrics"],
@@ -279,8 +281,8 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
             )
         CatalogEntry.objects.bulk_create(entries, batch_size=500)
         snapshot.entries.update(
-            title_search=SearchVector("title", config="simple"),
-            lyrics_search=SearchVector("cleaned_lyrics", config="simple"),
+            title_search=SearchVector("title", config=SEARCH_CONFIG),
+            lyrics_search=SearchVector("cleaned_lyrics", config=SEARCH_CONFIG),
         )
         snapshot.status = SnapshotStatus.COMPLETED
         snapshot.completed_at = promoted_at

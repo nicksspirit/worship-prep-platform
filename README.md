@@ -4,11 +4,12 @@ Worship Prep Platform is becoming a public, read-only Song Catalog sourced from 
 church's EasyWorship Library. The EasyWorship Library remains authoritative; the
 platform will ingest immutable snapshots without writing back to the source.
 
-This stacked branch contains the greenfield foundation plus the portable
-[Catalog Exporter](exporter/) and versioned
-[Catalog Import Package contract](contracts/catalog-import/v1/). Catalog importing,
-search, the read interface, public discovery, and administration arrive in later
-stacked pull requests tracked by GitHub issue #21.
+This stacked branch contains the greenfield foundation, the portable
+[Catalog Exporter](exporter/), the versioned
+[Catalog Import Package contract](contracts/catalog-import/v1/), immutable Catalog
+Importer snapshots, PostgreSQL search, and the Integration Client read API. Public
+discovery and administration arrive in later stacked pull requests tracked by GitHub
+issue #21.
 
 ## Quick Start
 
@@ -21,9 +22,10 @@ poe migrate
 poe dev
 ```
 
-The default local database is SQLite for interactive development. Local automated tests
-boot a disposable PostgreSQL 16 database through Testcontainers, so Docker must be
-running. GitHub Actions uses its native PostgreSQL service container instead.
+Catalog imports and search require PostgreSQL; configure `DATABASE_URL` before applying
+migrations or running the API locally. Local automated tests boot a disposable
+PostgreSQL 16 database through Testcontainers, so Docker must be running. GitHub Actions
+uses its native PostgreSQL service container instead.
 
 ```bash
 poe test
@@ -34,8 +36,9 @@ poe test
 - `apps.accounts`: custom user identity, invitation requests, sign-in, and invitation
   administration.
 - `apps.api_keys`: hashed Integration Client credentials, target Song Catalog scopes,
-  rotation, revocation, and administration.
-- `apps.catalog`: the Song Catalog module seam for subsequent slices.
+  rotation, revocation, database-coordinated rate limits, and administration.
+- `apps.catalog`: immutable Song Catalog snapshots, import processing, search, signed
+  continuations, and rights-aware Integration Client reads.
 - `apps.common`: shared Django infrastructure, model utilities, middleware, and
   Reactivated context.
 
@@ -46,6 +49,8 @@ runtime and migrations.
 ## HTTP Architecture
 
 - Django Bolt serves product and machine-facing JSON APIs from each app's `api.py`.
+- Each app defines its msgspec-backed Django Bolt request and response types in
+  `schema.py`; handlers construct those contracts rather than ad hoc dictionaries.
 - Django views and Reactivated templates serve rendered product UI.
 - Transport-neutral services hold reusable domain and application behavior.
 - Django's standard stack continues to own operational and framework routes such as
@@ -53,6 +58,21 @@ runtime and migrations.
 
 See [ADR-0004](docs/adr/0004-separate-json-and-rendered-transports.md) for the boundary,
 rationale, and review rule.
+
+## Integration Client API
+
+The versioned API is served under `/api/v1/` with Bearer-key scopes:
+
+- `GET /api/v1/catalog/search` requires `catalog.search`; Lyrics mode also requires
+  `catalog.lyrics.read`.
+- `GET /api/v1/catalog/songs/{song_uid}` requires `catalog.song.read`.
+- `GET /api/v1/catalog/songs/{song_uid}/lyrics` requires `catalog.lyrics.read`, plus
+  `catalog.lyrics.restricted` for restricted lyrics.
+- `POST /api/v1/catalog/imports` requires `catalog.import`.
+
+Machine-readable OpenAPI is available at `/api/v1/docs/openapi.json`. Local development
+serves Swagger UI at `/api/v1/docs`; production serves ReDoc at the same entry point.
+Search continuations are opaque server-provided URLs and expire after 24 hours.
 
 ## Commands
 
