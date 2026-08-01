@@ -58,6 +58,16 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --group test --frozen
-      - run: uv run pytest
+      - name: Verify PostgreSQL service
+        run: >-
+          uv run python -c
+          "import psycopg;
+          connection = psycopg.connect(
+          host='127.0.0.1', port=5432, dbname='postgres',
+          user='worship_prep_test', password='worship_prep_test');
+          print(connection.execute('SELECT version()').fetchone()[0]);
+          connection.close()"
+      - run: uv run pytest -vv --setup-show -o faulthandler_timeout=60
         env:
           DJANGO_ENV: test
+          PYTHONUNBUFFERED: "1"
