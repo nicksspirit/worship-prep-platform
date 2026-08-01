@@ -1,4 +1,4 @@
-// Package outbox durably records Catalog Exporter events before delivery exists.
+// Package outbox durably records Catalog Exporter events through delivery.
 package outbox
 
 import (
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,12 @@ type Event struct {
 	Type       string         `json:"type"`
 	OccurredAt time.Time      `json:"occurred_at"`
 	Details    map[string]any `json:"details,omitempty"`
+}
+
+// PendingRun identifies one event timeline that has not been acknowledged.
+type PendingRun struct {
+	RunID      string
+	EventsPath string
 }
 
 // Append writes and syncs an event so process failure does not erase history.
@@ -36,6 +44,45 @@ func Append(stateDirectory string, event Event) error {
 	}
 	if err := file.Sync(); err != nil {
 		return fmt.Errorf("sync outbox event: %w", err)
+	}
+	return nil
+}
+
+// Pending returns retained run timelines in deterministic run-ID order.
+func Pending(stateDirectory string) ([]PendingRun, error) {
+	directory := filepath.Join(stateDirectory, "outbox")
+	entries, err := os.ReadDir(directory)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read outbox: %w", err)
+	}
+	pending := make([]PendingRun, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".ndjson" {
+			continue
+		}
+		pending = append(pending, PendingRun{
+			RunID:      strings.TrimSuffix(entry.Name(), ".ndjson"),
+			EventsPath: filepath.Join(directory, entry.Name()),
+		})
+	}
+	sort.Slice(pending, func(left, right int) bool {
+		return pending[left].RunID < pending[right].RunID
+	})
+	return pending, nil
+}
+
+// MarkDelivered archives acknowledged events so connectivity retries stop replaying them.
+func MarkDelivered(stateDirectory, runID string) error {
+	source := filepath.Join(stateDirectory, "outbox", runID+".ndjson")
+	directory := filepath.Join(stateDirectory, "delivered")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create delivered event directory: %w", err)
+	}
+	if err := os.Rename(source, filepath.Join(directory, runID+".ndjson")); err != nil {
+		return fmt.Errorf("archive delivered events: %w", err)
 	}
 	return nil
 }

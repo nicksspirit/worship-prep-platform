@@ -40,6 +40,7 @@ class GreenfieldRuntimeTests(TestCase):
 
     def test_static_assets_remain_discoverable(self):
         self.assertIsNotNone(finders.find("rccgcm_logo.png"))
+        self.assertIsNotNone(finders.find("install-catalog-exporter.ps1"))
 
     def test_greenfield_modules_are_installed(self):
         self.assertEqual(apps.get_app_config("accounts").name, "apps.accounts")

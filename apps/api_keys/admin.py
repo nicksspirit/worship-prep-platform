@@ -89,6 +89,18 @@ class IntegrationApiKeyAdmin(ModelAdmin):
         "updated_on",
     ]
 
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return (
