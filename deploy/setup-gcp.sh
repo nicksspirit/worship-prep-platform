@@ -4,11 +4,16 @@
 # Required env:
 #   GCP_PROJECT_ID   (or use gcloud config project)
 # Optional:
-#   GCP_REGION       default us-central1
+#   GCP_REGION       default us-west1
 #   AR_REPOSITORY    default worship-prep
-#   RUNTIME_SA       default worship-prep-runtime@${PROJECT}.iam.gserviceaccount.com
+#   RUNTIME_SA_NAME   default wpp-runtime
 #
 set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${ROOT}/deploy/config.sh"
+
+apply_local_defaults
 
 PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 if [[ -z "${PROJECT_ID}" || "${PROJECT_ID}" == "(unset)" ]]; then
@@ -16,9 +21,8 @@ if [[ -z "${PROJECT_ID}" || "${PROJECT_ID}" == "(unset)" ]]; then
   exit 1
 fi
 
-REGION="${GCP_REGION:-us-central1}"
-AR_REPO="${AR_REPOSITORY:-worship-prep}"
-RUNTIME_SA_NAME="${RUNTIME_SA_NAME:-worship-prep-runtime}"
+REGION="${GCP_REGION}"
+AR_REPO="${AR_REPOSITORY}"
 RUNTIME_SA_EMAIL="${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo "Using project=${PROJECT_ID} region=${REGION}"

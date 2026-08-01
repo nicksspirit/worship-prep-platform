@@ -1,106 +1,145 @@
 #!/usr/bin/env bash
-# Submit Cloud Build using cloudbuild.yaml (build → migrate job → run job → deploy Django + Bolt).
-#
-# Required environment variables:
-#   RUNTIME_SA              Full email of Cloud Run runtime service account
-#   SUPABASE_STORAGE_BUCKET
-#   SUPABASE_CATALOG_IMPORT_BUCKET
-#   SUPABASE_S3_ENDPOINT    e.g. https://<ref>.supabase.co/storage/v1/s3
-#   EMAIL_HOST              SMTP hostname for invitations and import alerts
-#   EMAIL_HOST_USER         SMTP username
-#   DEFAULT_FROM_EMAIL      Sender identity
-#
-# Optional:
-#   GCP_PROJECT_ID          (default: gcloud config project)
-#   GCP_REGION              (default: us-central1)
-#   AR_REPOSITORY           (default: worship-prep)
-#   IMAGE_NAME              (default: worship-prep-app)
-#   DJANGO_SERVICE          (default: wpp-app)
-#   BOLT_SERVICE            (default: wpp-api)
-#   MIGRATE_JOB             (default: wpp-migrate)
-#   SUPABASE_S3_REGION      (default: us-east-1)
-#   ALLOWED_HOSTS           Comma-separated runtime hosts; .run.app is always appended
-#   CSRF_TRUSTED_ORIGINS    Comma-separated trusted origins; https://*.run.app is always appended
-#
+# Submit Cloud Build using cloudbuild.yaml.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PROJECT_ID="${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
-if [[ -z "${PROJECT_ID}" || "${PROJECT_ID}" == "(unset)" ]]; then
-  echo "Set GCP_PROJECT_ID or run: gcloud config set project <id>" >&2
-  exit 1
-fi
+source "${ROOT}/deploy/config.sh"
 
-RUNTIME_SA="${RUNTIME_SA:?Set RUNTIME_SA to the Cloud Run runtime service account email}"
-SUPABASE_STORAGE_BUCKET="${SUPABASE_STORAGE_BUCKET:?Set SUPABASE_STORAGE_BUCKET}"
-SUPABASE_CATALOG_IMPORT_BUCKET="${SUPABASE_CATALOG_IMPORT_BUCKET:?Set SUPABASE_CATALOG_IMPORT_BUCKET}"
-SUPABASE_S3_ENDPOINT="${SUPABASE_S3_ENDPOINT:?Set SUPABASE_S3_ENDPOINT}"
-EMAIL_HOST="${EMAIL_HOST:?Set EMAIL_HOST}"
-EMAIL_HOST_USER="${EMAIL_HOST_USER:?Set EMAIL_HOST_USER}"
-DEFAULT_FROM_EMAIL="${DEFAULT_FROM_EMAIL:?Set DEFAULT_FROM_EMAIL}"
+ENV_FILE=".env"
+DRY_RUN=0
 
-REGION="${GCP_REGION:-us-central1}"
-AR_REPO="${AR_REPOSITORY:-worship-prep}"
-IMAGE_NAME="${IMAGE_NAME:-worship-prep-app}"
-DJANGO_SERVICE="${DJANGO_SERVICE:-wpp-app}"
-BOLT_SERVICE="${BOLT_SERVICE:-wpp-api}"
-MIGRATE_JOB="${MIGRATE_JOB:-wpp-migrate}"
-SUPABASE_S3_REGION="${SUPABASE_S3_REGION:-us-east-1}"
-EMAIL_PORT="${EMAIL_PORT:-587}"
+usage() {
+  cat <<EOF
+Usage: ./deploy/deploy.sh [--env-file PATH] [--dry-run]
 
-append_csv_value() {
-  local csv="${1:-}"
-  local required="$2"
-  local IFS=','
-  local values=()
+Loads deployment values from the environment and, when present, .env.
+Required values that cannot be defaulted:
+  SUPABASE_S3_ENDPOINT or SUPABASE_URL
+  EMAIL_HOST
+  EMAIL_HOST_USER
+  DEFAULT_FROM_EMAIL
 
-  if [[ -n "$csv" ]]; then
-    read -r -a values <<< "$csv"
-    for value in "${values[@]}"; do
-      value="${value#"${value%%[![:space:]]*}"}"
-      value="${value%"${value##*[![:space:]]}"}"
-      if [[ "$value" == "$required" ]]; then
-        printf '%s' "$csv"
-        return
-      fi
-    done
+Secrets are read by Cloud Build and Cloud Run from Google Secret Manager.
+EOF
+}
 
-    printf '%s,%s' "$csv" "$required"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env-file)
+      ENV_FILE="${2:?--env-file requires a path}"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+load_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
+}
+
+normalize_runtime_lists() {
+  ALLOWED_HOSTS="$(normalize_allowed_hosts "${ALLOWED_HOSTS:-}")"
+  export ALLOWED_HOSTS
+
+  CSRF_TRUSTED_ORIGINS="$(normalize_csrf_origins "${CSRF_TRUSTED_ORIGINS:-}")"
+  export CSRF_TRUSTED_ORIGINS
+}
+
+configure() {
+  load_env_file
+
+  apply_local_defaults
+
+  if [[ -z "${SUPABASE_S3_ENDPOINT:-}" && -n "${SUPABASE_URL:-}" ]]; then
+    SUPABASE_S3_ENDPOINT="${SUPABASE_URL%/}/storage/v1/s3"
+    export SUPABASE_S3_ENDPOINT
+  fi
+
+  normalize_runtime_lists
+
+  local key
+  for key in "${REQUIRED_DEPLOY_ENV_KEYS[@]}"; do
+    require_var "$key"
+  done
+}
+
+build_substitutions() {
+  local substitutions=()
+  local joined=""
+  local item
+  local key
+  local cloudbuild_key
+  local shell_key
+
+  for item in "${INFRA_SUBSTITUTIONS[@]}"; do
+    cloudbuild_key="${item%%=*}"
+    shell_key="${item#*=}"
+    substitutions+=("$(cloudbuild_var "$cloudbuild_key")=${!shell_key}")
+  done
+
+  for key in "${COMMON_RUNTIME_ENV_KEYS[@]}" "${DJANGO_RUNTIME_ENV_KEYS[@]}"; do
+    substitutions+=("$(cloudbuild_var "$key")=${!key}")
+  done
+
+  for item in "${substitutions[@]}"; do
+    if [[ -z "$joined" ]]; then
+      joined="$item"
+    else
+      joined="${joined}|${item}"
+    fi
+  done
+
+  printf '^|^%s' "$joined"
+}
+
+print_summary() {
+  cat <<EOF
+Deploy configuration
+  project:        ${GCP_PROJECT_ID}
+  region:         ${GCP_REGION}
+  image:          ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}
+  services:       ${DJANGO_SERVICE}, ${BOLT_SERVICE}
+  migrate job:    ${MIGRATE_JOB}
+  runtime SA:     ${RUNTIME_SA}
+  allowed hosts:  ${ALLOWED_HOSTS}
+  CSRF origins:   ${CSRF_TRUSTED_ORIGINS}
+EOF
+}
+
+main() {
+  configure
+  print_summary
+
+  local substitutions
+  substitutions="$(build_substitutions)"
+
+  if [[ "$DRY_RUN" == 1 ]]; then
     return
   fi
 
-  printf '%s' "$required"
+  gcloud builds submit "${ROOT}" \
+    --project="${GCP_PROJECT_ID}" \
+    --config="${ROOT}/cloudbuild.yaml" \
+    --substitutions="$substitutions"
 }
 
-# Keep wildcard Cloud Run entries even when deploying from an older .env that
-# still sets narrower host/origin lists.
-ALLOWED_HOSTS="$(append_csv_value "${ALLOWED_HOSTS:-localhost,127.0.0.1}" ".run.app")"
-CSRF_TRUSTED_ORIGINS="$(
-  append_csv_value \
-    "${CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}" \
-    "https://*.run.app"
-)"
-
-gcloud builds submit "${ROOT}" \
-  --project="${PROJECT_ID}" \
-  --config="${ROOT}/cloudbuild.yaml" \
-  --substitutions=\
-"^|^_REGION=${REGION}|\
-_AR_REPOSITORY=${AR_REPO}|\
-_IMAGE_NAME=${IMAGE_NAME}|\
-_RUNTIME_SA=${RUNTIME_SA}|\
-_DJANGO_SERVICE=${DJANGO_SERVICE}|\
-_BOLT_SERVICE=${BOLT_SERVICE}|\
-_MIGRATE_JOB=${MIGRATE_JOB}|\
-_SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET}|\
-_SUPABASE_CATALOG_IMPORT_BUCKET=${SUPABASE_CATALOG_IMPORT_BUCKET}|\
-_SUPABASE_S3_ENDPOINT=${SUPABASE_S3_ENDPOINT}|\
-_SUPABASE_S3_REGION=${SUPABASE_S3_REGION}|\
-_EMAIL_HOST=${EMAIL_HOST}|\
-_EMAIL_PORT=${EMAIL_PORT}|\
-_EMAIL_HOST_USER=${EMAIL_HOST_USER}|\
-_DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}|\
-_ALLOWED_HOSTS=${ALLOWED_HOSTS}|\
-_CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}"
+main
