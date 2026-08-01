@@ -37,6 +37,8 @@
         poe test
         ```
         The Docker `test` image runs `pytest` with `DJANGO_ENV=test`; mount the host Docker socket (e.g. `-v /var/run/docker.sock:/var/run/docker.sock`) if you execute that image locally, otherwise Testcontainers cannot start Postgres inside the container.
+        GitHub Actions supplies PostgreSQL as a native service container and sets
+        `WPP_TEST_POSTGRES_*`; local runs continue to use Testcontainers.
 
 ## Package Management
 - All dependencies are managed in **pyproject.toml**.

@@ -28,6 +28,27 @@ jobs:
   postgres-tests:
     name: PostgreSQL tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: worship_prep_test
+          POSTGRES_PASSWORD: worship_prep_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U worship_prep_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WPP_TEST_POSTGRES_HOST: 127.0.0.1
+      WPP_TEST_POSTGRES_PORT: 5432
+      WPP_TEST_POSTGRES_DATABASE: postgres
+      WPP_TEST_POSTGRES_USER: worship_prep_test
+      WPP_TEST_POSTGRES_PASSWORD: worship_prep_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6

@@ -21,9 +21,9 @@ poe migrate
 poe dev
 ```
 
-The default local database is SQLite for interactive development. The automated test
-suite boots a disposable PostgreSQL 16 database through Testcontainers, so Docker must
-be running:
+The default local database is SQLite for interactive development. Local automated tests
+boot a disposable PostgreSQL 16 database through Testcontainers, so Docker must be
+running. GitHub Actions uses its native PostgreSQL service container instead.
 
 ```bash
 poe test
