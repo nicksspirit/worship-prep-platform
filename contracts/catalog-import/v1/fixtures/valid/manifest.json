@@ -1,0 +1,27 @@
+{
+  "contract_version": "catalog-import/v1",
+  "run_id": "11111111-1111-4111-8111-111111111111",
+  "exporter_instance_id": "22222222-2222-4222-8222-222222222222",
+  "exporter_version": "fixture",
+  "parser_version": "easyworship-rtf/v1",
+  "created_at": "2026-08-01T12:30:00Z",
+  "source": {
+    "system": "easyworship",
+    "fingerprint": "sha256:8c78f67e4bddfee9942b5761f4e24cb9f47c0c902b8577d49a5dd0c387c6dc2e",
+    "files": [
+      {"name": "SongKeys.db", "required": false, "present": false},
+      {"name": "SongWords.db", "required": true, "present": true, "size": 8192, "sha256": "sha256:bcc66ef0ba65bfd6e3d2ef9199ef49db4cbcdb5d70037836ed3c40a1ad02708f"},
+      {"name": "Songs.db", "required": true, "present": true, "size": 8192, "sha256": "sha256:514306ffdf9026f12f3caee833df6df832a9bd59775a9cbfb88b90c5f77f2fda"}
+    ],
+    "diagnostics": {"song_keys_present": false}
+  },
+  "records": {
+    "path": "songs.ndjson",
+    "media_type": "application/x-ndjson",
+    "sha256": "sha256:de6c56976fff28581e11c936b8103ea7f82919deeea7d490e2d1467a02b16d25",
+    "bytes": 1552,
+    "fingerprint": "sha256:de6c56976fff28581e11c936b8103ea7f82919deeea7d490e2d1467a02b16d25"
+  },
+  "counts": {"songs": 1, "warnings": 0},
+  "warnings": []
+}

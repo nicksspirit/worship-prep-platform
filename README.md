@@ -4,9 +4,11 @@ Worship Prep Platform is becoming a public, read-only Song Catalog sourced from 
 church's EasyWorship Library. The EasyWorship Library remains authoritative; the
 platform will ingest immutable snapshots without writing back to the source.
 
-This branch contains the greenfield foundation only. Catalog importing, search, the
-read interface, public discovery, and administration arrive in later stacked pull
-requests tracked by GitHub issue #21.
+This stacked branch contains the greenfield foundation plus the portable
+[Catalog Exporter](exporter/) and versioned
+[Catalog Import Package contract](contracts/catalog-import/v1/). Catalog importing,
+search, the read interface, public discovery, and administration arrive in later
+stacked pull requests tracked by GitHub issue #21.
 
 ## Quick Start
 
