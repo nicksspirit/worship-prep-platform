@@ -56,6 +56,20 @@ UNFOLD = {
                         "link": reverse_lazy("admin:catalog_catalogsnapshot_changelist"),
                     },
                     {
+                        "title": _("Lyrics rights"),
+                        "icon": "policy",
+                        "link": reverse_lazy(
+                            "admin:catalog_catalogsongrights_changelist"
+                        ),
+                    },
+                    {
+                        "title": _("Rights audit"),
+                        "icon": "fact_check",
+                        "link": reverse_lazy(
+                            "admin:catalog_lyricsrightschange_changelist"
+                        ),
+                    },
+                    {
                         "title": _("Import events"),
                         "icon": "diagnosis",
                         "link": reverse_lazy("admin:catalog_catalogimportevent_changelist"),

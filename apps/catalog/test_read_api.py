@@ -5,13 +5,14 @@ import json
 import time
 import uuid
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from time import perf_counter
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
-from django.contrib.postgres.search import SearchVector
+from django.db import connections
 from django.test import TransactionTestCase
 from django.utils import timezone
 from django_bolt.serializers import Serializer
@@ -30,7 +31,6 @@ from apps.catalog.schema import (
     SongMetadataResponse,
 )
 from apps.catalog.search import CURSOR_MAX_AGE_SECONDS, search_catalog
-from apps.catalog.text import SEARCH_CONFIG, normalize_title
 
 
 class CatalogReadAPITests(TransactionTestCase):
@@ -514,36 +514,19 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertIn("Retry-After", denied_response.headers)
 
     def test_postgres_search_and_continuation_meet_synthetic_catalog_targets(self):
-        snapshot = CatalogState.objects.get().active_snapshot
-        now = timezone.now()
-        fingerprint = "sha256:" + "1" * 64
-        entries = [
-            CatalogEntry(
-                snapshot=snapshot,
-                song_uid=f"perf-{index:04d}",
-                title=f"Song {index:04d}",
-                normalized_title=normalize_title(f"Song {index:04d}"),
-                authors=[],
-                cleaned_lyrics="grace truth mercy",
-                sections=[],
-                slide_count=1,
-                fingerprint_version="song-semantic/v1",
-                semantic_fingerprint=fingerprint,
-                metadata_fingerprint=fingerprint,
-                lyrics_fingerprint=fingerprint,
-                structure_fingerprint=fingerprint,
-                presentation_fingerprint=fingerprint,
-                content_changed_at=now,
-            )
+        records = [
+            {
+                "uid": f"perf-{index:04d}",
+                "title": f"Song {index:04d}",
+                "author": None,
+                "lyrics": "grace truth mercy",
+                "label": "Verse",
+            }
             for index in range(2283)
         ]
-        CatalogEntry.objects.bulk_create(entries, batch_size=500)
-        CatalogEntry.objects.filter(
-            snapshot=snapshot, song_uid__startswith="perf-"
-        ).update(
-            title_search=SearchVector("title", config=SEARCH_CONFIG),
-            lyrics_search=SearchVector("cleaned_lyrics", config=SEARCH_CONFIG),
-        )
+        import_started_at = perf_counter()
+        self.activate_catalog(records)
+        import_duration = perf_counter() - import_started_at
 
         first_page = search_catalog(query="Song", mode="title", limit=100)
         continuation = parse_qs(urlsplit(first_page.next_url).query)["next"][0]
@@ -574,3 +557,18 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertLessEqual(title_p95, 0.250)
         self.assertLessEqual(lyrics_p95, 0.500)
         self.assertLessEqual(continuation_p95, 0.300)
+        self.assertLessEqual(import_duration, 300)
+
+        def concurrent_search():
+            try:
+                return len(
+                    search_catalog(query="Song", mode="title", limit=20).entries
+                )
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            result_counts = list(
+                executor.map(lambda _index: concurrent_search(), range(10))
+            )
+        self.assertEqual(result_counts, [20] * 10)

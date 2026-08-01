@@ -48,6 +48,21 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     ordering = ["email"]
     filter_horizontal = []
 
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
 
 @admin.register(InvitationRequest)
 class InvitationRequestAdmin(ModelAdmin):
@@ -72,6 +87,12 @@ class InvitationRequestAdmin(ModelAdmin):
     ]
     ordering = ["-created_on"]
     actions = ["approve_as_catalog_admin", "reject_requests"]
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     @display(
         description=_("Name"),
@@ -206,6 +227,21 @@ class InvitationAdmin(ModelAdmin):
     list_filter = ("sent", "accepted")
     raw_id_fields = ("inviter",)
     readonly_fields = ("key", "sent", "accepted", "created")
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def get_readonly_fields(self, request, obj=None):
         if obj:

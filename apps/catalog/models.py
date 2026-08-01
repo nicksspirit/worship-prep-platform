@@ -17,6 +17,11 @@ class ImportStatus(models.TextChoices):
     FAILED = "failed", _("Failed")
 
 
+class ImportTrigger(models.TextChoices):
+    MANUAL = "manual", _("Manual")
+    SCHEDULED = "scheduled", _("Scheduled")
+
+
 class CatalogImportRun(models.Model):
     """Durable audit record for one exporter-generated run identity."""
 
@@ -38,6 +43,9 @@ class CatalogImportRun(models.Model):
     )
     status = models.CharField(
         max_length=16, choices=ImportStatus, default=ImportStatus.RECEIVED
+    )
+    trigger = models.CharField(
+        max_length=16, choices=ImportTrigger, default=ImportTrigger.MANUAL
     )
     song_count = models.PositiveIntegerField(default=0)
     warning_count = models.PositiveIntegerField(default=0)
@@ -106,6 +114,67 @@ class RightsStatus(models.TextChoices):
     APPROVED = "approved", _("Approved")
     UNKNOWN = "unknown", _("Unknown")
     RESTRICTED = "restricted", _("Restricted")
+
+
+class RightsBasis(models.TextChoices):
+    PUBLIC_DOMAIN = "public_domain", _("Documented public-domain status")
+    DIRECT_LICENSE = "direct_license", _("Direct license")
+    WRITTEN_PERMISSION = "written_permission", _("Written web-display permission")
+    KNOWN_PROHIBITION = "known_prohibition", _("Known prohibition")
+    PERMISSION_REVOKED = "permission_revoked", _("Permission expired or revoked")
+    OWNER_REQUEST = "owner_request", _("Owner request to withhold")
+    INCONCLUSIVE = "inconclusive", _("Inconclusive evidence")
+
+
+class CatalogSongRights(models.Model):
+    """Current administrative rights decision for one stable song identity."""
+
+    song_uid = models.CharField(max_length=255, unique=True)
+    status = models.CharField(
+        max_length=16, choices=RightsStatus, default=RightsStatus.UNKNOWN
+    )
+    basis = models.CharField(max_length=32, choices=RightsBasis, blank=True)
+    evidence_reference = models.TextField(blank=True)
+    explanation = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="current_lyrics_rights_decisions",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("Lyrics rights provenance")
+        verbose_name_plural = _("Lyrics rights provenance")
+        ordering = ["song_uid"]
+
+    def __str__(self) -> str:
+        return f"{self.song_uid} ({self.get_status_display()})"
+
+
+class LyricsRightsChange(models.Model):
+    """Append-only provenance for a Superuser Lyrics Rights Status change."""
+
+    rights = models.ForeignKey(
+        CatalogSongRights, on_delete=models.PROTECT, related_name="changes"
+    )
+    previous_status = models.CharField(max_length=16, choices=RightsStatus)
+    new_status = models.CharField(max_length=16, choices=RightsStatus)
+    basis = models.CharField(max_length=32, choices=RightsBasis)
+    evidence_reference = models.TextField()
+    explanation = models.TextField()
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="lyrics_rights_changes",
+    )
+    decided_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-decided_at", "-pk"]
 
 
 class CatalogEntry(models.Model):

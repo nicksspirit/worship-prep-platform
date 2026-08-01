@@ -21,7 +21,12 @@ from apps.api_keys.services import (
     authorize_api_key,
     check_rate_limit,
 )
-from apps.catalog.importer import MAX_PACKAGE_BYTES, ImportRejected, import_package
+from apps.catalog.importer import (
+    MAX_EXPORTER_EVENTS_BYTES,
+    MAX_PACKAGE_BYTES,
+    ImportRejected,
+    import_package,
+)
 from apps.catalog.models import CatalogEntry, RightsStatus
 from apps.catalog.schema import (
     APIErrorDetail,
@@ -170,6 +175,21 @@ async def catalog_import(
         ),
     ],
     authorization: Annotated[str, Header(alias="Authorization")] = "",
+    events: Annotated[
+        UploadFile | None,
+        File(
+            alias="events",
+            max_size=MAX_EXPORTER_EVENTS_BYTES,
+            allowed_types=["application/x-ndjson", "text/plain"],
+        ),
+    ] = None,
+    import_trigger: Annotated[
+        str,
+        Header(
+            alias="X-Catalog-Import-Trigger",
+            description="`manual` or `scheduled`; recovery is an admin operation.",
+        ),
+    ] = "manual",
 ):
     """Receive a Catalog Import Package from an import-scoped client."""
 
@@ -182,7 +202,12 @@ async def catalog_import(
         return authorized
 
     try:
-        result = await _database_call(import_package, package.file.read())
+        result = await _database_call(
+            import_package,
+            package.file.read(),
+            exporter_events=events.file.read() if events else b"",
+            trigger=import_trigger,
+        )
     except ImportRejected as exc:
         status = 409 if exc.code == "run_id_conflict" else 422
         return _raw_error(exc.code, exc.summary, status)

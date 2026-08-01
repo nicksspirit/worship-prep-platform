@@ -22,8 +22,10 @@ from apps.catalog.models import (
     CatalogImportEvent,
     CatalogImportRun,
     CatalogSnapshot,
+    CatalogSongRights,
     CatalogState,
     ImportStatus,
+    ImportTrigger,
     RightsStatus,
     SnapshotStatus,
 )
@@ -32,8 +34,17 @@ from apps.catalog.text import SEARCH_CONFIG, normalize_title
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_RECORDS_BYTES = 120 * 1024 * 1024
+MAX_EXPORTER_EVENTS_BYTES = 1024 * 1024
 RETAIN_PRIOR_SNAPSHOTS = 7
 ARCHIVE_FILES = {"manifest.json", "songs.ndjson"}
+EXPORTER_EVENT_DETAIL_KEYS = {
+    "error",
+    "exporter_version",
+    "package_sha256",
+    "scheduled",
+    "songs",
+    "warnings",
+}
 
 
 class ImportRejected(ValueError):
@@ -188,6 +199,56 @@ def _validate_records(manifest: dict, records_bytes: bytes) -> list[dict]:
     return records
 
 
+def _read_exporter_events(content: bytes, *, run_id: UUID) -> list[dict]:
+    if not content:
+        return []
+    if len(content) > MAX_EXPORTER_EVENTS_BYTES:
+        raise ImportRejected(
+            "exporter_events_too_large", "Exporter events exceed 1 MiB."
+        )
+
+    events = []
+    for line_number, line in enumerate(content.splitlines(), start=1):
+        event = _load_json(line, label=f"exporter events line {line_number}")
+        if not isinstance(event, dict) or str(event.get("run_id")) != str(run_id):
+            raise ImportRejected(
+                "invalid_exporter_event",
+                f"Exporter event {line_number} does not belong to this run.",
+            )
+        occurred_at = parse_datetime(str(event.get("occurred_at", "")))
+        details = event.get("details", {})
+        if (
+            not occurred_at
+            or not isinstance(event.get("type"), str)
+            or not event["type"]
+            or len(event["type"]) > 64
+            or not isinstance(details, dict)
+            or not set(details).issubset(EXPORTER_EVENT_DETAIL_KEYS)
+        ):
+            raise ImportRejected(
+                "invalid_exporter_event",
+                f"Exporter event {line_number} is malformed.",
+            )
+        events.append(
+            {
+                "event": event["type"],
+                "outcome": str(
+                    event.get("outcome")
+                    or (
+                        "failed"
+                        if event["type"] in {"failed", "run_identity_conflict"}
+                        else "skipped"
+                        if event["type"].startswith("skipped_")
+                        else "completed"
+                    )
+                )[:32],
+                "occurred_at": occurred_at,
+                "details": details,
+            }
+        )
+    return events
+
+
 def _event(run, event: str, outcome: str, *, details=None, occurred_at=None):
     return CatalogImportEvent.objects.create(
         import_run=run,
@@ -197,6 +258,18 @@ def _event(run, event: str, outcome: str, *, details=None, occurred_at=None):
         occurred_at=occurred_at or timezone.now(),
         details=details or {},
     )
+
+
+def _store_exporter_events(run: CatalogImportRun, events: list[dict]) -> None:
+    for event in events:
+        CatalogImportEvent.objects.get_or_create(
+            import_run=run,
+            source=CatalogImportEvent.Source.EXPORTER,
+            event=event["event"],
+            outcome=event["outcome"],
+            occurred_at=event["occurred_at"],
+            defaults={"details": event["details"]},
+        )
 
 
 def _write_report(run: CatalogImportRun) -> None:
@@ -241,6 +314,24 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
                     "song_uid", "semantic_fingerprint", "content_changed_at"
                 )
             }
+        song_uids = [record["source"]["song_uid"] for record in records]
+        rights_by_uid = {
+            rights.song_uid: rights.status
+            for rights in CatalogSongRights.objects.filter(song_uid__in=song_uids)
+        }
+        CatalogSongRights.objects.bulk_create(
+            [
+                CatalogSongRights(song_uid=song_uid)
+                for song_uid in song_uids
+                if song_uid not in rights_by_uid
+            ],
+            ignore_conflicts=True,
+        )
+        rights_by_uid.update(
+            CatalogSongRights.objects.filter(song_uid__in=song_uids).values_list(
+                "song_uid", "status"
+            )
+        )
         snapshot = CatalogSnapshot.objects.create(
             import_run=run, staged_at=promoted_at, entry_count=len(records)
         )
@@ -269,7 +360,9 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
                     slide_count=sum(
                         len(section["slides"]) for section in record["sections"]
                     ),
-                    rights_status=RightsStatus.UNKNOWN,
+                    rights_status=rights_by_uid.get(
+                        source["song_uid"], RightsStatus.UNKNOWN
+                    ),
                     fingerprint_version=fingerprint["version"],
                     semantic_fingerprint=fingerprint["value"],
                     metadata_fingerprint=components["metadata"],
@@ -283,6 +376,12 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
         snapshot.entries.update(
             title_search=SearchVector("title", config=SEARCH_CONFIG),
             lyrics_search=SearchVector("cleaned_lyrics", config=SEARCH_CONFIG),
+        )
+        _event(
+            run,
+            "staging",
+            "completed",
+            details={"snapshot_id": str(snapshot.pk)},
         )
         snapshot.status = SnapshotStatus.COMPLETED
         snapshot.completed_at = promoted_at
@@ -314,11 +413,77 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
         ).delete()
 
 
-def import_package(package: bytes) -> ImportResult:
+def _process_run(
+    run: CatalogImportRun,
+    manifest: dict,
+    records_bytes: bytes,
+    *,
+    notify_scheduled_failure: bool = True,
+) -> None:
+    try:
+        run.status = ImportStatus.VALIDATING
+        run.failure_code = ""
+        run.failure_summary = ""
+        run.completed_at = None
+        run.save(
+            update_fields=[
+                "status",
+                "failure_code",
+                "failure_summary",
+                "completed_at",
+            ]
+        )
+        records = _validate_records(manifest, records_bytes)
+        _event(run, "validation", "completed", details={"song_count": len(records)})
+        run.status = ImportStatus.STAGING
+        run.save(update_fields=["status"])
+        _event(run, "staging", "started")
+        _stage_and_promote(run, records)
+    except ImportRejected as exc:
+        run.status = ImportStatus.FAILED
+        run.failure_code = exc.code
+        run.failure_summary = exc.summary
+        run.completed_at = timezone.now()
+        run.save(
+            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
+        )
+        _event(run, "import", "failed", details={"code": exc.code})
+        _try_write_report(run)
+        if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
+            from apps.catalog.operations import notify_scheduled_import_failure
+
+            notify_scheduled_import_failure(run)
+        raise
+    except Exception:
+        run.status = ImportStatus.FAILED
+        run.failure_code = "staging_failed"
+        run.failure_summary = "The candidate snapshot could not be staged or promoted."
+        run.completed_at = timezone.now()
+        run.save(
+            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
+        )
+        _event(run, "import", "failed", details={"code": run.failure_code})
+        _try_write_report(run)
+        if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
+            from apps.catalog.operations import notify_scheduled_import_failure
+
+            notify_scheduled_import_failure(run)
+        raise
+
+
+def import_package(
+    package: bytes,
+    *,
+    exporter_events: bytes = b"",
+    trigger: str = ImportTrigger.MANUAL,
+) -> ImportResult:
     """Validate, privately retain, stage, and atomically promote one package."""
 
     manifest, records_bytes = _read_archive(package)
     run_id = UUID(manifest["run_id"])
+    if trigger not in ImportTrigger.values:
+        raise ImportRejected("invalid_import_trigger", "Import trigger is invalid.")
+    events = _read_exporter_events(exporter_events, run_id=run_id)
     package_sha = _sha256(package)
     existing = CatalogImportRun.objects.filter(pk=run_id).first()
     if existing:
@@ -326,6 +491,11 @@ def import_package(package: bytes) -> ImportResult:
             raise ImportRejected(
                 "run_id_conflict", "Run ID already belongs to another package."
             )
+        _store_exporter_events(existing, events)
+        if existing.status == ImportStatus.FAILED and trigger == ImportTrigger.SCHEDULED:
+            _event(existing, "retry", "requested")
+            _process_run(existing, manifest, records_bytes)
+            _try_write_report(existing)
         return ImportResult(existing, created=False)
 
     previous = CatalogImportRun.objects.filter(status=ImportStatus.COMPLETED).first()
@@ -343,9 +513,11 @@ def import_package(package: bytes) -> ImportResult:
         warning_count=manifest["counts"]["warnings"],
         warnings=manifest["warnings"],
         previous_import=previous,
+        trigger=trigger,
     )
     run.package_file.save(f"{run_id}.zip", ContentFile(package), save=False)
     run.save()
+    _store_exporter_events(run, events)
     CatalogImportEvent.objects.create(
         import_run=run,
         source=CatalogImportEvent.Source.EXPORTER,
@@ -355,38 +527,41 @@ def import_package(package: bytes) -> ImportResult:
         details={"exporter_version": run.exporter_version},
     )
     _event(run, "package_received", "completed")
-    try:
-        run.status = ImportStatus.VALIDATING
-        run.save(update_fields=["status"])
-        records = _validate_records(manifest, records_bytes)
-        _event(run, "validation", "completed", details={"song_count": len(records)})
-        run.status = ImportStatus.STAGING
-        run.save(update_fields=["status"])
-        _stage_and_promote(run, records)
-    except ImportRejected as exc:
-        run.status = ImportStatus.FAILED
-        run.failure_code = exc.code
-        run.failure_summary = exc.summary
-        run.completed_at = timezone.now()
-        run.save(
-            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
-        )
-        _event(run, "import", "failed", details={"code": exc.code})
-        _try_write_report(run)
-        raise
-    except Exception:
-        run.status = ImportStatus.FAILED
-        run.failure_code = "staging_failed"
-        run.failure_summary = "The candidate snapshot could not be staged or promoted."
-        run.completed_at = timezone.now()
-        run.save(
-            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
-        )
-        _event(run, "import", "failed", details={"code": run.failure_code})
-        _try_write_report(run)
-        raise
+    _process_run(run, manifest, records_bytes)
     _try_write_report(run)
     return ImportResult(run, created=True)
+
+
+def recover_import_run(run: CatalogImportRun, *, user) -> CatalogImportRun:
+    """Reprocess one privately retained failed package under its original identity."""
+
+    if not user or not user.is_superuser:
+        raise PermissionError("Only Superusers may recover a Catalog Import Run.")
+    run = CatalogImportRun.objects.get(pk=run.pk)
+    if run.status != ImportStatus.FAILED:
+        raise ValueError("Only failed Catalog Import Runs can be recovered.")
+    with run.package_file.open("rb") as package_file:
+        package = package_file.read()
+    if _sha256(package) != run.package_sha256:
+        raise ImportRejected(
+            "stored_package_integrity_failed",
+            "The retained package no longer matches its recorded checksum.",
+        )
+    manifest, records_bytes = _read_archive(package)
+    if UUID(manifest["run_id"]) != run.pk:
+        raise ImportRejected(
+            "stored_package_identity_failed",
+            "The retained package no longer matches its Catalog Import Run.",
+        )
+    _event(run, "recovery", "requested", details={"user_id": user.pk})
+    _process_run(
+        run,
+        manifest,
+        records_bytes,
+        notify_scheduled_failure=False,
+    )
+    _try_write_report(run)
+    return run
 
 
 @transaction.atomic
