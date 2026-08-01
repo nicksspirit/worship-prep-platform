@@ -1,5 +1,5 @@
 import React from "react";
-import { Context, CSRFToken } from "@reactivated";
+import { Context, CSRFToken, reverse } from "@reactivated";
 
 interface Props {
   title: string;
@@ -68,11 +68,11 @@ export const Layout = (props: Props) => {
       <body>
         {/* In production, content is visible immediately (no opacity hiding) */}
         <div id="app-content" className={isDev ? "" : "loaded"}>
-          <header className="sticky top-0 z-50 flex h-20 items-center justify-between border-b border-chapel-neutral-300 bg-chapel-neutral-50 px-8 sm:px-12">
+          <header className="sticky top-0 z-50 flex h-20 items-center justify-between border-b border-chapel-neutral-300 bg-chapel-neutral-50/95 px-5 backdrop-blur-md sm:px-12">
             <div className="flex w-1/3 items-center">
-              <span className="text-sm font-bold uppercase tracking-[0.15em] text-chapel-neutral-900">
+              <a href={reverse("catalog:search")} className="text-xs font-bold uppercase tracking-[0.15em] text-chapel-neutral-900 transition-colors hover:text-chapel-primary-500 sm:text-sm">
                 Chapel of Mercy
-              </span>
+              </a>
             </div>
 
             <div className="relative flex w-1/3 justify-center">
@@ -113,7 +113,14 @@ export const Layout = (props: Props) => {
                     </li>
                   </ul>
                 </div>
-              ) : null}
+              ) : (
+                <a
+                  href={reverse("account_login")}
+                  className="border-b border-chapel-neutral-400 pb-1 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-chapel-neutral-700 transition-colors hover:border-chapel-primary-500 hover:text-chapel-primary-500 sm:text-xs"
+                >
+                  Staff sign in
+                </a>
+              )}
             </div>
           </header>
 

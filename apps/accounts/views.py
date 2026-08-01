@@ -12,7 +12,7 @@ from .templates import RenderableTemplate, RequestInvitationPage, SignInPage
 
 class HomePageView(View):
     def get(self, request, *args, **kwargs) -> HttpResponse:
-        return redirect("account_login")
+        return redirect("catalog:search")
 
 
 class SignInView(LoginView):
