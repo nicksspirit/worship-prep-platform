@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worship-prep-platform.invalid/contracts/catalog-import/v1/song.schema.json",
+  "title": "Catalog Import Package v1 song record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version", "source", "metadata", "raw_lyrics", "cleaned_lyrics",
+    "sections", "semantic_fingerprint"
+  ],
+  "properties": {
+    "contract_version": {"const": "catalog-import/v1"},
+    "source": {"$ref": "#/$defs/source"},
+    "metadata": {"$ref": "#/$defs/metadata"},
+    "raw_lyrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "content"],
+      "properties": {
+        "format": {"const": "rtf"},
+        "content": {"type": "string", "minLength": 1}
+      }
+    },
+    "cleaned_lyrics": {"type": "string"},
+    "sections": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/section"}
+    },
+    "semantic_fingerprint": {"$ref": "#/$defs/fingerprint"}
+  },
+  "$defs": {
+    "nullable_string": {"type": ["string", "null"]},
+    "checksum": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "source_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["null", "integer", "real", "text", "blob"]},
+        "value": {}
+      },
+      "oneOf": [
+        {"properties": {"type": {"const": "null"}}, "not": {"required": ["value"]}},
+        {"properties": {"type": {"const": "integer"}, "value": {"type": "integer"}}, "required": ["value"]},
+        {"properties": {"type": {"const": "real"}, "value": {"type": "number"}}, "required": ["value"]},
+        {"properties": {"type": {"const": "text"}, "value": {"type": "string"}}, "required": ["value"]},
+        {"properties": {"type": {"const": "blob"}, "value": {"type": "string", "contentEncoding": "base64"}}, "required": ["value"]}
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system", "song_rowid", "song_item_uid", "song_uid", "song_revision_uid",
+        "revision", "layout_revision", "provider_id", "vendor_id", "presentation_id",
+        "slide_uids", "slide_layout_revisions", "slide_revisions"
+      ],
+      "properties": {
+        "system": {"const": "easyworship"},
+        "song_rowid": {"type": "integer"},
+        "song_item_uid": {"type": "string", "minLength": 1},
+        "song_uid": {"type": "string", "minLength": 1},
+        "song_revision_uid": {"$ref": "#/$defs/nullable_string"},
+        "revision": {"$ref": "#/$defs/source_value"},
+        "layout_revision": {"$ref": "#/$defs/source_value"},
+        "provider_id": {"$ref": "#/$defs/source_value"},
+        "vendor_id": {"$ref": "#/$defs/source_value"},
+        "presentation_id": {"$ref": "#/$defs/source_value"},
+        "slide_uids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "slide_layout_revisions": {"$ref": "#/$defs/source_value"},
+        "slide_revisions": {"$ref": "#/$defs/source_value"}
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title", "author", "copyright", "administrator", "description", "tags",
+        "reference_number"
+      ],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "author": {"$ref": "#/$defs/nullable_string"},
+        "copyright": {"$ref": "#/$defs/nullable_string"},
+        "administrator": {"$ref": "#/$defs/nullable_string"},
+        "description": {"$ref": "#/$defs/nullable_string"},
+        "tags": {"$ref": "#/$defs/nullable_string"},
+        "reference_number": {"$ref": "#/$defs/nullable_string"}
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "label", "slides"],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1},
+        "label": {"type": "string"},
+        "slides": {"type": "array", "items": {"$ref": "#/$defs/slide"}}
+      }
+    },
+    "slide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "source_slide_uid", "lines"],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1},
+        "source_slide_uid": {"$ref": "#/$defs/nullable_string"},
+        "lines": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "components", "value"],
+      "properties": {
+        "version": {"const": "song-semantic/v1"},
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["metadata", "lyrics", "structure", "presentation"],
+          "properties": {
+            "metadata": {"$ref": "#/$defs/checksum"},
+            "lyrics": {"$ref": "#/$defs/checksum"},
+            "structure": {"$ref": "#/$defs/checksum"},
+            "presentation": {"$ref": "#/$defs/checksum"}
+          }
+        },
+        "value": {"$ref": "#/$defs/checksum"}
+      }
+    }
+  }
+}

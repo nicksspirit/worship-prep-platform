@@ -1,0 +1,1 @@
+"""Integration Client credential module."""

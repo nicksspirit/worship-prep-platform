@@ -67,7 +67,7 @@ export const Template = (props: SignInPageProps) => {
     const nonFieldErrors = props.login_form.errors?.__all__ ?? [];
 
     return (
-        <Layout title={props.title}>
+        <Layout title={props.title} signedOutHeaderLink="song-search">
             <div className="flex min-h-[calc(100vh-5rem)] w-full flex-col lg:flex-row bg-chapel-neutral-50 text-chapel-neutral-950 overflow-hidden">
                 
                 {/* Left Side: Editorial Typography & Imagery */}

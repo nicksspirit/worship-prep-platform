@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worship-prep-platform.invalid/contracts/catalog-import/v1/manifest.schema.json",
+  "title": "Catalog Import Package v1 manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version", "run_id", "exporter_instance_id", "exporter_version",
+    "parser_version", "created_at", "source", "records", "counts", "warnings"
+  ],
+  "properties": {
+    "contract_version": {"const": "catalog-import/v1"},
+    "run_id": {"$ref": "#/$defs/uuid"},
+    "exporter_instance_id": {"$ref": "#/$defs/uuid"},
+    "exporter_version": {"type": "string", "minLength": 1},
+    "parser_version": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "fingerprint", "files", "diagnostics"],
+      "properties": {
+        "system": {"const": "easyworship"},
+        "fingerprint": {"$ref": "#/$defs/checksum"},
+        "files": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/source_file"}
+        },
+        "diagnostics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["song_keys_present"],
+          "properties": {
+            "song_keys_present": {"type": "boolean"},
+            "song_keys_rows": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "records": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "media_type", "sha256", "bytes", "fingerprint"],
+      "properties": {
+        "path": {"const": "songs.ndjson"},
+        "media_type": {"const": "application/x-ndjson"},
+        "sha256": {"$ref": "#/$defs/checksum"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "fingerprint": {"$ref": "#/$defs/checksum"}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["songs", "warnings"],
+      "properties": {
+        "songs": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0}
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1},
+          "song_uid": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "required", "present"],
+      "properties": {
+        "name": {"enum": ["Songs.db", "SongWords.db", "SongKeys.db"]},
+        "required": {"type": "boolean"},
+        "present": {"type": "boolean"},
+        "size": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/checksum"}
+      }
+    }
+  }
+}

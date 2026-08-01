@@ -1,0 +1,1 @@
+"""Song Catalog product module."""

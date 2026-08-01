@@ -68,4 +68,4 @@ gcloud artifacts repositories add-iam-policy-binding "${AR_REPO}" \
 
 echo "Bootstrap complete."
 echo "Runtime service account: ${RUNTIME_SA_EMAIL}"
-echo "Create secrets in Secret Manager (DATABASE_URL, DIRECT_URL, SECRET_KEY, OAuth, S3 keys, N8N key) and wire them in cloudbuild / deploy."
+echo "Create secrets in Secret Manager (DATABASE_URL, DIRECT_URL, SECRET_KEY, OAuth, S3 keys) and wire them in cloudbuild / deploy."

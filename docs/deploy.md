@@ -128,10 +128,16 @@ The important values are:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `SUPABASE_STORAGE_BUCKET`
+- `SUPABASE_CATALOG_IMPORT_BUCKET`
 - `SUPABASE_S3_ENDPOINT`
 - `SUPABASE_S3_ACCESS_KEY`
 - `SUPABASE_S3_SECRET_KEY`
 - `SUPABASE_S3_REGION`
+- `EMAIL_HOST`
+- `EMAIL_PORT`
+- `EMAIL_HOST_USER`
+- `EMAIL_HOST_PASSWORD`
+- `DEFAULT_FROM_EMAIL`
 - `SITE_ID`
 
 The expected meaning of the database URLs is:
@@ -142,10 +148,15 @@ The expected meaning of the database URLs is:
 The expected meaning of the storage variables is:
 
 - `SUPABASE_STORAGE_BUCKET`: the media bucket name, usually `wpp-media`
+- `SUPABASE_CATALOG_IMPORT_BUCKET`: the private package/report bucket, usually `wpp-catalog-imports`
 - `SUPABASE_S3_ENDPOINT`: your Supabase S3 endpoint, in the form `https://<PROJECT_REF>.supabase.co/storage/v1/s3`
 - `SUPABASE_S3_ACCESS_KEY`: S3 access key
 - `SUPABASE_S3_SECRET_KEY`: S3 secret key
 - `SUPABASE_S3_REGION`: usually `us-east-1`
+
+The email values configure SMTP for invitation messages and scheduled Catalog Import
+failure alerts. `EMAIL_HOST_PASSWORD` is stored in Secret Manager; the remaining SMTP
+settings are passed as Cloud Run environment values.
 
 **Important:** `deploy/deploy.sh` will hard-fail if `SUPABASE_STORAGE_BUCKET` or `SUPABASE_S3_ENDPOINT` are empty. Make sure both are set in `.env` or exported before running the script. If your `.env` only has `SUPABASE_URL`, you still need to add these two variables separately.
 
@@ -216,6 +227,7 @@ Cloud Build and Cloud Run expect the following secrets in Google Secret Manager:
 - `GOOGLE_CLIENT_SECRET`
 - `SUPABASE_S3_ACCESS_KEY`
 - `SUPABASE_S3_SECRET_KEY`
+- `EMAIL_HOST_PASSWORD`
 
 The safest workflow is:
 
@@ -241,6 +253,7 @@ printf '%s' "$GOOGLE_CLIENT_ID" | gcloud secrets create GOOGLE_CLIENT_ID --data-
 printf '%s' "$GOOGLE_CLIENT_SECRET" | gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=-
 printf '%s' "$SUPABASE_S3_ACCESS_KEY" | gcloud secrets create SUPABASE_S3_ACCESS_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_SECRET_KEY" | gcloud secrets create SUPABASE_S3_SECRET_KEY --data-file=-
+printf '%s' "$EMAIL_HOST_PASSWORD" | gcloud secrets create EMAIL_HOST_PASSWORD --data-file=-
 ```
 
 If a secret already exists, add a new version instead:
@@ -253,27 +266,8 @@ printf '%s' "$GOOGLE_CLIENT_ID" | gcloud secrets versions add GOOGLE_CLIENT_ID -
 printf '%s' "$GOOGLE_CLIENT_SECRET" | gcloud secrets versions add GOOGLE_CLIENT_SECRET --data-file=-
 printf '%s' "$SUPABASE_S3_ACCESS_KEY" | gcloud secrets versions add SUPABASE_S3_ACCESS_KEY --data-file=-
 printf '%s' "$SUPABASE_S3_SECRET_KEY" | gcloud secrets versions add SUPABASE_S3_SECRET_KEY --data-file=-
+printf '%s' "$EMAIL_HOST_PASSWORD" | gcloud secrets versions add EMAIL_HOST_PASSWORD --data-file=-
 ```
-
-## Step 4b: Issue and Store The N8N API Key
-
-The Bolt API no longer reads a shared API key from Django environment variables.
-Instead, create a scoped machine key from Django admin after deployment:
-
-1. Sign in to Django admin as an administrator.
-2. Create a new API key for N8N with only the scopes it needs:
-   - `schedules.read`
-   - `schedules.write`
-   - `songs.write`
-3. Copy the plaintext key immediately. It is only shown once.
-4. Store that key in your N8N secret source, preferably as `WPP_API_KEY`.
-5. Configure the N8N HTTP nodes to send it in the `X-API-Key` header.
-
-When rotating the key later:
-
-1. Rotate it from Django admin.
-2. Update the N8N secret value.
-3. Re-run a schedule lookup, schedule intake, and song intake smoke test.
 
 To confirm the secrets exist:
 
@@ -331,12 +325,17 @@ export GCP_REGION=us-west1
 export RUNTIME_SA=wpp-runtime@worship-prep-portal.iam.gserviceaccount.com
 ```
 
-If your `.env` already contains `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ENDPOINT`, and `SUPABASE_S3_REGION`, no additional exports are needed — the `source .env` step above makes them available. Otherwise, export them explicitly:
+If your `.env` already contains the Supabase storage and SMTP values, no additional
+exports are needed—the `source .env` step above makes them available. Otherwise, export
+them explicitly:
 
 ```bash
 export SUPABASE_STORAGE_BUCKET=wpp-media
 export SUPABASE_S3_ENDPOINT="https://<PROJECT_REF>.supabase.co/storage/v1/s3"
 export SUPABASE_S3_REGION=us-east-1
+export EMAIL_HOST=smtp.example.com
+export EMAIL_HOST_USER=worship-prep@example.com
+export DEFAULT_FROM_EMAIL='Worship Prep <noreply@example.com>'
 ```
 
 The remaining variables (`AR_REPOSITORY`, `IMAGE_NAME`, `DJANGO_SERVICE`, `BOLT_SERVICE`, `MIGRATE_JOB`) default to the project's standard naming and only need to be exported if you've changed them.

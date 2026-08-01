@@ -37,6 +37,8 @@
         poe test
         ```
         The Docker `test` image runs `pytest` with `DJANGO_ENV=test`; mount the host Docker socket (e.g. `-v /var/run/docker.sock:/var/run/docker.sock`) if you execute that image locally, otherwise Testcontainers cannot start Postgres inside the container.
+        GitHub Actions supplies PostgreSQL as a native service container and sets
+        `WPP_TEST_POSTGRES_*`; local runs continue to use Testcontainers.
 
 ## Package Management
 - All dependencies are managed in **pyproject.toml**.
@@ -59,6 +61,20 @@
 ## Security & Dependencies
 - Never hard-code secrets.
 - Review new packages before adding, and document significant changes in the PR.
+
+## Transport Boundaries
+- Serve product and machine-facing JSON APIs with Django Bolt. Register them in an
+  app's `api.py`; do not add those routes to Django's URLconf or return them from a
+  Django/Reactivated view.
+- Define every Django Bolt JSON request and response contract as a msgspec-backed
+  Django Bolt `Serializer` in the owning app's `schema.py`; handlers must construct
+  those schema types rather than ad hoc response dictionaries.
+- Serve rendered UI with Django views and Reactivated templates. Keep domain and
+  application services independent of both transports so an API handler and a view can
+  reuse behavior without calling one another.
+- Operational/framework routes such as health checks, readiness checks, Django admin,
+  and authentication callbacks may remain on Django's standard HTTP stack.
+- See `docs/adr/0004-separate-json-and-rendered-transports.md`.
 
 ## Agent skills
 

@@ -1,6 +1,8 @@
 from typing import TypedDict
+
 from django.http import HttpRequest
-from apps.users.models import User
+
+from apps.accounts.models import User
 
 
 class ReactivatedUserData(TypedDict):
@@ -17,7 +19,7 @@ class AuthContext(TypedDict):
 
 def auth(request: HttpRequest) -> AuthContext:
     if hasattr(request, "user") and request.user.is_authenticated:
-        # Assuming request.user is an instance of apps.users.models.User
+        # The Reactivated context exposes only presentation-safe account fields.
         user: User = request.user  # type: ignore
         return {
             "user": {

@@ -1,0 +1,2 @@
+contracts/catalog-import/**/*.json text eol=lf
+contracts/catalog-import/**/*.ndjson text eol=lf

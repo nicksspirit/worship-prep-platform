@@ -18,15 +18,16 @@ INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.postgres",
     "django.contrib.sessions",
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # 1st party apps
     "apps.common",
-    "apps.users",
-    "apps.schedules",
-    "apps.songs",
+    "apps.accounts",
+    "apps.api_keys",
+    "apps.catalog",
 ]
 
 MIDDLEWARE = [

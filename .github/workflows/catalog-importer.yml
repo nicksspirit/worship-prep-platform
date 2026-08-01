@@ -1,0 +1,152 @@
+name: Catalog Importer
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/catalog-importer.yml"
+      - "apps/api_keys/**"
+      - "apps/catalog/**"
+      - "backend/**"
+      - "contracts/catalog-import/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/catalog-importer.yml"
+      - "apps/api_keys/**"
+      - "apps/catalog/**"
+      - "backend/**"
+      - "contracts/catalog-import/**"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  clean-schema-bootstrap:
+    name: Greenfield PostgreSQL bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: worship_prep_test
+          POSTGRES_PASSWORD: worship_prep_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U worship_prep_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_ENV: test
+      DATABASE_URL: postgresql://worship_prep_test:worship_prep_test@127.0.0.1:5432/postgres
+      WPP_TEST_POSTGRES_HOST: 127.0.0.1
+      WPP_TEST_POSTGRES_PORT: 5432
+      WPP_TEST_POSTGRES_DATABASE: postgres
+      WPP_TEST_POSTGRES_USER: worship_prep_test
+      WPP_TEST_POSTGRES_PASSWORD: worship_prep_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --group test --frozen
+      - name: Recreate schema from migrations
+        run: uv run python manage.py migrate --noinput
+      - name: Reject unrecorded model changes
+        run: uv run python manage.py makemigrations --check --dry-run
+
+  postgres-tests:
+    name: Security, rights, import, UI, OpenAPI and performance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: worship_prep_test
+          POSTGRES_PASSWORD: worship_prep_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U worship_prep_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Configure Django before pytest-django snapshots the database settings.
+      DATABASE_URL: postgresql://worship_prep_test:worship_prep_test@127.0.0.1:5432/postgres
+      WPP_TEST_POSTGRES_HOST: 127.0.0.1
+      WPP_TEST_POSTGRES_PORT: 5432
+      WPP_TEST_POSTGRES_DATABASE: postgres
+      WPP_TEST_POSTGRES_USER: worship_prep_test
+      WPP_TEST_POSTGRES_PASSWORD: worship_prep_test
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@v4
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: ⚡ Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: 📦 Install dependencies
+        run: uv sync --group test --frozen
+      - name: ⚛️ Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+      - name: ⚛️ Generate Reactivated schema
+        run: >-
+          uv run python -c
+          "from pathlib import Path;
+          import django;
+          Path('node_modules/_reactivated').mkdir(parents=True, exist_ok=True);
+          django.setup();
+          from reactivated.apps import generate_schema;
+          generate_schema(skip_cache=True)"
+        env:
+          DJANGO_ENV: test
+          DJANGO_SETTINGS_MODULE: backend.settings
+      - name: 🏗️ Build Reactivated assets
+        run: npm exec build.client
+      - name: 🗂️ Collect static assets
+        run: uv run python manage.py collectstatic --noinput --verbosity 0
+        env:
+          DJANGO_ENV: test
+      - name: 🧪 Run WPP catalog tests
+        run: uv run pytest
+        env:
+          DJANGO_ENV: test
+          PYTHONUNBUFFERED: "1"
+          PYTHONWARNINGS: "error:No directory at:UserWarning"
+
+  required-release-gates:
+    name: Required Song Catalog release gates
+    if: always()
+    needs: [clean-schema-bootstrap, postgres-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every automated gate
+        env:
+          BOOTSTRAP_RESULT: ${{ needs.clean-schema-bootstrap.result }}
+          ACCEPTANCE_RESULT: ${{ needs.postgres-tests.result }}
+        run: |
+          test "$BOOTSTRAP_RESULT" = "success"
+          test "$ACCEPTANCE_RESULT" = "success"
