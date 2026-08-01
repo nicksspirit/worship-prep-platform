@@ -54,20 +54,29 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --group test --frozen
-      - name: Verify PostgreSQL service
+      - run: npm ci --legacy-peer-deps
+      - name: Build Reactivated renderer
         run: >-
           uv run python -c
-          "import psycopg;
-          connection = psycopg.connect(
-          host='127.0.0.1', port=5432, dbname='postgres',
-          user='worship_prep_test', password='worship_prep_test');
-          print(connection.execute('SELECT version()').fetchone()[0]);
-          connection.close()"
-      - run: uv run pytest -vv --setup-show -o faulthandler_timeout=60
+          "from pathlib import Path;
+          import django;
+          Path('node_modules/_reactivated').mkdir(parents=True, exist_ok=True);
+          django.setup();
+          from reactivated.apps import generate_schema;
+          generate_schema(skip_cache=True)"
+        env:
+          DJANGO_ENV: test
+          DJANGO_SETTINGS_MODULE: backend.settings
+      - run: npm exec build.client
+      - run: uv run pytest
         env:
           DJANGO_ENV: test
           PYTHONUNBUFFERED: "1"
