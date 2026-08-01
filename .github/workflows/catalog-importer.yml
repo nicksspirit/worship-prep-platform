@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   postgres-tests:
-    name: PostgreSQL tests
+    name: 🎶 WPP Catalog Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -89,7 +89,7 @@ jobs:
         run: uv run python manage.py collectstatic --noinput --verbosity 0
         env:
           DJANGO_ENV: test
-      - name: 🧪 Run PostgreSQL tests
+      - name: 🧪 Run WPP catalog tests
         run: uv run pytest
         env:
           DJANGO_ENV: test
