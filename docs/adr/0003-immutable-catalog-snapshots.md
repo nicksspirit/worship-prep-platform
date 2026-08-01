@@ -41,6 +41,10 @@ time. Imported rights always start as `unknown`.
 Packages and reports use a dedicated private storage alias and production bucket. They
 are never exposed through public media storage or a public URL.
 
+The machine-facing JSON import endpoint is registered through Django Bolt and served by
+the dedicated Bolt service. Django/Reactivated views remain the transport for rendered
+UI; the importer service itself is independent of either transport.
+
 ## Alternatives Considered
 
 ### Update one mutable catalog in place

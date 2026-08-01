@@ -9,14 +9,16 @@ from pathlib import Path
 from django.apps import apps
 from django.conf import settings
 from django.contrib.staticfiles import finders
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase
 from django.urls import reverse
+from django_bolt import UploadFile
 
 from apps.api_keys.models import APIKeyScope
 from apps.api_keys.services import issue_api_key
+from apps.catalog.api import api as catalog_api
+from apps.catalog.api import catalog_import
 from apps.catalog.importer import rollback_to_snapshot
 from apps.catalog.models import (
     CatalogEntry,
@@ -90,19 +92,28 @@ class CatalogImporterTests(TestCase):
         return buffer.getvalue(), manifest["run_id"]
 
     def post_package(self, package, *, key=None):
-        return self.client.post(
-            reverse("catalog:import"),
-            {"package": SimpleUploadedFile("catalog.zip", package, "application/zip")},
-            HTTP_AUTHORIZATION=f"Bearer {key or self.plaintext_key}",
+        upload = UploadFile(
+            filename="catalog.zip",
+            content_type="application/zip",
+            size=len(package),
+            file_data=package,
         )
+        return catalog_import(upload, f"Bearer {key or self.plaintext_key}")
+
+    def test_json_import_is_registered_only_with_bolt(self):
+        routes = {
+            (method, path)
+            for method, path, _handler_id, _handler in catalog_api._routes
+        }
+        self.assertIn(("POST", "/api/v1/catalog/imports"), routes)
+        self.assertEqual(self.client.post("/api/v1/catalog/imports").status_code, 404)
 
     def test_requires_import_scoped_bearer_key(self):
         package, _run_id = self.build_package()
-        response = self.client.post(
-            reverse("catalog:import"),
-            {"package": SimpleUploadedFile("catalog.zip", package)},
+        upload = UploadFile(
+            filename="catalog.zip", size=len(package), file_data=package
         )
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(catalog_import(upload, "").status_code, 401)
 
         _search_key, plaintext = issue_api_key(
             name="Search", scopes=[APIKeyScope.CATALOG_SEARCH]
