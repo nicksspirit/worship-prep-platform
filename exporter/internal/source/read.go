@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/nicksspirit/worship-prep-platform/exporter/internal/contract"
@@ -93,13 +94,24 @@ func Read(ctx context.Context, acquisition *Acquisition) (ReadResult, error) {
 }
 
 func openReadOnly(path string) (*sql.DB, error) {
-	location := &url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
-	database, err := sql.Open("sqlite", location.String()+"?mode=ro&immutable=1")
+	database, err := sql.Open("sqlite", databaseURL(path, runtime.GOOS))
 	if err != nil {
 		return nil, err
 	}
 	database.SetMaxOpenConns(1)
 	return database, nil
+}
+
+func databaseURL(path string, operatingSystem string) string {
+	normalized := filepath.ToSlash(path)
+	if operatingSystem == "windows" {
+		normalized = strings.ReplaceAll(normalized, `\`, "/")
+		if len(normalized) >= 2 && normalized[1] == ':' {
+			normalized = "/" + normalized
+		}
+	}
+	location := &url.URL{Scheme: "file", Path: normalized}
+	return location.String() + "?mode=ro&immutable=1"
 }
 
 func verifyDatabase(ctx context.Context, database *sql.DB, name string, checkIndexes bool) error {
