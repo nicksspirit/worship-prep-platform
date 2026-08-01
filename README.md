@@ -43,6 +43,17 @@ The archived schedule, content-submission, and inbound-song product is available
 tag `archive/pre-song-catalog-pivot`; it is intentionally absent from the active
 runtime and migrations.
 
+## HTTP Architecture
+
+- Django Bolt serves product and machine-facing JSON APIs from each app's `api.py`.
+- Django views and Reactivated templates serve rendered product UI.
+- Transport-neutral services hold reusable domain and application behavior.
+- Django's standard stack continues to own operational and framework routes such as
+  health/readiness, admin, invitations, and authentication callbacks.
+
+See [ADR-0004](docs/adr/0004-separate-json-and-rendered-transports.md) for the boundary,
+rationale, and review rule.
+
 ## Commands
 
 Project commands are Poe aliases over Django management commands:

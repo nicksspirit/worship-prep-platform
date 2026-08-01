@@ -43,7 +43,8 @@ are never exposed through public media storage or a public URL.
 
 The machine-facing JSON import endpoint is registered through Django Bolt and served by
 the dedicated Bolt service. Django/Reactivated views remain the transport for rendered
-UI; the importer service itself is independent of either transport.
+UI; the importer service itself is independent of either transport. This is an
+application of the system-wide boundary in ADR-0004.
 
 ## Alternatives Considered
 

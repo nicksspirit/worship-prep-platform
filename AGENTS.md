@@ -60,6 +60,17 @@
 - Never hard-code secrets.
 - Review new packages before adding, and document significant changes in the PR.
 
+## Transport Boundaries
+- Serve product and machine-facing JSON APIs with Django Bolt. Register them in an
+  app's `api.py`; do not add those routes to Django's URLconf or return them from a
+  Django/Reactivated view.
+- Serve rendered UI with Django views and Reactivated templates. Keep domain and
+  application services independent of both transports so an API handler and a view can
+  reuse behavior without calling one another.
+- Operational/framework routes such as health checks, readiness checks, Django admin,
+  and authentication callbacks may remain on Django's standard HTTP stack.
+- See `docs/adr/0004-separate-json-and-rendered-transports.md`.
+
 ## Agent skills
 
 ### Issue tracker
