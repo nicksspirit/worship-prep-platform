@@ -40,18 +40,38 @@ type RecentSearch = {
 
 const RECENT_SEARCHES_KEY = "wpp.catalog.recent-searches.v1";
 
+const normalizeRecentQuery = (query: string) => (
+    query.trim().replace(/\s+/gu, " ").normalize("NFKC")
+);
+
+const getRecentSearchKey = (search: RecentSearch) => (
+    `${search.mode}:${search.query.toLowerCase()}`
+);
+
 const validateRecentSearches = (value: unknown): RecentSearch[] => {
     if (!Array.isArray(value)) return [];
-    return value.filter((item): item is RecentSearch => (
-        typeof item === "object"
-        && item !== null
-        && "query" in item
-        && typeof item.query === "string"
-        && item.query.length > 0
-        && item.query.length <= 128
-        && "mode" in item
-        && (item.mode === "title" || item.mode === "lyrics")
-    )).slice(0, 5);
+    const searches: RecentSearch[] = [];
+    const seen = new Set<string>();
+    for (const item of value) {
+        if (
+            typeof item !== "object"
+            || item === null
+            || !("query" in item)
+            || typeof item.query !== "string"
+            || !("mode" in item)
+            || (item.mode !== "title" && item.mode !== "lyrics")
+        ) continue;
+        const search: RecentSearch = {
+            query: normalizeRecentQuery(item.query),
+            mode: item.mode,
+        };
+        const key = getRecentSearchKey(search);
+        if (search.query.length === 0 || search.query.length > 128 || seen.has(key)) continue;
+        searches.push(search);
+        seen.add(key);
+        if (searches.length === 5) break;
+    }
+    return searches;
 };
 
 const SearchGlyph = () => (
@@ -144,32 +164,55 @@ const SearchHints = () => (
     </div>
 );
 
-const RecentSearches = ({query, mode}: {query: string; mode: string}) => {
+const RecentSearches = ({query, mode, shouldRecord}: {query: string; mode: string; shouldRecord: boolean}) => {
     const [searches, setSearches] = React.useState<RecentSearch[]>([]);
 
     React.useEffect(() => {
+        let stored: RecentSearch[] = [];
         try {
-            const stored = validateRecentSearches(JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]"));
-            const normalizedQuery = query.trim();
-            const normalizedMode: RecentSearch["mode"] = mode === "lyrics" ? "lyrics" : "title";
-            const next: RecentSearch[] = normalizedQuery
-                ? [
-                    {query: normalizedQuery, mode: normalizedMode},
-                    ...stored.filter((item) => item.query !== normalizedQuery || item.mode !== normalizedMode),
-                ].slice(0, 5)
-                : stored;
-            localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
-            setSearches(next);
-        } catch {
-            setSearches([]);
+            stored = validateRecentSearches(JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]"));
+        } catch {}
+
+        const current: RecentSearch = {
+            query: normalizeRecentQuery(query),
+            mode: mode === "lyrics" ? "lyrics" : "title",
+        };
+        const canRecord = shouldRecord && current.query.length > 0 && current.query.length <= 128;
+        const currentKey = getRecentSearchKey(current);
+        const next = canRecord
+            ? [current, ...stored.filter((item) => getRecentSearchKey(item) !== currentKey)].slice(0, 5)
+            : stored;
+        setSearches(next);
+
+        if (canRecord) {
+            try {
+                localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+            } catch {}
         }
-    }, [query, mode]);
+    }, [query, mode, shouldRecord]);
+
+    const clearSearches = () => {
+        try {
+            localStorage.removeItem(RECENT_SEARCHES_KEY);
+        } catch {}
+        setSearches([]);
+    };
 
     if (searches.length === 0) return null;
 
     return (
         <div className="mt-10 border-t border-white/30 pt-6">
-            <h2 className="font-sans text-xs font-bold uppercase tracking-[0.14em] text-worship-accent-200">Recent searches</h2>
+            <div className="flex items-center justify-between gap-4">
+                <h2 className="font-sans text-xs font-bold uppercase tracking-[0.14em] text-worship-accent-200">Recent searches</h2>
+                <button
+                    type="button"
+                    onClick={clearSearches}
+                    className="border-b border-white/40 pb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white/70 transition-colors hover:border-worship-accent-200 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-worship-accent-200"
+                    aria-label="Clear recent searches from this browser"
+                >
+                    Clear
+                </button>
+            </div>
             <ul className="mt-3 divide-y divide-white/20">
                 {searches.map((search) => (
                     <li key={`${search.mode}:${search.query}`}>
@@ -199,7 +242,11 @@ export const Template = (props: CatalogSearchPageProps) => {
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
                             A catalogue of easy worship songs updated weekly.
                         </p>
-                        <RecentSearches query={props.query} mode={props.mode} />
+                        <RecentSearches
+                            query={props.query}
+                            mode={props.mode}
+                            shouldRecord={props.searched && props.error === null}
+                        />
                     </aside>
 
                     <section className="min-w-0 px-6 py-9 sm:px-8 lg:px-12 lg:py-14" aria-labelledby="catalog-results-heading">
