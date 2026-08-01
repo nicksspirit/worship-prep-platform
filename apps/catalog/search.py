@@ -58,6 +58,7 @@ class CatalogReadError(ValueError):
 class SearchPage:
     """One stable page of Song Catalog entries."""
 
+    snapshot: CatalogSnapshot | None
     entries: list[CatalogEntry]
     next_url: str | None
     has_more: bool
@@ -74,7 +75,13 @@ def build_search_url(
     return f"{SEARCH_PATH}?{urlencode(parameters)}"
 
 
-def _validate_request(query: str, mode: str, limit: int) -> tuple[str, str, int]:
+def _validate_request(
+    query: str,
+    mode: str,
+    limit: int,
+    *,
+    minimum_lyrics_query_length: int,
+) -> tuple[str, str, int]:
     normalized_query = str(query or "").strip()
     if len(normalized_query) > MAX_QUERY_LENGTH:
         raise CatalogReadError(
@@ -94,10 +101,11 @@ def _validate_request(query: str, mode: str, limit: int) -> tuple[str, str, int]
             f"Search limit must be between 1 and {MAX_PAGE_SIZE}.",
             400,
         )
-    if mode == "lyrics" and len(normalized_query) < 3:
+    if mode == "lyrics" and len(normalized_query) < minimum_lyrics_query_length:
         raise CatalogReadError(
             "lyrics_query_too_short",
-            "Lyrics search requires at least three non-whitespace characters.",
+            "Lyrics search requires at least "
+            f"{minimum_lyrics_query_length} non-whitespace characters.",
             400,
         )
     return normalized_query, mode, limit
@@ -245,10 +253,16 @@ def search_catalog(
     limit: int = 20,
     continuation: str | None = None,
     include_restricted_lyrics: bool = False,
+    minimum_lyrics_query_length: int = 3,
 ) -> SearchPage:
     """Search one pinned Song Catalog snapshot with stable keyset pagination."""
 
-    query, mode, limit = _validate_request(query, mode, limit)
+    query, mode, limit = _validate_request(
+        query,
+        mode,
+        limit,
+        minimum_lyrics_query_length=minimum_lyrics_query_length,
+    )
     include_restricted_lyrics = mode == "lyrics" and include_restricted_lyrics
     payload = _decode_cursor(continuation) if continuation else None
     if payload:
@@ -270,7 +284,12 @@ def search_catalog(
         strategy = "all" if not query else "fts"
 
     if snapshot is None:
-        return SearchPage(entries=[], next_url=None, has_more=False)
+        return SearchPage(
+            snapshot=None,
+            entries=[],
+            next_url=None,
+            has_more=False,
+        )
 
     entries = CatalogEntry.objects.filter(snapshot=snapshot)
     entries = _filter_search(
@@ -322,7 +341,12 @@ def search_catalog(
             limit=limit,
             cursor=token,
         )
-    return SearchPage(entries=page_entries, next_url=next_url, has_more=has_more)
+    return SearchPage(
+        snapshot=snapshot,
+        entries=page_entries,
+        next_url=next_url,
+        has_more=has_more,
+    )
 
 
 def get_active_entry(song_uid: str) -> CatalogEntry:
