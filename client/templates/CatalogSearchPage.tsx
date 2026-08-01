@@ -33,6 +33,27 @@ type CatalogSearchPageProps = {
     restart_url: string | null;
 };
 
+type RecentSearch = {
+    query: string;
+    mode: "title" | "lyrics";
+};
+
+const RECENT_SEARCHES_KEY = "wpp.catalog.recent-searches.v1";
+
+const validateRecentSearches = (value: unknown): RecentSearch[] => {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is RecentSearch => (
+        typeof item === "object"
+        && item !== null
+        && "query" in item
+        && typeof item.query === "string"
+        && item.query.length > 0
+        && item.query.length <= 128
+        && "mode" in item
+        && (item.mode === "title" || item.mode === "lyrics")
+    )).slice(0, 5);
+};
+
 const SearchGlyph = () => (
     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="11" cy="11" r="7" />
@@ -41,7 +62,7 @@ const SearchGlyph = () => (
 );
 
 const FreshnessNote = ({freshness}: {freshness: Freshness | null}) => (
-    <p className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] text-chapel-neutral-600">
+    <p className="flex items-center justify-end gap-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-chapel-neutral-600">
         <span className="h-2 w-2 rounded-full bg-chapel-primary-500" aria-hidden="true" />
         {freshness ? (
             <span>
@@ -54,11 +75,19 @@ const FreshnessNote = ({freshness}: {freshness: Freshness | null}) => (
 );
 
 const SearchForm = ({props}: {props: CatalogSearchPageProps}) => (
-    <form action={reverse("catalog:search")} method="get" role="search" className="mt-5">
-        <label htmlFor="catalog-query" className="text-xs font-bold uppercase tracking-[0.16em] text-chapel-neutral-600">
-            Search titles or lyrics
-        </label>
-        <div className="mt-2 flex items-end gap-3 border-b-2 border-chapel-neutral-950 focus-within:border-chapel-primary-500">
+    <form action={reverse("catalog:search")} method="get" role="search">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <label htmlFor="catalog-query" className="text-xs font-bold uppercase tracking-[0.16em] text-chapel-neutral-600">
+                    Search titles or lyrics
+                </label>
+                <p className="mt-2 font-serif text-base italic leading-6 text-chapel-neutral-600">
+                    Search by name when you know it; search by lyrics when only the words remain.
+                </p>
+            </div>
+            <FreshnessNote freshness={props.catalog_freshness} />
+        </div>
+        <div className="mt-3 flex items-end gap-3 border-b-2 border-chapel-neutral-950 focus-within:border-chapel-primary-500">
             <input
                 id="catalog-query"
                 type="search"
@@ -115,6 +144,49 @@ const SearchHints = () => (
     </div>
 );
 
+const RecentSearches = ({query, mode}: {query: string; mode: string}) => {
+    const [searches, setSearches] = React.useState<RecentSearch[]>([]);
+
+    React.useEffect(() => {
+        try {
+            const stored = validateRecentSearches(JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]"));
+            const normalizedQuery = query.trim();
+            const normalizedMode: RecentSearch["mode"] = mode === "lyrics" ? "lyrics" : "title";
+            const next: RecentSearch[] = normalizedQuery
+                ? [
+                    {query: normalizedQuery, mode: normalizedMode},
+                    ...stored.filter((item) => item.query !== normalizedQuery || item.mode !== normalizedMode),
+                ].slice(0, 5)
+                : stored;
+            localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+            setSearches(next);
+        } catch {
+            setSearches([]);
+        }
+    }, [query, mode]);
+
+    if (searches.length === 0) return null;
+
+    return (
+        <div className="mt-10 border-t border-white/30 pt-6">
+            <h2 className="font-sans text-xs font-bold uppercase tracking-[0.14em] text-worship-accent-200">Recent searches</h2>
+            <ul className="mt-3 divide-y divide-white/20">
+                {searches.map((search) => (
+                    <li key={`${search.mode}:${search.query}`}>
+                        <a
+                            href={`${reverse("catalog:search")}?q=${encodeURIComponent(search.query)}&mode=${search.mode}`}
+                            className="group flex items-center justify-between gap-3 py-3 text-sm text-white/85 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-worship-accent-200"
+                        >
+                            <span className="min-w-0 truncate">{search.query}</span>
+                            <span className="shrink-0 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white/55 group-hover:text-worship-accent-200">{search.mode}</span>
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+
 export const Template = (props: CatalogSearchPageProps) => {
     const resultLabel = props.results.length === 1 ? "1 song" : `${props.results.length} songs`;
 
@@ -123,26 +195,15 @@ export const Template = (props: CatalogSearchPageProps) => {
             <main className="min-h-[calc(100vh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
                 <div className="mx-auto grid max-w-7xl lg:grid-cols-[19rem_minmax(0,1fr)]">
                     <aside className="border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:min-h-[calc(100vh-5rem)] lg:border-b-0 lg:border-r lg:p-10">
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-worship-accent-200">Sanctuary Index</p>
-                        <h1 className="mt-6 max-w-xs text-5xl leading-[0.9] text-balance">Songs for gathering.</h1>
+                        <h1 className="max-w-xs text-5xl leading-[0.9] text-balance">Songs for worship.</h1>
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
-                            A clear, ordered index for the moment before rehearsal, service, or study.
+                            A catalogue of easy worship songs updated weekly.
                         </p>
-                        <div className="mt-8 border-t border-white/30 pt-5 lg:mt-12">
-                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-worship-accent-200">Public edition</p>
-                            <p className="mt-2 text-sm leading-6 text-white/75">Read-only songs prepared for the whole worship community.</p>
-                        </div>
-                        <div className="mt-10 hidden grid-cols-6 gap-x-3 gap-y-2 text-center text-[0.65rem] font-bold text-white/55 lg:grid" aria-hidden="true">
-                            {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => <span key={letter}>{letter}</span>)}
-                        </div>
+                        <RecentSearches query={props.query} mode={props.mode} />
                     </aside>
 
                     <section className="min-w-0 px-6 py-9 sm:px-8 lg:px-12 lg:py-14" aria-labelledby="catalog-results-heading">
                         <div className="border-b border-chapel-neutral-300 pb-9">
-                            <FreshnessNote freshness={props.catalog_freshness} />
-                            <p className="mt-5 max-w-2xl text-sm leading-6 text-chapel-neutral-600">
-                                Search by name when you know it. Search by lyrics when only the words remain.
-                            </p>
                             <SearchForm props={props} />
                         </div>
 
