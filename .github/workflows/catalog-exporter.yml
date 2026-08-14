@@ -79,7 +79,10 @@ jobs:
             '-At "03:00"',
             '-RestartCount 1',
             'New-TimeSpan -Minutes 30',
-            'DataProtectionScope]::CurrentUser'
+            'DataProtectionScope]::CurrentUser',
+            '$BinaryDirectory = Join-Path $LocalDirectory "bin"',
+            'WPP_CATALOG_EXPORTER_DATA_DIR',
+            'WPP_CATALOG_EXPORTER_API_KEY_FILE'
           )) {
             if (-not $installer.Contains($required)) {
               throw "Installer contract is missing: $required"

@@ -50,11 +50,19 @@ attempt was manual or scheduled, synchronizes exporter events idempotently, and 
 active Superusers when a scheduled attempt fails. A successful acknowledgment archives
 the local event file; failed connectivity leaves the package and events pending.
 
-Publish the installer as a stable application static asset. It selects the newest
-semantic `exporter/v*` release, verifies the binary SHA-256, preserves the exporter
-instance identity across updates, configures the task, and runs diagnostics. Tag builds
-publish the Windows binary and checksum only after portable, Windows, cross-compile, and
-installer gates pass.
+Publish a stable `/install` PowerShell bootstrap that derives the platform URL and
+downloads the installer asset. This keeps the operator command to `irm <platform>/install
+| iex` while the installer selects the newest semantic `exporter/v*` release, verifies
+the binary SHA-256, preserves the exporter instance identity across updates, configures
+the task, and runs diagnostics. Tag builds publish the Windows binary and checksum only
+after portable, Windows, cross-compile, and installer gates pass.
+
+Install the executable in `%USERPROFILE%\.local\bin`, with durable state in the user's
+`.local\state` directory and configuration plus the DPAPI credential under the user's
+`.config` directory. Persist non-secret paths and connection settings as user-scoped
+`WPP_CATALOG_EXPORTER_*` environment variables so direct invocations have the same
+defaults as scheduled ones. The API key stays in its user-scoped DPAPI file; only its
+path may be configured through the environment.
 
 ## Alternatives Considered
 

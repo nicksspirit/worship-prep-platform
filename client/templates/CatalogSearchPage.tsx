@@ -39,6 +39,41 @@ type RecentSearch = {
 };
 
 const RECENT_SEARCHES_KEY = "wpp.catalog.recent-searches.v1";
+const SEARCH_WORD_PATTERN = /[\p{L}\p{N}_]+/gu;
+
+const normalizeSearchWord = (value: string) => (
+    value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase()
+);
+
+const HighlightedLyric = ({line, query}: {line: string; query: string}) => {
+    const terms = new Set(
+        Array.from(query.matchAll(SEARCH_WORD_PATTERN), ([word]) => normalizeSearchWord(word)),
+    );
+    if (terms.size === 0) return <>{line}</>;
+
+    const content: React.ReactNode[] = [];
+    let lastIndex = 0;
+    for (const match of line.matchAll(SEARCH_WORD_PATTERN)) {
+        const word = match[0];
+        const start = match.index;
+        if (start > lastIndex) content.push(line.slice(lastIndex, start));
+        if (terms.has(normalizeSearchWord(word))) {
+            content.push(
+                <mark
+                    key={`${start}-${word}`}
+                    className="-mx-px bg-worship-accent-200 px-px font-semibold text-chapel-neutral-950 underline decoration-worship-accent-700 decoration-1 underline-offset-2"
+                >
+                    {word}
+                </mark>,
+            );
+        } else {
+            content.push(word);
+        }
+        lastIndex = start + word.length;
+    }
+    if (lastIndex < line.length) content.push(line.slice(lastIndex));
+    return <>{content}</>;
+};
 
 const normalizeRecentQuery = (query: string) => (
     query.trim().replace(/\s+/gu, " ").normalize("NFKC")
@@ -311,7 +346,13 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                     {song.lyrics_available ? (
                                                         <>
                                                             <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chapel-neutral-400">Lyric preview</p>
-                                                            {song.lyric_preview.map((line, lineIndex) => <p key={lineIndex}>{line}</p>)}
+                                                            {song.lyric_preview.map((line, lineIndex) => (
+                                                                <p key={lineIndex} className="break-words">
+                                                                    {props.mode === "lyrics" ? (
+                                                                        <HighlightedLyric line={line} query={props.query} />
+                                                                    ) : line}
+                                                                </p>
+                                                            ))}
                                                         </>
                                                     ) : (
                                                         <p className="italic text-chapel-neutral-500">Lyrics unavailable for public display.</p>

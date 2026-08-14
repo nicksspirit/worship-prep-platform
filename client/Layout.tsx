@@ -35,6 +35,7 @@ const devCriticalCSS = `
 
 export const Layout = (props: Props) => {
   const { STATIC_URL, user } = React.useContext(Context);
+  const staticUrl = STATIC_URL.replace(/\/+$/, "");
   const signedOutHeaderLink = props.signedOutHeaderLink === "song-search"
     ? {href: reverse("catalog:search"), label: "Song search"}
     : {href: reverse("account_login"), label: "Staff sign in"};
@@ -60,11 +61,11 @@ export const Layout = (props: Props) => {
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
         {/* Favicons */}
-        <link rel="apple-touch-icon" sizes="180x180" href={`${STATIC_URL}apple-touch-icon.png`} />
-        <link rel="icon" type="image/png" sizes="32x32" href={`${STATIC_URL}favicon-32x32.png`} />
-        <link rel="icon" type="image/png" sizes="16x16" href={`${STATIC_URL}favicon-16x16.png`} />
-        <link rel="manifest" href={`${STATIC_URL}site.webmanifest`} />
-        <link rel="shortcut icon" href={`${STATIC_URL}favicon.ico`} />
+        <link rel="apple-touch-icon" sizes="180x180" href={`${staticUrl}/apple-touch-icon.png`} />
+        <link rel="icon" type="image/png" sizes="32x32" href={`${staticUrl}/favicon-32x32.png`} />
+        <link rel="icon" type="image/png" sizes="16x16" href={`${staticUrl}/favicon-16x16.png`} />
+        <link rel="manifest" href={`${staticUrl}/site.webmanifest`} />
+        <link rel="shortcut icon" href={`${staticUrl}/favicon.ico`} />
 
         {/* Development: inject critical CSS to prevent FOUC */}
         {isDev && <style dangerouslySetInnerHTML={{ __html: devCriticalCSS }} />}
@@ -82,7 +83,7 @@ export const Layout = (props: Props) => {
             <div className="relative flex w-1/3 justify-center">
               {/* Centered Circular Logo overlapping the bottom border */}
               <div className="absolute top-1/2 flex h-18 w-18 -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 shadow-sm bg-white overflow-hidden p-1.5">
-                <img src={`${STATIC_URL}rccgcm_logo.png`} alt="RCCG Chapel of Mercy Logo" className="h-full w-full object-contain scale-[1.3]" />
+                <img src={`${staticUrl}/rccgcm_logo.png`} alt="RCCG Chapel of Mercy Logo" className="h-full w-full object-contain scale-[1.3]" />
               </div>
             </div>
 

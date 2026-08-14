@@ -48,22 +48,37 @@ SHA-256; it does not print song content.
 
 ## Windows installation and schedule
 
-Download the stable installer from
-`/static/install-catalog-exporter.ps1` on the deployed platform and run it with
-PowerShell 7. It downloads the latest `exporter/v*` release, verifies its checksum,
-protects the one-time API key with DPAPI, and creates a weekly 3:00 AM Pacific task with
-one retry after 30 minutes:
+On the EasyWorship Windows machine, open PowerShell 7.4 or later as the Windows user
+that runs EasyWorship and use the platform's one-line bootstrap. It prompts for the
+EasyWorship data directory, then downloads the stable installer. That installer obtains
+the latest `exporter/v*` release, verifies its checksum, protects the one-time API key
+with DPAPI, and creates a weekly 3:00 AM Pacific task with one retry after 30 minutes:
 
 ```powershell
-./install-catalog-exporter.ps1 `
-  -PlatformUrl 'https://wpp-api.example.com' `
-  -DataDirectory 'C:\Users\operator\Documents\Softouch\EasyWorship\Default\Databases\Data'
+irm https://wpp-api.example.com/install | iex
 ```
 
-The weekday defaults to Sunday and can be changed with `-ScheduleDay`. Windows must use
-the `Pacific Standard Time` zone so daylight-saving transitions remain aligned with
-America/Los_Angeles. Re-run with `-Mode Diagnose` after machine or account changes.
-`PlatformUrl` is the Django Bolt API service base URL, not the rendered web-app URL.
+The weekday defaults to Sunday. Windows must use the `Pacific Standard Time` zone so
+daylight-saving transitions remain aligned with America/Los_Angeles. Re-run the command
+after machine or account changes to reinstall; `-Mode Diagnose` remains available from
+the downloaded installer. The platform URL is the Django Bolt API service base URL, not
+the rendered web-app URL.
+
+The installer places `catalog-exporter.exe` in `%USERPROFILE%\.local\bin`, durable
+packages and outbox state in `%USERPROFILE%\.local\state\WorshipPrep\CatalogExporter`,
+and configuration plus the current-user DPAPI-protected API key in
+`%USERPROFILE%\.config\WorshipPrep\CatalogExporter`. It writes these non-secret
+per-user defaults so the executable can be run directly without repeating flags:
+
+- `WPP_CATALOG_EXPORTER_DATA_DIR`
+- `WPP_CATALOG_EXPORTER_STATE_DIR`
+- `WPP_CATALOG_EXPORTER_INSTANCE_ID`
+- `WPP_CATALOG_EXPORTER_ENDPOINT`
+- `WPP_CATALOG_EXPORTER_API_KEY_FILE`
+
+`WPP_CATALOG_EXPORTER_DATA_DIR` takes precedence over `EASYWORSHIP_DATA_DIR`; an
+explicit command-line flag takes precedence over either environment variable. The API
+key itself is never placed in an environment variable.
 An authorized operator can start an immediate run without changing the weekly schedule:
 
 ```powershell

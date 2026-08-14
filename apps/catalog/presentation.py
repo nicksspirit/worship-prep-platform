@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -16,6 +18,7 @@ PUBLIC_MAX_PAGE_SIZE = 50
 PUBLIC_MAX_QUERY_LENGTH = 128
 LYRIC_PREVIEW_LINES = 3
 LYRIC_PREVIEW_CHARACTERS = 180
+SEARCH_WORD_PATTERN = re.compile(r"[\w]+", re.UNICODE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,15 +114,80 @@ def _author(entry: CatalogEntry) -> str:
     return ", ".join(authors) if authors else "N/A"
 
 
-def _preview(lyrics: str) -> list[str]:
+def _search_word(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    ).casefold()
+
+
+def _search_terms(value: str) -> set[str]:
+    return {_search_word(match.group()) for match in SEARCH_WORD_PATTERN.finditer(value)}
+
+
+def _matching_span(line: str, terms: set[str]) -> tuple[int, int] | None:
+    for match in SEARCH_WORD_PATTERN.finditer(line):
+        if _search_word(match.group()) in terms:
+            return match.span()
+    return None
+
+
+def _excerpt(line: str, limit: int, terms: set[str]) -> str:
+    if len(line) <= limit:
+        return line
+
+    matching_span = _matching_span(line, terms)
+    if matching_span is None:
+        return f"{line[: max(limit - 1, 1)].rstrip()}…"
+
+    match_start, match_end = matching_span
+    content_limit = max(limit - 2, match_end - match_start)
+    start = max(0, match_start - max((content_limit - (match_end - match_start)) // 2, 0))
+    end = min(len(line), start + content_limit)
+    if end == len(line):
+        start = max(0, end - content_limit)
+
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(line) else ""
+    excerpt = line[start:end].strip()
+    while len(prefix) + len(excerpt) + len(suffix) > limit and excerpt:
+        excerpt = excerpt[:-1].rstrip()
+    return f"{prefix}{excerpt}{suffix}"
+
+
+def _preview(lyrics: str, query: str = "") -> list[str]:
     lines = [line.strip() for line in lyrics.splitlines() if line.strip()]
+    terms = _search_terms(query)
+    if terms:
+        matching_indexes = [
+            index for index, line in enumerate(lines) if _matching_span(line, terms)
+        ]
+        selected_indexes = matching_indexes[:LYRIC_PREVIEW_LINES]
+        if selected_indexes:
+            nearby_indexes = sorted(
+                (
+                    index
+                    for index in range(len(lines))
+                    if index not in selected_indexes
+                ),
+                key=lambda index: (
+                    min(abs(index - match_index) for match_index in matching_indexes),
+                    index,
+                ),
+            )
+            selected_indexes.extend(
+                nearby_indexes[: LYRIC_PREVIEW_LINES - len(selected_indexes)]
+            )
+            lines = [lines[index] for index in sorted(selected_indexes)]
+
     preview: list[str] = []
     remaining = LYRIC_PREVIEW_CHARACTERS
     for line in lines[:LYRIC_PREVIEW_LINES]:
         if remaining <= 0:
             break
-        if len(line) > remaining:
-            line = f"{line[: max(remaining - 1, 1)].rstrip()}…"
+        remaining_lines = min(LYRIC_PREVIEW_LINES, len(lines)) - len(preview)
+        line_limit = remaining // remaining_lines if terms else remaining
+        line = _excerpt(line, line_limit, terms)
         preview.append(line)
         remaining -= len(line)
     return preview
@@ -220,7 +288,14 @@ def search_public_catalog(
                 url=reverse("catalog:detail", kwargs={"song_uid": entry.song_uid}),
                 title=entry.title,
                 author=_author(entry),
-                lyric_preview=_preview(entry.cleaned_lyrics) if lyrics_available else [],
+                lyric_preview=(
+                    _preview(
+                        entry.cleaned_lyrics,
+                        normalized_query if mode == "lyrics" else "",
+                    )
+                    if lyrics_available
+                    else []
+                ),
                 lyrics_available=lyrics_available,
                 rights_status=entry.rights_status,
                 song_freshness=song_freshness,

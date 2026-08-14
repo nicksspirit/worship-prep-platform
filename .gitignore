@@ -18,6 +18,8 @@ db.sqlite3
 **/settings/environments/.local.py
 
 public/
+static/dist/
+prototype/
 node_modules/
 
 # OS Files

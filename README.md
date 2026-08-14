@@ -100,11 +100,12 @@ rights with policy-valid evidence, recover a retained failed package, roll back 
 active pointer, manage invitations, and issue, rotate, or revoke Integration Client
 keys.
 
-The stable Windows installer is served at `/static/install-catalog-exporter.ps1`. It
-verifies the latest `exporter/v*` binary, protects the import key with current-user
-DPAPI, and schedules the Catalog Exporter weekly at 3:00 AM America/Los_Angeles with one
-retry after 30 minutes. See [ADR-0007](docs/adr/0007-audit-and-automate-catalog-operations.md)
-and the [Catalog Exporter guide](exporter/README.md).
+The stable Windows installer is available from `/install` for a one-line PowerShell 7
+install. It verifies the latest `exporter/v*` binary, protects the import key with
+current-user DPAPI, and schedules the Catalog Exporter weekly at 3:00 AM
+America/Los_Angeles with one retry after 30 minutes. See
+[ADR-0007](docs/adr/0007-audit-and-automate-catalog-operations.md) and the
+[Catalog Exporter guide](exporter/README.md).
 
 ## Commands
 
@@ -117,6 +118,14 @@ poe makemig
 poe migrate
 poe test
 ```
+
+## Frontend asset pipeline
+
+`client/` contains React and TypeScript source. `static/` contains hand-authored files
+served at `/static/`, such as icons, installer scripts, and product media. `npm exec
+build.client` compiles the React bundle into the generated `static/dist/` directory.
+Then Django's `collectstatic` gathers both sources into the generated `public/static/`
+deployment directory. Neither generated directory is committed.
 
 See [deployment documentation](docs/deploy.md) for Cloud Run, Supabase PostgreSQL,
 and private Supabase Object Storage setup. Architectural decisions live in

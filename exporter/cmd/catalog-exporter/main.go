@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nicksspirit/worship-prep-platform/exporter/internal/credential"
@@ -28,13 +29,13 @@ func run() int {
 	var dataDirectory, outputPath, stateDirectory, runID, instanceID string
 	var endpoint, apiKeyFile string
 	var scheduled bool
-	flag.StringVar(&dataDirectory, "data-dir", "", "EasyWorship Data directory")
+	flag.StringVar(&dataDirectory, "data-dir", environmentDefault("", "WPP_CATALOG_EXPORTER_DATA_DIR", "EASYWORSHIP_DATA_DIR"), "EasyWorship Data directory")
 	flag.StringVar(&outputPath, "output", "", "Catalog Import Package output path")
-	flag.StringVar(&stateDirectory, "state-dir", ".catalog-exporter", "durable local state directory")
+	flag.StringVar(&stateDirectory, "state-dir", environmentDefault(".catalog-exporter", "WPP_CATALOG_EXPORTER_STATE_DIR"), "durable local state directory")
 	flag.StringVar(&runID, "run-id", "", "Catalog Import Run UUID (generated when omitted)")
-	flag.StringVar(&instanceID, "instance-id", "", "stable Catalog Exporter instance UUID")
-	flag.StringVar(&endpoint, "endpoint", "", "Worship Prep Platform HTTPS base URL")
-	flag.StringVar(&apiKeyFile, "api-key-file", "", "user-scoped Windows DPAPI credential file")
+	flag.StringVar(&instanceID, "instance-id", environmentDefault("", "WPP_CATALOG_EXPORTER_INSTANCE_ID"), "stable Catalog Exporter instance UUID")
+	flag.StringVar(&endpoint, "endpoint", environmentDefault("", "WPP_CATALOG_EXPORTER_ENDPOINT"), "Worship Prep Platform HTTPS base URL")
+	flag.StringVar(&apiKeyFile, "api-key-file", environmentDefault("", "WPP_CATALOG_EXPORTER_API_KEY_FILE"), "user-scoped Windows DPAPI credential file")
 	flag.BoolVar(&scheduled, "scheduled", false, "identify this as the weekly scheduled Catalog Import")
 	flag.Parse()
 
@@ -104,6 +105,15 @@ func run() int {
 		result.Manifest.Counts.Warnings, result.SHA256,
 	)
 	return 0
+}
+
+func environmentDefault(fallback string, names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+	}
+	return fallback
 }
 
 func replayPending(ctx context.Context, stateDirectory, endpoint, apiKey string, scheduled bool) (bool, error) {

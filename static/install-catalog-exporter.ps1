@@ -14,11 +14,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $TaskName = "Worship Prep Catalog Import"
-$InstallRoot = Join-Path $env:LOCALAPPDATA "WorshipPrep\CatalogExporter"
-$StateDirectory = Join-Path $InstallRoot "state"
-$ExecutablePath = Join-Path $InstallRoot "catalog-exporter.exe"
-$CredentialPath = Join-Path $InstallRoot "api-key.dpapi"
-$ConfigurationPath = Join-Path $InstallRoot "config.json"
+$LocalDirectory = Join-Path $env:USERPROFILE ".local"
+$BinaryDirectory = Join-Path $LocalDirectory "bin"
+$StateDirectory = Join-Path $LocalDirectory "state\WorshipPrep\CatalogExporter"
+$ConfigurationDirectory = Join-Path $env:USERPROFILE ".config\WorshipPrep\CatalogExporter"
+$ExecutablePath = Join-Path $BinaryDirectory "catalog-exporter.exe"
+$CredentialPath = Join-Path $ConfigurationDirectory "api-key.dpapi"
+$ConfigurationPath = Join-Path $ConfigurationDirectory "config.json"
 
 function Assert-PacificTimeZone {
     $timeZone = Get-TimeZone
@@ -90,6 +92,21 @@ function Save-UserScopedCredential {
     }
     finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+}
+
+function Set-UserEnvironmentDefaults {
+    param([pscustomobject]$Configuration)
+    $defaults = @{
+        "WPP_CATALOG_EXPORTER_DATA_DIR" = $Configuration.data_directory
+        "WPP_CATALOG_EXPORTER_STATE_DIR" = $StateDirectory
+        "WPP_CATALOG_EXPORTER_INSTANCE_ID" = $Configuration.exporter_instance_id
+        "WPP_CATALOG_EXPORTER_ENDPOINT" = $Configuration.platform_url
+        "WPP_CATALOG_EXPORTER_API_KEY_FILE" = $CredentialPath
+    }
+    foreach ($name in $defaults.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $defaults[$name], "User")
+        [Environment]::SetEnvironmentVariable($name, $defaults[$name], "Process")
     }
 }
 
@@ -175,18 +192,25 @@ if ($Mode -eq "Diagnose") {
     exit 0
 }
 
-if (-not $PlatformUrl -or -not $DataDirectory) {
-    throw "-PlatformUrl and -DataDirectory are required for installation."
+if (-not $PlatformUrl) {
+    throw "-PlatformUrl is required for installation."
 }
 if (-not ([uri]$PlatformUrl).Scheme.Equals("https", [StringComparison]::OrdinalIgnoreCase)) {
     throw "PlatformUrl must use HTTPS."
 }
 Assert-PacificTimeZone
+if (-not $DataDirectory) {
+    $DataDirectory = [Environment]::GetEnvironmentVariable("WPP_CATALOG_EXPORTER_DATA_DIR", "User")
+}
+if (-not $DataDirectory) {
+    $DataDirectory = Join-Path $env:USERPROFILE "Documents\Softouch\EasyWorship\Default\Databases\Data"
+}
 if (-not (Test-Path $DataDirectory -PathType Container)) {
     throw "EasyWorship Data directory does not exist: $DataDirectory"
 }
-New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $BinaryDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $StateDirectory -Force | Out-Null
+New-Item -ItemType Directory -Path $ConfigurationDirectory -Force | Out-Null
 
 $existingConfiguration = $null
 if (Test-Path $ConfigurationPath) {
@@ -206,6 +230,7 @@ $configuration = [pscustomobject]@{
 $configuration | ConvertTo-Json | Set-Content $ConfigurationPath -Encoding utf8NoBOM
 Install-VerifiedExporter
 Save-UserScopedCredential -Secret $ApiKey
+Set-UserEnvironmentDefaults -Configuration $configuration
 Register-WeeklyTask -Configuration $configuration -Credential $TaskCredential
 Test-Installation
 Write-Host "Catalog Exporter installed. The weekly import runs $ScheduleDay at 3:00 AM America/Los_Angeles."

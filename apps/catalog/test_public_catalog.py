@@ -85,7 +85,12 @@ class PublicCatalogTests(TestCase):
                     "uid": "amazing-mercy",
                     "title": "Amazing Mercy",
                     "authors": [],
-                    "lyrics": "Mercy in the morning",
+                    "lyrics": (
+                        "We gather in hope\n"
+                        "Every voice is lifted\n"
+                        "The day is awakening\n"
+                        "Mercy in the mórning"
+                    ),
                     "rights": RightsStatus.APPROVED,
                 },
                 {
@@ -191,9 +196,12 @@ class PublicCatalogTests(TestCase):
 
         lyrics_response = self.client.get(
             reverse("catalog:search"),
-            {"q": "Mercy", "mode": "lyrics"},
+            {"q": "mercy morning", "mode": "lyrics"},
         )
         self.assertContains(lyrics_response, "Amazing Mercy")
+        self.assertContains(lyrics_response, ">Mercy</mark>")
+        self.assertContains(lyrics_response, ">mórning</mark>")
+        self.assertNotContains(lyrics_response, "We gather in hope")
         self.assertNotContains(lyrics_response, "Amazing Grace")
         self.assertNotContains(lyrics_response, "Amazing Hidden Song")
 
@@ -264,6 +272,12 @@ class PublicCatalogTests(TestCase):
         self.assertContains(response, "Catalog freshness")
         self.assertContains(response, "Projection Preview")
         self.assertContains(response, 'class="projection-stage"')
+        self.assertContains(
+            response, "media/default-song-background.mp4"
+        )
+        self.assertContains(response, 'type="video/mp4"')
+        self.assertContains(response, "Open full screen preview")
+        self.assertContains(response, 'aria-label="Close full screen preview"')
         self.assertContains(response, 'aria-live="polite"')
         self.assertContains(response, "Show next projection slide")
         self.assertContains(response, 'aria-current="step"')
@@ -282,6 +296,7 @@ class PublicCatalogTests(TestCase):
         self.assertNotContains(response, "SECRET REFRAIN MUST NEVER LEAK")
         self.assertNotContains(response, "Projection Preview")
         self.assertNotContains(response, "projection-stage")
+        self.assertNotContains(response, "default-song-background.mp4")
 
     def test_unknown_song_returns_not_found(self):
         response = self.client.get(
