@@ -1,4 +1,4 @@
-#Requires -Version 7.4
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [ValidateSet("Install", "Diagnose", "Validate")]
@@ -98,7 +98,6 @@ function Save-UserScopedCredential {
 function Set-UserEnvironmentDefaults {
     param([pscustomobject]$Configuration)
     $defaults = @{
-        "WPP_CATALOG_EXPORTER_DATA_DIR" = $Configuration.data_directory
         "WPP_CATALOG_EXPORTER_STATE_DIR" = $StateDirectory
         "WPP_CATALOG_EXPORTER_INSTANCE_ID" = $Configuration.exporter_instance_id
         "WPP_CATALOG_EXPORTER_ENDPOINT" = $Configuration.platform_url
@@ -116,7 +115,6 @@ function Register-WeeklyTask {
         [PSCredential]$Credential
     )
     $arguments = @(
-        '--data-dir', ('"' + $Configuration.data_directory + '"'),
         '--state-dir', ('"' + $StateDirectory + '"'),
         '--instance-id', $Configuration.exporter_instance_id,
         '--endpoint', ('"' + $Configuration.platform_url + '"'),
@@ -200,10 +198,13 @@ if (-not ([uri]$PlatformUrl).Scheme.Equals("https", [StringComparison]::OrdinalI
 }
 Assert-PacificTimeZone
 if (-not $DataDirectory) {
-    $DataDirectory = [Environment]::GetEnvironmentVariable("WPP_CATALOG_EXPORTER_DATA_DIR", "User")
+    $DataDirectory = $env:WPP_EASYWORSHIP_DATA_DIR
 }
 if (-not $DataDirectory) {
-    $DataDirectory = Join-Path $env:USERPROFILE "Documents\Softouch\EasyWorship\Default\Databases\Data"
+    $DataDirectory = [Environment]::GetEnvironmentVariable("WPP_EASYWORSHIP_DATA_DIR", "User")
+}
+if (-not $DataDirectory) {
+    throw "WPP_EASYWORSHIP_DATA_DIR must identify the EasyWorship Data directory."
 }
 if (-not (Test-Path $DataDirectory -PathType Container)) {
     throw "EasyWorship Data directory does not exist: $DataDirectory"
@@ -227,7 +228,7 @@ $configuration = [pscustomobject]@{
     exporter_instance_id = $instanceId
     schedule_day = $ScheduleDay
 }
-$configuration | ConvertTo-Json | Set-Content $ConfigurationPath -Encoding utf8NoBOM
+$configuration | ConvertTo-Json | Set-Content $ConfigurationPath -Encoding UTF8
 Install-VerifiedExporter
 Save-UserScopedCredential -Secret $ApiKey
 Set-UserEnvironmentDefaults -Configuration $configuration

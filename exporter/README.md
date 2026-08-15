@@ -48,11 +48,19 @@ SHA-256; it does not print song content.
 
 ## Windows installation and schedule
 
-On the EasyWorship Windows machine, open PowerShell 7.4 or later as the Windows user
-that runs EasyWorship and use the platform's one-line bootstrap. It prompts for the
-EasyWorship data directory, then downloads the stable installer. That installer obtains
-the latest `exporter/v*` release, verifies its checksum, protects the one-time API key
-with DPAPI, and creates a weekly 3:00 AM Pacific task with one retry after 30 minutes:
+On the EasyWorship Windows machine, set `WPP_EASYWORSHIP_DATA_DIR` once for the Windows
+user that runs EasyWorship, then open a new built-in Windows PowerShell 5.1 or later
+session and use the platform's one-line bootstrap. The installer obtains the latest
+`exporter/v*` release, verifies its checksum, protects the one-time API key with DPAPI,
+and creates a weekly 3:00 AM Pacific task with one retry after 30 minutes:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  'WPP_EASYWORSHIP_DATA_DIR',
+  'C:\\Users\\operator\\Documents\\Softouch\\EasyWorship\\Default\\Databases\\Data',
+  'User'
+)
+```
 
 ```powershell
 irm https://wpp-api.example.com/install | iex
@@ -70,15 +78,15 @@ and configuration plus the current-user DPAPI-protected API key in
 `%USERPROFILE%\.config\WorshipPrep\CatalogExporter`. It writes these non-secret
 per-user defaults so the executable can be run directly without repeating flags:
 
-- `WPP_CATALOG_EXPORTER_DATA_DIR`
+- `WPP_EASYWORSHIP_DATA_DIR`
 - `WPP_CATALOG_EXPORTER_STATE_DIR`
 - `WPP_CATALOG_EXPORTER_INSTANCE_ID`
 - `WPP_CATALOG_EXPORTER_ENDPOINT`
 - `WPP_CATALOG_EXPORTER_API_KEY_FILE`
 
-`WPP_CATALOG_EXPORTER_DATA_DIR` takes precedence over `EASYWORSHIP_DATA_DIR`; an
-explicit command-line flag takes precedence over either environment variable. The API
-key itself is never placed in an environment variable.
+`WPP_EASYWORSHIP_DATA_DIR` takes precedence over `EASYWORSHIP_DATA_DIR`; an explicit
+command-line flag takes precedence over either environment variable. The API key itself
+is never placed in an environment variable.
 An authorized operator can start an immediate run without changing the weekly schedule:
 
 ```powershell

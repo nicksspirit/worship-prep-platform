@@ -1,3 +1,4 @@
+from textwrap import dedent
 from typing import cast
 
 from django.http import Http404, HttpRequest, HttpResponse
@@ -46,42 +47,31 @@ def _search_item(item: PublicSearchItem) -> SearchItemProps:
     )
 
 
-def _powershell_literal(value: str) -> str:
-    """Return a value safely quoted for a single-quoted PowerShell literal."""
-    return "'" + value.replace("'", "''") + "'"
-
-
 def catalog_exporter_install(request: HttpRequest) -> HttpResponse:
     """Serve the copy-and-paste bootstrap for the Windows Catalog Exporter."""
     platform_url = request.build_absolute_uri("/").rstrip("/")
-    installer_url = request.build_absolute_uri(
-        "/static/install-catalog-exporter.ps1"
-    )
-    default_data_directory = (
-        "Documents\\Softouch\\EasyWorship\\Default\\Databases\\Data"
-    )
-    script = f"""#Requires -Version 7.4
-$ErrorActionPreference = 'Stop'
-$platformUrl = {_powershell_literal(platform_url)}
-$defaultDataDirectory = Join-Path $env:USERPROFILE {_powershell_literal(default_data_directory)}
-$dataDirectory = Read-Host "EasyWorship Data directory [$defaultDataDirectory]"
-if ([string]::IsNullOrWhiteSpace($dataDirectory)) {{
-    $dataDirectory = $defaultDataDirectory
-}}
-$installerPath = Join-Path ([System.IO.Path]::GetTempPath()) ("install-catalog-exporter-" + [guid]::NewGuid() + ".ps1")
-try {{
-    Write-Host 'Downloading the checksum-verified Catalog Exporter installer...'
-    Invoke-WebRequest -Uri {_powershell_literal(installer_url)} -OutFile $installerPath
-    & $installerPath -PlatformUrl $platformUrl -DataDirectory $dataDirectory
-}}
-finally {{
-    Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
-}}
-"""
-    response = HttpResponse(script, content_type="text/plain; charset=utf-8")
-    response["Cache-Control"] = "no-store"
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
+    installer_url = request.build_absolute_uri("/static/install-catalog-exporter.ps1")
+    as_pwsh_literal = lambda v: "'" + v.replace("'", "''") + "'" # type: str
+
+    script = dedent(f"""#Requires -Version 5.1
+    $ErrorActionPreference = 'Stop'
+    $platformUrl = {as_pwsh_literal(platform_url)}
+    $installerPath = Join-Path ([System.IO.Path]::GetTempPath()) ("install-catalog-exporter-" + [guid]::NewGuid() + ".ps1")
+    try {{
+        Write-Host 'Downloading the checksum-verified Catalog Exporter installer...'
+        Invoke-WebRequest -Uri {as_pwsh_literal(installer_url)} -OutFile $installerPath
+        & $installerPath -PlatformUrl $platformUrl
+    }}
+    finally {{
+        Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+    }}
+    """)
+
+    resp = HttpResponse(script, content_type="text/plain; charset=utf-8")
+    resp["Cache-Control"] = "no-store"
+    resp["X-Content-Type-Options"] = "nosniff"
+
+    return resp
 
 
 class CatalogSearchView(View):

@@ -30,11 +30,11 @@ func TestReplayPendingDoesNotBlockOnSourceFailureWithoutPackage(t *testing.T) {
 }
 
 func TestEnvironmentDefaultUsesFirstNonEmptyConfiguredValue(t *testing.T) {
-	t.Setenv("WPP_CATALOG_EXPORTER_DATA_DIR", "C:\\Worship\\Data")
+	t.Setenv("WPP_EASYWORSHIP_DATA_DIR", "C:\\Worship\\Data")
 	t.Setenv("EASYWORSHIP_DATA_DIR", "C:\\EasyWorship\\Data")
 
 	actual := environmentDefault(
-		"", "WPP_CATALOG_EXPORTER_DATA_DIR", "EASYWORSHIP_DATA_DIR",
+		"", "WPP_EASYWORSHIP_DATA_DIR", "EASYWORSHIP_DATA_DIR",
 	)
 
 	if actual != "C:\\Worship\\Data" {

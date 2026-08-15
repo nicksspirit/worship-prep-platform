@@ -49,11 +49,12 @@ class GreenfieldRuntimeTests(TestCase):
         self.assertEqual(response["Content-Type"], "text/plain; charset=utf-8")
         self.assertEqual(response["Cache-Control"], "no-store")
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
-        self.assertIn("#Requires -Version 7.4", response.content.decode())
+        self.assertIn("#Requires -Version 5.1", response.content.decode())
         self.assertIn(
             "http://testserver/static/install-catalog-exporter.ps1",
             response.content.decode(),
         )
+        self.assertNotIn("EasyWorship Data directory", response.content.decode())
 
     def test_greenfield_modules_are_installed(self):
         self.assertEqual(apps.get_app_config("accounts").name, "apps.accounts")

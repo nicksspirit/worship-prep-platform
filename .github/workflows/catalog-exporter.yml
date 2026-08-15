@@ -67,10 +67,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate installer commands and syntax
-        shell: pwsh
+        shell: powershell
         run: ./static/install-catalog-exporter.ps1 -Mode Validate
       - name: Assert weekly Pacific retry policy
-        shell: pwsh
+        shell: powershell
         run: |
           $installer = Get-Content ./static/install-catalog-exporter.ps1 -Raw
           foreach ($required in @(
@@ -81,7 +81,7 @@ jobs:
             'New-TimeSpan -Minutes 30',
             'DataProtectionScope]::CurrentUser',
             '$BinaryDirectory = Join-Path $LocalDirectory "bin"',
-            'WPP_CATALOG_EXPORTER_DATA_DIR',
+            'WPP_EASYWORSHIP_DATA_DIR',
             'WPP_CATALOG_EXPORTER_API_KEY_FILE'
           )) {
             if (-not $installer.Contains($required)) {
@@ -110,7 +110,7 @@ jobs:
           go-version: "1.26.x"
           cache-dependency-path: exporter/go.sum
       - name: Acquire real EasyWorship source and build package
-        shell: pwsh
+        shell: powershell
         env:
           EASYWORSHIP_DATA_DIR: ${{ vars.WPP_EASYWORSHIP_DATA_DIR }}
         run: |

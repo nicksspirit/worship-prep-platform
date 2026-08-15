@@ -100,7 +100,7 @@ rights with policy-valid evidence, recover a retained failed package, roll back 
 active pointer, manage invitations, and issue, rotate, or revoke Integration Client
 keys.
 
-The stable Windows installer is available from `/install` for a one-line PowerShell 7
+The stable Windows installer is available from `/install` for a one-line Windows PowerShell
 install. It verifies the latest `exporter/v*` binary, protects the import key with
 current-user DPAPI, and schedules the Catalog Exporter weekly at 3:00 AM
 America/Los_Angeles with one retry after 30 minutes. See

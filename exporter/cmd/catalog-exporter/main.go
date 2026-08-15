@@ -29,7 +29,7 @@ func run() int {
 	var dataDirectory, outputPath, stateDirectory, runID, instanceID string
 	var endpoint, apiKeyFile string
 	var scheduled bool
-	flag.StringVar(&dataDirectory, "data-dir", environmentDefault("", "WPP_CATALOG_EXPORTER_DATA_DIR", "EASYWORSHIP_DATA_DIR"), "EasyWorship Data directory")
+	flag.StringVar(&dataDirectory, "data-dir", environmentDefault("", "WPP_EASYWORSHIP_DATA_DIR", "EASYWORSHIP_DATA_DIR"), "EasyWorship Data directory")
 	flag.StringVar(&outputPath, "output", "", "Catalog Import Package output path")
 	flag.StringVar(&stateDirectory, "state-dir", environmentDefault(".catalog-exporter", "WPP_CATALOG_EXPORTER_STATE_DIR"), "durable local state directory")
 	flag.StringVar(&runID, "run-id", "", "Catalog Import Run UUID (generated when omitted)")
