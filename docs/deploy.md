@@ -447,6 +447,11 @@ Replace `wpp-app-zxdtzfpwua-uw.a.run.app` with your real current service hostnam
 
 ## Step 10: Update Google OAuth Redirect URIs
 
+If this deployment is the `wpp_catalog_v1` to `wpp_app` schema promotion, complete the
+identity rebuild in [ADR-0009](adr/0009-recreate-catalog-superuser-google-identity.md)
+before testing the redirect URI. It creates the catalog superuser interactively and
+recreates the Google identity link without copying OAuth tokens or secrets.
+
 This app uses django-allauth for Google login. The callback path is:
 
 ```text
