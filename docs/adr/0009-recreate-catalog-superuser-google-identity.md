@@ -113,17 +113,21 @@ Verify the new user's flags without printing the password:
 poe manage shell -c "import os; from apps.accounts.models import User; u=User.objects.get(email__iexact=os.environ['TARGET_EMAIL']); assert u.is_active and u.is_staff and u.is_superuser; print({'id': u.pk, 'email': u.email, 'first_name': u.first_name, 'last_name': u.last_name, 'has_usable_password': u.has_usable_password()})"
 ```
 
-Create the Google identity link using only the UID in the cutover record.
-The guard fails rather than reassigning an existing provider identity to a different
-user:
+Create the Google identity link only after the schema preflight above confirms that
+`wpp_app` is first in the search path. The command uses only the UID in the cutover
+record, creates an empty `extra_data` object, and never creates a `SocialToken`. Its
+guard fails rather than reassigning an existing provider identity to a different user.
+A retry with the correct link verifies that link without creating a duplicate:
 
 ```bash
 export TARGET_GOOGLE_UID='<GOOGLE_UID_FROM_PREFLIGHT>'
 
-poe manage shell -c "import os; from apps.accounts.models import User; from allauth.socialaccount.models import SocialAccount; email=os.environ['TARGET_EMAIL']; uid=os.environ['TARGET_GOOGLE_UID']; user=User.objects.get(email__iexact=email); existing=SocialAccount.objects.filter(provider='google', uid=uid).first(); assert existing is None or existing.user_id == user.pk, 'Google UID is already linked to another user'; account, created=SocialAccount.objects.get_or_create(provider='google', uid=uid, defaults={'user': user, 'extra_data': {}}); assert account.user_id == user.pk; print({'id': account.pk, 'provider': account.provider, 'uid': account.uid, 'created': created, 'extra_data_keys': list(account.extra_data)})"
+poe manage link_google_identity \
+  --email "$TARGET_EMAIL" \
+  --uid "$TARGET_GOOGLE_UID"
 ```
 
-The expected `extra_data_keys` value is `[]`. Do not replace it with the legacy JSON.
+Do not replace the empty profile metadata with the legacy JSON.
 
 ## Validation gate
 

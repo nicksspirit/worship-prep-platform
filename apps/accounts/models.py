@@ -86,6 +86,8 @@ class UserManager(BaseUserManager[_T]):
         Create and save a user with the given email, and password.
         """
 
+        email = email.strip().lower()
+
         if not email:
             raise ValueError("The user's email must be set")
 
