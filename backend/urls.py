@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 from health_check.views import HealthCheckView
 
-from apps.accounts.views import SignInView
+from apps.accounts.views import InvitationRequiredView, SignInView
 
 admin.autodiscover()
 admin.site.login = secure_admin_login(admin.site.login)
@@ -30,6 +30,11 @@ urlpatterns = [
     path("ready/", DjangoReadyView.as_view(), name="ready"),
     path("admin/", admin.site.urls),
     path("accounts/login/", SignInView.as_view(), name="account_login"),
+    path(
+        "accounts/signup/",
+        InvitationRequiredView.as_view(),
+        name="account_signup",
+    ),
     path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),
     path("", include("apps.catalog.urls")),

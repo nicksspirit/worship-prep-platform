@@ -14,6 +14,15 @@ class AccountFoundationTests(TestCase):
         self.assertContains(response, "Sign In")
         self.assertContains(response, reverse("request_invitation"))
 
+    def test_closed_signup_explains_invitation_only_access(self):
+        response = self.client.get(reverse("account_signup"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You need an invitation to join.")
+        self.assertContains(response, reverse("request_invitation"))
+        self.assertContains(response, reverse("account_login"))
+        self.assertNotContains(response, 'href="/accounts/signup/"')
+
     def test_invitation_request_is_persisted_for_review(self):
         response = self.client.post(
             reverse("request_invitation"),

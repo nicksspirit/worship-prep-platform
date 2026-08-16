@@ -45,6 +45,6 @@ EMAIL_PORT = env.int("EMAIL_PORT", 587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", True)
 EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", "Worship Prep <noreply@example.com>")
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", "Worship Prep Platform <noreply@example.com>")
 
 BOLT_PROCESSES = env.int("BOLT_PROCESSES", default=1)

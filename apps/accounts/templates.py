@@ -35,3 +35,12 @@ class RequestInvitationPage(NamedTuple):
     last_name: str
     message: str
     field_errors: dict[str, str]
+
+
+@template
+class InvitationRequiredPage(NamedTuple):
+    """Invitation-only access notice shown when public signup is closed."""
+
+    title: str
+    request_invitation_url: str
+    sign_in_url: str

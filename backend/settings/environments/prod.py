@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from django.core.exceptions import ImproperlyConfigured
 
 from backend.settings import env
-
-if TYPE_CHECKING:
-    from backend.settings.components.database import DATABASES
-    from backend.settings.components.storage import (
-        STORAGES_SUPABASE,
-        SUPABASE_CATALOG_IMPORT_BUCKET,
-        SUPABASE_STORAGE_BUCKET,
-    )
+from backend.settings.components.database import DATABASES
+from backend.settings.components.storage import (
+    STORAGES_SUPABASE,
+    SUPABASE_CATALOG_IMPORT_BUCKET,
+    SUPABASE_STORAGE_BUCKET,
+)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
@@ -25,6 +21,7 @@ DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 
 if not SUPABASE_STORAGE_BUCKET:
     raise ImproperlyConfigured("SUPABASE_STORAGE_BUCKET must be set in production.")
+
 if not SUPABASE_CATALOG_IMPORT_BUCKET:
     raise ImproperlyConfigured(
         "SUPABASE_CATALOG_IMPORT_BUCKET must be set in production."

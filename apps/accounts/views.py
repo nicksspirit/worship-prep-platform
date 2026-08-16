@@ -1,13 +1,18 @@
 from typing import Any, cast
 
-from allauth.account.views import LoginView
+from allauth.account.views import LoginView, SignupView
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
 
 from .forms import InvitationRequestForm
-from .templates import RenderableTemplate, RequestInvitationPage, SignInPage
+from .templates import (
+    InvitationRequiredPage,
+    RenderableTemplate,
+    RequestInvitationPage,
+    SignInPage,
+)
 
 
 class HomePageView(View):
@@ -29,6 +34,21 @@ class SignInView(LoginView):
                 google_login_url=reverse("google_login"),
                 next_value=cast(str | None, context.get("redirect_field_value")),
                 redirect_field_name=self.redirect_field_name,
+            ),
+        )
+        return page.render(self.request)
+
+
+class InvitationRequiredView(SignupView):
+    """Present an invitation-only access notice when public signup is closed."""
+
+    def closed(self) -> HttpResponse:
+        page = cast(
+            RenderableTemplate,
+            InvitationRequiredPage(
+                title="Invitation Required",
+                request_invitation_url=reverse("request_invitation"),
+                sign_in_url=reverse("account_login"),
             ),
         )
         return page.render(self.request)
