@@ -5,7 +5,9 @@ import io
 import json
 import zipfile
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
+from typing import TypedDict, cast
 from uuid import UUID
 
 from django.conf import settings
@@ -26,10 +28,14 @@ from apps.catalog.models import (
     CatalogState,
     ImportStatus,
     ImportTrigger,
-    RightsStatus,
     SnapshotStatus,
 )
-from apps.catalog.text import SEARCH_CONFIG, normalize_title
+from apps.catalog.services.importing import (
+    CatalogSongRecord,
+    ExistingCatalogSong,
+    prepare_catalog_entries,
+)
+from apps.catalog.text import SEARCH_CONFIG
 
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -62,11 +68,55 @@ class ImportResult:
     created: bool
 
 
+class ManifestSource(TypedDict):
+    fingerprint: str
+
+
+class ManifestRecords(TypedDict):
+    bytes: int
+    sha256: str
+    fingerprint: str
+
+
+class ManifestCounts(TypedDict):
+    songs: int
+    warnings: int
+
+
+class ImportManifest(TypedDict):
+    run_id: str
+    exporter_instance_id: str
+    contract_version: str
+    exporter_version: str
+    parser_version: str
+    source: ManifestSource
+    records: ManifestRecords
+    counts: ManifestCounts
+    warnings: list[object]
+    created_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class InspectedPackage:
+    """Archive contents that passed package-shape and manifest validation."""
+
+    manifest: ImportManifest
+    records_bytes: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedPackage:
+    """An inspected package whose song records are safe to prepare."""
+
+    manifest: ImportManifest
+    records: tuple[CatalogSongRecord, ...]
+
+
 def _sha256(content: bytes) -> str:
     return f"sha256:{hashlib.sha256(content).hexdigest()}"
 
 
-def _load_json(content: bytes, *, label: str):
+def _load_json(content: bytes, *, label: str) -> object:
     def reject_duplicates(pairs):
         result = {}
         for key, value in pairs:
@@ -85,6 +135,7 @@ def _load_json(content: bytes, *, label: str):
         raise ImportRejected("invalid_json", f"{label} is not valid UTF-8 JSON.") from exc
 
 
+@cache
 def _validator(name: str) -> Draft202012Validator:
     schema_path = (
         Path(settings.BASE_DIR) / "contracts" / "catalog-import" / "v1" / name
@@ -105,7 +156,7 @@ def _validate_schema(value, *, name: str, label: str) -> None:
         )
 
 
-def _read_archive(package: bytes) -> tuple[dict, bytes]:
+def _read_archive(package: bytes) -> InspectedPackage:
     if not package or len(package) > MAX_PACKAGE_BYTES:
         raise ImportRejected(
             "invalid_package_size", "Package is empty or exceeds 128 MiB."
@@ -147,10 +198,12 @@ def _read_archive(package: bytes) -> tuple[dict, bytes]:
         records_bytes = archive.read(records_info)
     manifest = _load_json(manifest_bytes, label="manifest.json")
     _validate_schema(manifest, name="manifest.schema.json", label="manifest.json")
-    return manifest, records_bytes
+    return InspectedPackage(cast(ImportManifest, manifest), records_bytes)
 
 
-def _validate_records(manifest: dict, records_bytes: bytes) -> list[dict]:
+def _validate_records(
+    manifest: ImportManifest, records_bytes: bytes
+) -> ValidatedPackage:
     expected = manifest["records"]
     if expected["bytes"] != len(records_bytes) or expected["sha256"] != _sha256(
         records_bytes
@@ -187,7 +240,7 @@ def _validate_records(manifest: dict, records_bytes: bytes) -> list[dict]:
             )
         song_uids.add(source["song_uid"])
         song_item_uids.add(source["song_item_uid"])
-        records.append(record)
+        records.append(cast(CatalogSongRecord, record))
     if len(records) != manifest["counts"]["songs"]:
         raise ImportRejected(
             "song_count_mismatch", "Manifest song count differs from records."
@@ -196,7 +249,7 @@ def _validate_records(manifest: dict, records_bytes: bytes) -> list[dict]:
         raise ImportRejected(
             "warning_count_mismatch", "Manifest warning count differs from warnings."
         )
-    return records
+    return ValidatedPackage(manifest=manifest, records=tuple(records))
 
 
 def _read_exporter_events(content: bytes, *, run_id: UUID) -> list[dict]:
@@ -301,15 +354,20 @@ def _try_write_report(run: CatalogImportRun) -> None:
         _event(run, "report_storage", "failed")
 
 
-def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
+def _stage_and_promote(
+    run: CatalogImportRun, records: tuple[CatalogSongRecord, ...]
+) -> None:
     promoted_at = timezone.now()
     with transaction.atomic():
         state, _ = CatalogState.objects.select_for_update().get_or_create(pk=1)
         previous = state.active_snapshot
-        previous_entries = {}
+        previous_entries: dict[str, ExistingCatalogSong] = {}
         if previous:
             previous_entries = {
-                entry.song_uid: entry
+                entry.song_uid: ExistingCatalogSong(
+                    semantic_fingerprint=entry.semantic_fingerprint,
+                    content_changed_at=entry.content_changed_at,
+                )
                 for entry in previous.entries.only(
                     "song_uid", "semantic_fingerprint", "content_changed_at"
                 )
@@ -335,43 +393,34 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
         snapshot = CatalogSnapshot.objects.create(
             import_run=run, staged_at=promoted_at, entry_count=len(records)
         )
-        entries = []
-        for record in records:
-            source = record["source"]
-            metadata = record["metadata"]
-            fingerprint = record["semantic_fingerprint"]
-            components = fingerprint["components"]
-            prior = previous_entries.get(source["song_uid"])
-            changed_at = (
-                prior.content_changed_at
-                if prior and prior.semantic_fingerprint == fingerprint["value"]
-                else promoted_at
+        prepared_entries = prepare_catalog_entries(
+            records,
+            previous_songs=previous_entries,
+            rights_by_song_uid=rights_by_uid,
+            promoted_at=promoted_at,
+        )
+        entries = [
+            CatalogEntry(
+                snapshot=snapshot,
+                song_uid=entry.song_uid,
+                title=entry.title,
+                normalized_title=entry.normalized_title,
+                authors=list(entry.authors),
+                copyright_notice=entry.copyright_notice,
+                cleaned_lyrics=entry.cleaned_lyrics,
+                sections=entry.sections,
+                slide_count=entry.slide_count,
+                rights_status=entry.rights_status,
+                fingerprint_version=entry.fingerprint_version,
+                semantic_fingerprint=entry.semantic_fingerprint,
+                metadata_fingerprint=entry.metadata_fingerprint,
+                lyrics_fingerprint=entry.lyrics_fingerprint,
+                structure_fingerprint=entry.structure_fingerprint,
+                presentation_fingerprint=entry.presentation_fingerprint,
+                content_changed_at=entry.content_changed_at,
             )
-            entries.append(
-                CatalogEntry(
-                    snapshot=snapshot,
-                    song_uid=source["song_uid"],
-                    title=metadata["title"],
-                    normalized_title=normalize_title(metadata["title"]),
-                    authors=[metadata["author"]] if metadata["author"] else [],
-                    copyright_notice=metadata["copyright"] or "",
-                    cleaned_lyrics=record["cleaned_lyrics"],
-                    sections=record["sections"],
-                    slide_count=sum(
-                        len(section["slides"]) for section in record["sections"]
-                    ),
-                    rights_status=rights_by_uid.get(
-                        source["song_uid"], RightsStatus.UNKNOWN
-                    ),
-                    fingerprint_version=fingerprint["version"],
-                    semantic_fingerprint=fingerprint["value"],
-                    metadata_fingerprint=components["metadata"],
-                    lyrics_fingerprint=components["lyrics"],
-                    structure_fingerprint=components["structure"],
-                    presentation_fingerprint=components["presentation"],
-                    content_changed_at=changed_at,
-                )
-            )
+            for entry in prepared_entries
+        ]
         CatalogEntry.objects.bulk_create(entries, batch_size=500)
         snapshot.entries.update(
             title_search=SearchVector("title", config=SEARCH_CONFIG),
@@ -413,10 +462,35 @@ def _stage_and_promote(run: CatalogImportRun, records: list[dict]) -> None:
         ).delete()
 
 
+def _mark_run_failed(run: CatalogImportRun, *, code: str, summary: str) -> None:
+    """Record the terminal failure state shared by validation and staging failures."""
+
+    run.status = ImportStatus.FAILED
+    run.failure_code = code
+    run.failure_summary = summary
+    run.completed_at = timezone.now()
+    run.save(
+        update_fields=["status", "failure_code", "failure_summary", "completed_at"]
+    )
+    _event(run, "import", "failed", details={"code": code})
+
+
+def _finish_failed_run(
+    run: CatalogImportRun, *, code: str, summary: str, notify_scheduled_failure: bool
+) -> None:
+    """Persist a terminal failure and its diagnostics without masking its cause."""
+
+    _mark_run_failed(run, code=code, summary=summary)
+    _try_write_report(run)
+    if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
+        from apps.catalog.operations import notify_scheduled_import_failure
+
+        notify_scheduled_import_failure(run)
+
+
 def _process_run(
     run: CatalogImportRun,
-    manifest: dict,
-    records_bytes: bytes,
+    inspected: InspectedPackage,
     *,
     notify_scheduled_failure: bool = True,
 ) -> None:
@@ -433,41 +507,32 @@ def _process_run(
                 "completed_at",
             ]
         )
-        records = _validate_records(manifest, records_bytes)
-        _event(run, "validation", "completed", details={"song_count": len(records)})
+        validated = _validate_records(inspected.manifest, inspected.records_bytes)
+        _event(
+            run,
+            "validation",
+            "completed",
+            details={"song_count": len(validated.records)},
+        )
         run.status = ImportStatus.STAGING
         run.save(update_fields=["status"])
         _event(run, "staging", "started")
-        _stage_and_promote(run, records)
+        _stage_and_promote(run, validated.records)
     except ImportRejected as exc:
-        run.status = ImportStatus.FAILED
-        run.failure_code = exc.code
-        run.failure_summary = exc.summary
-        run.completed_at = timezone.now()
-        run.save(
-            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
+        _finish_failed_run(
+            run,
+            code=exc.code,
+            summary=exc.summary,
+            notify_scheduled_failure=notify_scheduled_failure,
         )
-        _event(run, "import", "failed", details={"code": exc.code})
-        _try_write_report(run)
-        if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
-            from apps.catalog.operations import notify_scheduled_import_failure
-
-            notify_scheduled_import_failure(run)
         raise
     except Exception:
-        run.status = ImportStatus.FAILED
-        run.failure_code = "staging_failed"
-        run.failure_summary = "The candidate snapshot could not be staged or promoted."
-        run.completed_at = timezone.now()
-        run.save(
-            update_fields=["status", "failure_code", "failure_summary", "completed_at"]
+        _finish_failed_run(
+            run,
+            code="staging_failed",
+            summary="The candidate snapshot could not be staged or promoted.",
+            notify_scheduled_failure=notify_scheduled_failure,
         )
-        _event(run, "import", "failed", details={"code": run.failure_code})
-        _try_write_report(run)
-        if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
-            from apps.catalog.operations import notify_scheduled_import_failure
-
-            notify_scheduled_import_failure(run)
         raise
 
 
@@ -479,7 +544,8 @@ def import_package(
 ) -> ImportResult:
     """Validate, privately retain, stage, and atomically promote one package."""
 
-    manifest, records_bytes = _read_archive(package)
+    inspected = _read_archive(package)
+    manifest = inspected.manifest
     run_id = UUID(manifest["run_id"])
     if trigger not in ImportTrigger.values:
         raise ImportRejected("invalid_import_trigger", "Import trigger is invalid.")
@@ -494,12 +560,13 @@ def import_package(
         _store_exporter_events(existing, events)
         if existing.status == ImportStatus.FAILED and trigger == ImportTrigger.SCHEDULED:
             _event(existing, "retry", "requested")
-            _process_run(existing, manifest, records_bytes)
+            _process_run(existing, inspected)
             _try_write_report(existing)
         return ImportResult(existing, created=False)
 
     previous = CatalogImportRun.objects.filter(status=ImportStatus.COMPLETED).first()
     created_at = parse_datetime(manifest["created_at"])
+    assert created_at is not None
     run = CatalogImportRun(
         id=run_id,
         exporter_instance_id=UUID(manifest["exporter_instance_id"]),
@@ -527,7 +594,7 @@ def import_package(
         details={"exporter_version": run.exporter_version},
     )
     _event(run, "package_received", "completed")
-    _process_run(run, manifest, records_bytes)
+    _process_run(run, inspected)
     _try_write_report(run)
     return ImportResult(run, created=True)
 
@@ -547,7 +614,8 @@ def recover_import_run(run: CatalogImportRun, *, user) -> CatalogImportRun:
             "stored_package_integrity_failed",
             "The retained package no longer matches its recorded checksum.",
         )
-    manifest, records_bytes = _read_archive(package)
+    inspected = _read_archive(package)
+    manifest = inspected.manifest
     if UUID(manifest["run_id"]) != run.pk:
         raise ImportRejected(
             "stored_package_identity_failed",
@@ -556,8 +624,7 @@ def recover_import_run(run: CatalogImportRun, *, user) -> CatalogImportRun:
     _event(run, "recovery", "requested", details={"user_id": user.pk})
     _process_run(
         run,
-        manifest,
-        records_bytes,
+        inspected,
         notify_scheduled_failure=False,
     )
     _try_write_report(run)
