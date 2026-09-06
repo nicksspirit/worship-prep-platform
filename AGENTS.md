@@ -58,6 +58,16 @@
 - **Class names**: Use nouns or concepts to represent their purpose.
 - Use descriptive names and consistent casing across modules.
 
+## Test Layout
+- Keep tests beside the code that owns the behavior: Django app tests live in that
+  app's `tests/` package, TypeScript tests are colocated as `*.test.ts` or
+  `*.test.tsx`, and Go tests stay beside their packages as `*_test.go`.
+- Use root `tests/contracts/`, `tests/integration/`, or `tests/e2e/` only for behavior
+  that crosses apps, processes, languages, or deployed surfaces; do not add empty
+  directory scaffolding.
+- Test location follows behavior ownership. Test structure follows the focused
+  Arrange–Act–Assert convention when that refactor is in scope.
+
 ## Security & Dependencies
 - Never hard-code secrets.
 - Review new packages before adding, and document significant changes in the PR.
