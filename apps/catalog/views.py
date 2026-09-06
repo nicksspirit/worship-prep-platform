@@ -14,7 +14,7 @@ from apps.catalog.presentation import (
     public_restart_url,
     search_public_catalog,
 )
-from apps.catalog.search import CatalogReadError
+from apps.catalog.services import CatalogReadError
 from apps.catalog.templates import (
     CatalogSearchPage,
     FreshnessProps,

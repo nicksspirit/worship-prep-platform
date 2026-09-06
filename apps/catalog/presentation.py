@@ -10,8 +10,17 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.timesince import timesince
 
-from apps.catalog.models import CatalogEntry, CatalogSnapshot, CatalogState, RightsStatus
-from apps.catalog.search import CatalogReadError, get_active_entry, search_catalog
+from apps.catalog.models import CatalogSnapshot, CatalogState, RightsStatus
+from apps.catalog.services import (
+    CatalogAccess,
+    CatalogReadError,
+    CatalogSearchItem,
+    CatalogSong,
+    GetCatalogSong,
+    SearchCatalog,
+    get_catalog_song,
+    search_catalog,
+)
 
 PUBLIC_DEFAULT_PAGE_SIZE = 20
 PUBLIC_MAX_PAGE_SIZE = 50
@@ -109,7 +118,7 @@ def _active_snapshot() -> CatalogSnapshot | None:
     return state.active_snapshot if state else None
 
 
-def _author(entry: CatalogEntry) -> str:
+def _author(entry: CatalogSearchItem | CatalogSong) -> str:
     authors = [str(author).strip() for author in entry.authors if str(author).strip()]
     return ", ".join(authors) if authors else "N/A"
 
@@ -271,15 +280,17 @@ def search_public_catalog(
         )
 
     page = search_catalog(
-        query=normalized_query,
-        mode=mode,
-        limit=limit,
-        continuation=continuation,
-        minimum_lyrics_query_length=1,
+        SearchCatalog(
+            query=normalized_query,
+            mode=mode,
+            limit=limit,
+            continuation=continuation,
+            access=CatalogAccess(True, False),
+        )
     )
     items = []
-    for entry in page.entries:
-        lyrics_available = entry.rights_status != RightsStatus.RESTRICTED
+    for entry in page.items:
+        lyrics_available = entry.lyrics_available
         song_freshness = _freshness(entry.content_changed_at)
         assert song_freshness is not None
         items.append(
@@ -290,7 +301,7 @@ def search_public_catalog(
                 author=_author(entry),
                 lyric_preview=(
                     _preview(
-                        entry.cleaned_lyrics,
+                        entry.cleaned_lyrics or "",
                         normalized_query if mode == "lyrics" else "",
                     )
                     if lyrics_available
@@ -301,11 +312,11 @@ def search_public_catalog(
                 song_freshness=song_freshness,
             )
         )
-    token = _continuation(page.next_url)
+    token = page.continuation
     return PublicSearchResult(
         items=items,
         catalog_freshness=(
-            _freshness(page.snapshot.completed_at) if page.snapshot else None
+            _freshness(page.snapshot_completed_at)
         ),
         next_url=(
             _public_search_url(
@@ -345,26 +356,13 @@ def _display_label(label: object) -> str:
     return common.get(value.casefold(), value or "Section")
 
 
-def _song_structure(entry: CatalogEntry) -> tuple[list[PublicSection], list[PublicSlide]]:
+def _song_structure(entry: CatalogSong) -> tuple[list[PublicSection], list[PublicSlide]]:
     sections: list[PublicSection] = []
     slides: list[PublicSlide] = []
-    for section_index, raw_section in enumerate(entry.sections, start=1):
-        if not isinstance(raw_section, dict):
-            continue
-        label = _display_label(raw_section.get("label"))
-        raw_slides = raw_section.get("slides", [])
+    for section in entry.sections:
+        label = _display_label(section.label)
         section_lines: list[str] = []
-        if not isinstance(raw_slides, list):
-            raw_slides = []
-        for raw_slide in raw_slides:
-            if not isinstance(raw_slide, dict):
-                continue
-            raw_lines = raw_slide.get("lines", [])
-            lines = (
-                [str(line).strip() for line in raw_lines if str(line).strip()]
-                if isinstance(raw_lines, list)
-                else []
-            )
+        for lines in section.slides:
             if not lines:
                 continue
             section_lines.extend(lines)
@@ -377,12 +375,12 @@ def _song_structure(entry: CatalogEntry) -> tuple[list[PublicSection], list[Publ
             )
         sections.append(
             PublicSection(
-                position=int(raw_section.get("position") or section_index),
+                position=section.position,
                 label=label,
                 text="\n".join(section_lines),
             )
         )
-    if not slides and entry.cleaned_lyrics.strip():
+    if not slides and entry.cleaned_lyrics and entry.cleaned_lyrics.strip():
         fallback_lines = [
             line.strip() for line in entry.cleaned_lyrics.splitlines() if line.strip()
         ]
@@ -396,13 +394,15 @@ def _song_structure(entry: CatalogEntry) -> tuple[list[PublicSection], list[Publ
 def get_public_song(song_uid: str) -> PublicSongDetail:
     """Return a public Song Detail with restricted lyric fields removed."""
 
-    entry = get_active_entry(song_uid)
-    lyrics_available = entry.rights_status != RightsStatus.RESTRICTED
+    entry = get_catalog_song(
+        GetCatalogSong(song_uid=song_uid, access=CatalogAccess(True, False))
+    )
+    lyrics_available = entry.lyrics_available
     sections, slides = _song_structure(entry) if lyrics_available else ([], [])
     return PublicSongDetail(
         song_uid=entry.song_uid,
         title=entry.title,
-        authors=[str(author) for author in entry.authors if str(author).strip()],
+        authors=entry.authors,
         author=_author(entry),
         copyright_notice=entry.copyright_notice,
         rights_status=entry.rights_status,
@@ -411,5 +411,5 @@ def get_public_song(song_uid: str) -> PublicSongDetail:
         slides=slides,
         slide_count=len(slides),
         song_freshness=_freshness(entry.content_changed_at),
-        catalog_freshness=_freshness(entry.snapshot.completed_at),
+        catalog_freshness=_freshness(entry.snapshot_completed_at),
     )

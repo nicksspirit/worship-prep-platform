@@ -1,4 +1,5 @@
 from typing import Annotated
+from urllib.parse import urlencode
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -38,7 +39,15 @@ from apps.catalog.schema import (
     SongLyricsSection,
     SongMetadataResponse,
 )
-from apps.catalog.search import CatalogReadError, get_active_entry, search_catalog
+from apps.catalog.services import (
+    CatalogAccess,
+    CatalogReadError,
+    GetCatalogSong,
+    SearchCatalog,
+    SearchRestart,
+    get_catalog_song,
+    search_catalog,
+)
 
 SEARCH_RATE_LIMIT = 60
 LYRICS_RATE_LIMIT = 30
@@ -100,6 +109,21 @@ def _raw_error(
     response_headers = [("content-type", "application/json")]
     response_headers.extend((headers or {}).items())
     return status_code, response_headers, JSON(body).to_bytes()
+
+
+def _search_url(
+    *, query: str, mode: str, limit: int, continuation: str | None = None
+) -> str:
+    parameters = {"q": query, "mode": mode, "limit": str(limit)}
+    if continuation:
+        parameters["next"] = continuation
+    return f"/api/v1/catalog/search?{urlencode(parameters)}"
+
+
+def _restart_url(restart: SearchRestart | None) -> str | None:
+    if restart is None:
+        return None
+    return _search_url(query=restart.query, mode=restart.mode, limit=restart.limit)
 
 
 def _authorize(authorization: str, *scopes: str):
@@ -265,16 +289,28 @@ async def catalog_search(
     )
     if isinstance(rate, tuple):
         return rate
+    if mode == "lyrics" and len(q.strip()) < 3:
+        return _raw_error(
+            "lyrics_query_too_short",
+            "Lyrics search requires at least 3 non-whitespace characters.",
+            400,
+            headers=rate.headers,
+        )
 
     try:
         page = await _database_call(
             search_catalog,
-            query=q,
-            mode=mode,
-            limit=limit,
-            continuation=continuation,
-            include_restricted_lyrics=(
-                APIKeyScope.RESTRICTED_LYRICS_READ in authorized.scopes
+            SearchCatalog(
+                query=q,
+                mode=mode,
+                limit=limit,
+                continuation=continuation,
+                access=CatalogAccess(
+                    may_read_lyrics=True,
+                    may_read_restricted_lyrics=(
+                        APIKeyScope.RESTRICTED_LYRICS_READ in authorized.scopes
+                    ),
+                ),
             ),
         )
     except CatalogReadError as exc:
@@ -283,7 +319,7 @@ async def catalog_search(
             exc.message,
             exc.status_code,
             headers=rate.headers,
-            restart_url=exc.restart_url,
+            restart_url=_restart_url(exc.restart),
         )
 
     results = [
@@ -296,12 +332,21 @@ async def catalog_search(
             rights_status=entry.rights_status,
             lyrics_access=_lyrics_access(entry, authorized.scopes),
         )
-        for entry in page.entries
+        for entry in page.items
     ]
     return Response(
         CatalogSearchResponse(
             results=results,
-            next=page.next_url,
+            next=(
+                _search_url(
+                    query=q,
+                    mode=mode,
+                    limit=limit,
+                    continuation=page.continuation,
+                )
+                if page.continuation
+                else None
+            ),
             has_more=page.has_more,
         ),
         headers=rate.headers,
@@ -341,7 +386,10 @@ async def song_metadata(
     if isinstance(rate, tuple):
         return rate
     try:
-        entry = await _database_call(get_active_entry, song_uid)
+        entry = await _database_call(
+            get_catalog_song,
+            GetCatalogSong(song_uid=song_uid, access=CatalogAccess(False, False)),
+        )
     except CatalogReadError as exc:
         return _raw_error(
             exc.code,
@@ -399,7 +447,15 @@ async def song_lyrics(
     if isinstance(rate, tuple):
         return rate
     try:
-        entry = await _database_call(get_active_entry, song_uid)
+        entry = await _database_call(
+            get_catalog_song,
+            GetCatalogSong(
+                song_uid=song_uid,
+                access=CatalogAccess(
+                    True, APIKeyScope.RESTRICTED_LYRICS_READ in authorized.scopes
+                ),
+            ),
+        )
     except CatalogReadError as exc:
         return _raw_error(
             exc.code,
@@ -420,9 +476,9 @@ async def song_lyrics(
 
     sections = [
         SongLyricsSection(
-            position=section["position"],
-            label=section["label"],
-            text=_section_text(section),
+            position=section.position,
+            label=section.label,
+            text="\n\n".join("\n".join(slide) for slide in section.slides),
         )
         for section in entry.sections
     ]

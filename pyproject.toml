@@ -8,6 +8,7 @@ dependencies = [
     "django>=5.2.8",
     "django-allauth[socialaccount]>=65.13.0",
     "django-bolt>=0.6.0",
+    "msgspec>=0.20.0",
     "django-health-check>=3.20.0",
     "django-stubs-ext>=5.2.7",
     "django-structlog>=9.1.0",
