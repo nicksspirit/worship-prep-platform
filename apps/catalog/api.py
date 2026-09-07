@@ -21,11 +21,10 @@ from apps.api_keys.services import (
     authorize_api_key,
     check_rate_limit,
 )
-from apps.catalog.importer import (
+from apps.catalog.services import ImportRejected, import_package
+from apps.catalog.services.importing import (
     MAX_EXPORTER_EVENTS_BYTES,
     MAX_PACKAGE_BYTES,
-    ImportRejected,
-    import_package,
 )
 from apps.catalog.models import CatalogEntry, RightsStatus
 from apps.catalog.schema import (

@@ -22,7 +22,7 @@ from apps.api_keys.models import APIKeyScope
 from apps.api_keys.services import issue_api_key
 from apps.catalog.api import api as catalog_api
 from apps.catalog.api import catalog_import
-from apps.catalog.importer import rollback_to_snapshot
+from apps.catalog.services import rollback_to_snapshot
 from apps.catalog.models import (
     CatalogEntry,
     CatalogImportRun,

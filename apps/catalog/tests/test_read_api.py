@@ -21,7 +21,7 @@ from django_bolt.testing import TestClient
 from apps.api_keys.models import APIKeyScope
 from apps.api_keys.services import check_rate_limit, issue_api_key, rotate_api_key
 from apps.catalog.api import api as catalog_api
-from apps.catalog.importer import import_package
+from apps.catalog.services import import_package
 from apps.catalog.models import CatalogEntry, CatalogState, RightsStatus
 from apps.catalog.schema import (
     APIErrorResponse,

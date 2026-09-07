@@ -6,7 +6,7 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import action
 
 from apps.catalog.forms import CatalogSongRightsAdminForm
-from apps.catalog.importer import recover_import_run, rollback_to_snapshot
+from apps.catalog.services import recover_import_run, rollback_to_snapshot
 from apps.catalog.models import (
     CatalogActivation,
     CatalogEntry,

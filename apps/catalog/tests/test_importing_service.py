@@ -6,16 +6,13 @@ from pathlib import Path
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from apps.catalog.importer import (
+from apps.catalog.services.importing import (
     InspectedPackage,
     ValidatedPackage,
     _read_archive,
     _validate_records,
 )
-from apps.catalog.services.importing import (
-    ExistingCatalogSong,
-    prepare_catalog_entries,
-)
+from apps.catalog.services.importing import ExistingCatalogSong, prepare_catalog_entries
 
 
 class PrepareCatalogEntriesTests(SimpleTestCase):

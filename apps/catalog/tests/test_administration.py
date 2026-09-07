@@ -15,7 +15,11 @@ from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.catalog.importer import ImportRejected, import_package, recover_import_run
+from apps.catalog.services import (
+    ImportRejected,
+    import_package,
+    recover_import_run,
+)
 from apps.catalog.models import (
     CatalogEntry,
     CatalogImportEvent,
@@ -172,7 +176,7 @@ class CatalogAdministrationTests(TransactionTestCase):
     def test_failed_retained_package_can_be_recovered_without_exporter_rerun(self):
         package, _manifest = self.build_package()
         with patch(
-            "apps.catalog.importer._stage_and_promote",
+            "apps.catalog.services.importing._stage_and_promote",
             side_effect=RuntimeError("temporary database failure"),
         ):
             with self.assertRaises(RuntimeError):
@@ -247,7 +251,7 @@ class CatalogAdministrationTests(TransactionTestCase):
     def test_scheduled_retry_reprocesses_the_same_run_and_package_once(self):
         package, manifest = self.build_package()
         with patch(
-            "apps.catalog.importer._stage_and_promote",
+            "apps.catalog.services.importing._stage_and_promote",
             side_effect=RuntimeError("temporary database failure"),
         ):
             with self.assertRaises(RuntimeError):
