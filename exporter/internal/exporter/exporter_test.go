@@ -21,34 +21,33 @@ type detector struct{ running bool }
 
 func (d detector) EasyWorshipRunning() (bool, error) { return d.running, nil }
 
-func TestRunBuildsVersionedPackageFromCopiedDatabases(t *testing.T) {
+func TestRunCreatesVersionedPackage(t *testing.T) {
 	t.Parallel()
-	dataDirectory := createSourceFixture(t, true)
-	stateDirectory := t.TempDir()
-	outputPath := filepath.Join(t.TempDir(), "catalog-import.zip")
-	createdAt := time.Date(2026, 8, 1, 12, 30, 0, 0, time.UTC)
+	result, _, _ := runFixtureExporter(t, true)
 
-	result, err := Run(context.Background(), Config{
-		DataDirectory: dataDirectory, OutputPath: outputPath, StateDirectory: stateDirectory,
-		RunID:              "11111111-1111-4111-8111-111111111111",
-		ExporterInstanceID: "22222222-2222-4222-8222-222222222222",
-		ExporterVersion:    "test", CreatedAt: createdAt, Detector: detector{},
-	})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
 	if result.Status != "package_created" || result.Manifest.Counts.Songs != 1 {
 		t.Fatalf("Run() result = %#v", result)
 	}
+}
+
+func TestRunRecordsSourceDiagnostics(t *testing.T) {
+	t.Parallel()
+	result, _, _ := runFixtureExporter(t, true)
+
 	if !result.Manifest.Source.Diagnostics.SongKeysPresent || result.Manifest.Source.Diagnostics.SongKeysRows != 1 {
 		t.Fatalf("SongKeys diagnostics = %#v", result.Manifest.Source.Diagnostics)
 	}
+}
 
+func TestRunWritesManifestAndSongRecord(t *testing.T) {
+	t.Parallel()
+	_, outputPath, _ := runFixtureExporter(t, true)
 	archive, err := zip.OpenReader(outputPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer archive.Close()
+
 	if len(archive.File) != 2 || archive.File[0].Name != "manifest.json" || archive.File[1].Name != "songs.ndjson" {
 		t.Fatalf("archive entries = %#v", archive.File)
 	}
@@ -81,7 +80,11 @@ func TestRunBuildsVersionedPackageFromCopiedDatabases(t *testing.T) {
 	if song.Fingerprint.Version != contract.FingerprintVersion || song.Fingerprint.Components.Lyrics == "" {
 		t.Fatalf("semantic fingerprint = %#v", song.Fingerprint)
 	}
+}
 
+func TestRunRecordsPackageCreatedEvent(t *testing.T) {
+	t.Parallel()
+	_, _, stateDirectory := runFixtureExporter(t, true)
 	events, err := os.Open(filepath.Join(stateDirectory, "outbox", "11111111-1111-4111-8111-111111111111.ndjson"))
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +103,26 @@ func TestRunBuildsVersionedPackageFromCopiedDatabases(t *testing.T) {
 	}
 	if got, want := strings.Join(eventTypes, ","), "started,package_created"; got != want {
 		t.Fatalf("outbox events = %q, want %q", got, want)
+	}
+}
+
+func runFixtureExporter(t *testing.T, includeKeys bool) (Result, string, string) {
+	t.Helper()
+	config := fixtureConfig(t, includeKeys, "11111111-1111-4111-8111-111111111111")
+	result, err := Run(context.Background(), config)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	return result, config.OutputPath, config.StateDirectory
+}
+
+func fixtureConfig(t *testing.T, includeKeys bool, runID string) Config {
+	t.Helper()
+	return Config{
+		DataDirectory: createSourceFixture(t, includeKeys), OutputPath: filepath.Join(t.TempDir(), "catalog-import.zip"),
+		StateDirectory: t.TempDir(), RunID: runID,
+		ExporterInstanceID: "22222222-2222-4222-8222-222222222222",
+		ExporterVersion:    "test", CreatedAt: time.Date(2026, 8, 1, 12, 30, 0, 0, time.UTC), Detector: detector{},
 	}
 }
 
@@ -127,16 +150,9 @@ func TestRunRecordsSourceInUseWithoutReadingDatabases(t *testing.T) {
 	}
 }
 
-func TestRunReusesIdenticalPackageAndRejectsConflictingRunIdentity(t *testing.T) {
+func TestRunReusesIdenticalPackage(t *testing.T) {
 	t.Parallel()
-	dataDirectory := createSourceFixture(t, false)
-	stateDirectory := t.TempDir()
-	config := Config{
-		DataDirectory: dataDirectory, OutputPath: filepath.Join(t.TempDir(), "catalog-import.zip"),
-		StateDirectory: stateDirectory, RunID: "55555555-5555-4555-8555-555555555555",
-		ExporterInstanceID: "66666666-6666-4666-8666-666666666666",
-		ExporterVersion:    "test", CreatedAt: time.Now(), Detector: detector{},
-	}
+	config := fixtureConfig(t, false, "55555555-5555-4555-8555-555555555555")
 	first, err := Run(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -149,8 +165,15 @@ func TestRunReusesIdenticalPackageAndRejectsConflictingRunIdentity(t *testing.T)
 	if second.Status != "package_reused" || second.SHA256 != first.SHA256 {
 		t.Fatalf("idempotent Run() = %#v, first = %#v", second, first)
 	}
+}
 
-	database := openFixtureDatabase(t, filepath.Join(dataDirectory, "Songs.db"))
+func TestRunRejectsChangedPackageForExistingRunID(t *testing.T) {
+	t.Parallel()
+	config := fixtureConfig(t, false, "55555555-5555-4555-8555-555555555555")
+	if _, err := Run(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+	database := openFixtureDatabase(t, filepath.Join(config.DataDirectory, "Songs.db"))
 	execFixture(t, database, `UPDATE song SET title = 'Changed title' WHERE rowid = 42`)
 	database.Close()
 	config.CreatedAt = config.CreatedAt.Add(time.Minute)

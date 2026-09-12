@@ -179,7 +179,7 @@ class PublicCatalogTests(TestCase):
         self.assertContains(response, "Start with what you remember")
         self.assertNotContains(response, "Amazing Grace")
 
-    def test_public_search_retains_modes_author_fallback_and_rights_omission(self):
+    def test_public_title_search_shows_public_metadata_and_hides_restricted_lyrics(self):
         title_response = self.client.get(
             reverse("catalog:search"),
             {"q": "Amazing", "mode": "title"},
@@ -194,6 +194,7 @@ class PublicCatalogTests(TestCase):
         self.assertContains(title_response, "Lyrics unavailable for public display")
         self.assertNotContains(title_response, "SECRET REFRAIN MUST NEVER LEAK")
 
+    def test_public_lyrics_search_highlights_matching_public_lyrics(self):
         lyrics_response = self.client.get(
             reverse("catalog:search"),
             {"q": "mercy morning", "mode": "lyrics"},
@@ -205,6 +206,7 @@ class PublicCatalogTests(TestCase):
         self.assertNotContains(lyrics_response, "Amazing Grace")
         self.assertNotContains(lyrics_response, "Amazing Hidden Song")
 
+    def test_public_title_search_does_not_search_lyrics(self):
         isolated_response = self.client.get(
             reverse("catalog:search"),
             {"q": "morning", "mode": "title"},
@@ -212,7 +214,7 @@ class PublicCatalogTests(TestCase):
         self.assertContains(isolated_response, "No songs found")
         self.assertNotContains(isolated_response, "Amazing Mercy")
 
-    def test_public_search_validates_length_and_keeps_no_result_query(self):
+    def test_public_search_rejects_overlong_queries(self):
         too_long = "a" * 129
         response = self.client.get(
             reverse("catalog:search"),
@@ -222,6 +224,7 @@ class PublicCatalogTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertContains(response, "at most 128 characters", status_code=400)
 
+    def test_public_search_preserves_a_no_result_query(self):
         response = self.client.get(
             reverse("catalog:search"),
             {"q": "not in the catalog", "mode": "title"},

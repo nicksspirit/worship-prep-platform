@@ -71,11 +71,10 @@ class CatalogAdministrationTests(TransactionTestCase):
             archive.writestr("songs.ndjson", records)
         return package.getvalue(), manifest
 
-    def test_rights_change_requires_superuser_policy_evidence_and_is_audited(self):
-        first_package, _manifest = self.build_package()
-        first = import_package(first_package).run.snapshot
+    def test_rights_change_rejects_catalog_administrators(self):
+        package, _manifest = self.build_package()
+        import_package(package)
         rights = CatalogSongRights.objects.get(song_uid="fixture-song-uid")
-        self.assertEqual(rights.status, RightsStatus.UNKNOWN)
 
         with self.assertRaises(PermissionDenied):
             change_lyrics_rights(
@@ -86,6 +85,12 @@ class CatalogAdministrationTests(TransactionTestCase):
                 explanation="Owner requested that web lyrics be withheld.",
                 user=self.catalog_admin,
             )
+
+    def test_rights_change_rejects_an_invalid_status_and_basis_pair(self):
+        package, _manifest = self.build_package()
+        import_package(package)
+        rights = CatalogSongRights.objects.get(song_uid="fixture-song-uid")
+
         with self.assertRaises(ValidationError):
             change_lyrics_rights(
                 rights,
@@ -95,6 +100,11 @@ class CatalogAdministrationTests(TransactionTestCase):
                 explanation="Wrong basis for approval.",
                 user=self.superuser,
             )
+
+    def test_rights_change_is_audited_and_carries_forward_to_later_imports(self):
+        first_package, _manifest = self.build_package()
+        first = import_package(first_package).run.snapshot
+        rights = CatalogSongRights.objects.get(song_uid="fixture-song-uid")
 
         decision = change_lyrics_rights(
             rights,

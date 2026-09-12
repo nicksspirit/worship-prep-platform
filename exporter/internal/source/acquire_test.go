@@ -36,20 +36,9 @@ func TestAcquireRequiresCanonicalDatabases(t *testing.T) {
 	}
 }
 
-func TestAcquireUsesPrivateCopiesAndAllowsMissingDiagnosticDatabase(t *testing.T) {
+func TestAcquireUsesPrivateCopies(t *testing.T) {
 	t.Parallel()
-	directory := t.TempDir()
-	for name, content := range map[string]string{
-		"Songs.db": "original songs", "SongWords.db": "original words",
-	} {
-		if err := os.WriteFile(filepath.Join(directory, name), []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	acquisition, err := Acquire(directory, fixedDetector{})
-	if err != nil {
-		t.Fatalf("Acquire() error = %v", err)
-	}
+	directory, acquisition := acquireFixture(t)
 	t.Cleanup(func() { _ = acquisition.Cleanup() })
 	if acquisition.Directory == directory {
 		t.Fatal("Acquire() returned live source directory")
@@ -64,13 +53,42 @@ func TestAcquireUsesPrivateCopiesAndAllowsMissingDiagnosticDatabase(t *testing.T
 	if got, want := string(copied), "original songs"; got != want {
 		t.Fatalf("copied Songs.db = %q, want %q", got, want)
 	}
+}
+
+func TestAcquireDescribesMissingDiagnosticDatabase(t *testing.T) {
+	t.Parallel()
+	_, acquisition := acquireFixture(t)
+	defer acquisition.Cleanup()
+
 	if got := acquisition.Files[2]; got.Name != "SongKeys.db" || got.Present || got.Required {
 		t.Fatalf("optional source metadata = %#v", got)
 	}
+}
+
+func TestAcquisitionCleanupRemovesPrivateCopies(t *testing.T) {
+	t.Parallel()
+	_, acquisition := acquireFixture(t)
 	if err := acquisition.Cleanup(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(acquisition.Directory); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("temporary directory still exists: %v", err)
 	}
+}
+
+func acquireFixture(t *testing.T) (string, *Acquisition) {
+	t.Helper()
+	directory := t.TempDir()
+	for name, content := range map[string]string{
+		"Songs.db": "original songs", "SongWords.db": "original words",
+	} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	acquisition, err := Acquire(directory, fixedDetector{})
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	return directory, acquisition
 }

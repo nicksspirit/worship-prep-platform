@@ -134,12 +134,14 @@ class CatalogImporterTests(TransactionTestCase):
         self.assertIn(("POST", "/api/v1/catalog/imports"), routes)
         self.assertEqual(self.client.post("/api/v1/catalog/imports").status_code, 404)
 
-    def test_requires_import_scoped_bearer_key(self):
+    def test_import_rejects_missing_bearer_key(self):
         package, _run_id = self.build_package()
         upload = UploadFile(filename="catalog.zip", size=len(package), file_data=package)
         response = async_to_sync(catalog_import)(upload, "")
         self.assertEqual(response[0], 401)
 
+    def test_import_rejects_bearer_key_without_import_scope(self):
+        package, _run_id = self.build_package()
         plaintext = issue_api_key(
             IssueApiKey(name="Search", scopes=[APIKeyScope.CATALOG_SEARCH])
         ).plaintext_key
@@ -162,13 +164,17 @@ class CatalogImporterTests(TransactionTestCase):
         self.assertIsNotNone(entry.title_search)
         self.assertIsNotNone(entry.lyrics_search)
 
-    def test_same_run_and_package_is_idempotent_but_conflict_is_rejected(self):
+    def test_reimporting_an_identical_run_is_idempotent(self):
         run_id = uuid.uuid4()
         package, _ = self.build_package(run_id=run_id)
         self.assertEqual(self.post_package(package).status_code, 201)
         self.assertEqual(self.post_package(package).status_code, 200)
         self.assertEqual(CatalogSnapshot.objects.count(), 1)
 
+    def test_reimporting_a_changed_package_with_the_same_run_id_conflicts(self):
+        run_id = uuid.uuid4()
+        package, _ = self.build_package(run_id=run_id)
+        self.assertEqual(self.post_package(package).status_code, 201)
         conflicting, _ = self.build_package(
             run_id=run_id,
             transform_record=lambda record: record["metadata"].update(title="Conflict"),
@@ -189,7 +195,7 @@ class CatalogImporterTests(TransactionTestCase):
         self.assertEqual(failed.status, ImportStatus.FAILED)
         self.assertEqual(failed.failure_code, "records_integrity_failed")
 
-    def test_unchanged_song_keeps_freshness_and_rollback_moves_only_pointer(self):
+    def test_unchanged_song_keeps_its_freshness_across_imports(self):
         first, _ = self.build_package()
         self.post_package(first)
         first_snapshot = CatalogState.objects.get().active_snapshot
@@ -201,12 +207,20 @@ class CatalogImporterTests(TransactionTestCase):
         second_freshness = second_snapshot.entries.get().content_changed_at
         self.assertEqual(second_freshness, original_freshness)
 
+    def test_rollback_moves_the_active_snapshot_pointer(self):
+        first, _ = self.build_package()
+        self.post_package(first)
+        first_snapshot = CatalogState.objects.get().active_snapshot
+        second, _ = self.build_package()
+        self.post_package(second)
+        second_snapshot = CatalogState.objects.get().active_snapshot
+
         activation = rollback_to_snapshot(first_snapshot)
         self.assertEqual(CatalogState.objects.get().active_snapshot, first_snapshot)
         self.assertEqual(activation.previous_snapshot, second_snapshot)
         self.assertEqual(CatalogSnapshot.objects.count(), 2)
 
-    def test_changed_song_gets_new_freshness_and_retention_keeps_eight_snapshots(self):
+    def test_changed_song_gets_new_freshness(self):
         first, _ = self.build_package()
         self.post_package(first)
         first_entry = CatalogState.objects.get().active_snapshot.entries.get()
@@ -222,7 +236,12 @@ class CatalogImporterTests(TransactionTestCase):
         changed_freshness = changed_entry.content_changed_at
         self.assertGreater(changed_freshness, original_freshness)
 
-        for _ in range(7):
+    def test_snapshot_retention_keeps_eight_snapshots(self):
+        def change_song(record):
+            record["metadata"]["title"] = "Amazing Grace (Revised)"
+            record["semantic_fingerprint"]["value"] = "sha256:" + "a" * 64
+
+        for _ in range(8):
             package, _run_id = self.build_package(transform_record=change_song)
             self.assertEqual(self.post_package(package).status_code, 201)
         self.assertEqual(CatalogSnapshot.objects.count(), 8)

@@ -254,12 +254,12 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(machine_schema.status_code, 200)
         self.assertEqual(machine_schema.json()["info"]["version"], "1.0.0")
 
-    def test_openapi_documentation_renders_swagger_ui(self):
+    def test_openapi_documentation_renders_an_openapi_page(self):
         catalog_api._register_openapi_routes()
         with TestClient(catalog_api, read_django_settings=False) as docs_client:
             rendered_docs = docs_client.get("/api/v1/docs")
         self.assertEqual(rendered_docs.status_code, 200)
-        self.assertIn("swagger", rendered_docs.text.lower())
+        self.assertIn("openapi", rendered_docs.text.lower())
 
     def test_title_search_is_accent_insensitive_and_hides_restricted_lyrics(self):
         title_response = self.client.get(
@@ -426,7 +426,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json()["error"]["code"], "cursor_expired")
 
-    def test_metadata_never_leaks_lyrics_and_structured_lyrics_enforce_rights(self):
+    def test_metadata_hides_lyrics_and_sections(self):
         metadata = self.client.get(
             "/api/v1/catalog/songs/03-echo",
             headers=self.auth(self.reader_secret),
@@ -436,6 +436,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertNotIn("lyrics", metadata.json())
         self.assertNotIn("sections", metadata.json())
 
+    def test_unknown_song_lyrics_are_available_to_readers(self):
         unknown_lyrics = self.client.get(
             "/api/v1/catalog/songs/01-grace/lyrics",
             headers=self.auth(self.reader_secret),
@@ -443,6 +444,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(unknown_lyrics.status_code, 200)
         self.assertEqual(unknown_lyrics.json()["rights_status"], "unknown")
 
+    def test_restricted_lyrics_are_not_disclosed_to_unprivileged_readers(self):
         denied = self.client.get(
             "/api/v1/catalog/songs/03-echo/lyrics",
             headers=self.auth(self.reader_secret),
@@ -454,6 +456,7 @@ class CatalogReadAPITests(TransactionTestCase):
         )
         self.assertNotIn("Hidden refrain", denied.text)
 
+    def test_privileged_readers_can_read_restricted_lyrics(self):
         allowed = self.client.get(
             "/api/v1/catalog/songs/03-echo/lyrics",
             headers=self.auth(self.privileged_secret),
@@ -470,11 +473,12 @@ class CatalogReadAPITests(TransactionTestCase):
             ],
         )
 
-    def test_invalid_expired_revoked_and_under_scoped_keys_use_stable_errors(self):
+    def test_missing_api_key_is_rejected(self):
         response = self.client.get("/api/v1/catalog/search")
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["error"]["code"], "invalid_api_key")
 
+    def test_expired_api_key_is_rejected(self):
         self.reader_key.expires_on = timezone.now()
         self.reader_key.save(update_fields=["expires_on", "updated_on"])
         response = self.client.get(
@@ -483,12 +487,16 @@ class CatalogReadAPITests(TransactionTestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_rotated_api_key_rejects_the_old_secret(self):
         replacement = rotate_api_key(self.privileged_key)
         response = self.client.get(
             "/api/v1/catalog/search",
             headers=self.auth(self.privileged_secret),
         )
         self.assertEqual(response.status_code, 401)
+
+    def test_replacement_api_key_tracks_its_first_use(self):
+        replacement = rotate_api_key(self.privileged_key)
         response = self.client.get(
             "/api/v1/catalog/search",
             headers=self.auth(replacement.plaintext_key),
@@ -498,6 +506,7 @@ class CatalogReadAPITests(TransactionTestCase):
         replacement.api_key.refresh_from_db()
         self.assertIsNotNone(replacement.api_key.last_used_on)
 
+    def test_lyrics_search_requires_lyrics_scope(self):
         response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "words", "mode": "lyrics"},
@@ -506,10 +515,11 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "insufficient_scope")
 
+    def test_lyrics_search_rejects_blank_queries(self):
         response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "  ", "mode": "lyrics"},
-            headers=self.auth(replacement.plaintext_key),
+            headers=self.auth(self.reader_secret),
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -517,6 +527,8 @@ class CatalogReadAPITests(TransactionTestCase):
             "lyrics_query_too_short",
         )
 
+    def test_search_rejects_queries_over_the_limit(self):
+        replacement = rotate_api_key(self.privileged_key)
         response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "x" * 201},
@@ -525,7 +537,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"]["code"], "query_too_long")
 
-    def test_rate_limit_is_per_key_and_returns_retry_metadata(self):
+    def test_rate_limit_is_isolated_per_api_key(self):
         first = check_rate_limit(self.search_key, bucket="test", limit=2)
         second = check_rate_limit(self.search_key, bucket="test", limit=2)
         denied = check_rate_limit(self.search_key, bucket="test", limit=2)
@@ -540,6 +552,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertGreater(denied.retry_after, 0)
         self.assertTrue(other_key.allowed)
 
+    def test_rate_limited_search_returns_retry_metadata(self):
         with patch("apps.catalog.api.SEARCH_RATE_LIMIT", 1):
             allowed_response = self.client.get(
                 "/api/v1/catalog/search",

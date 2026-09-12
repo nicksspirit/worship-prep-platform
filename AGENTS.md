@@ -67,6 +67,9 @@
   directory scaffolding.
 - Test location follows behavior ownership. Test structure follows the focused
   Arrange–Act–Assert convention when that refactor is in scope.
+- Give each test one clearly named behavior and one primary Act. Keep related
+  assertions together, but split independently meaningful outcomes into separate
+  tests; do not add ceremonial AAA comments when naming and whitespace are clear.
 
 ## Security & Dependencies
 - Never hard-code secrets.
@@ -85,6 +88,23 @@
 - Operational/framework routes such as health checks, readiness checks, Django admin,
   and authentication callbacks may remain on Django's standard HTTP stack.
 - See `docs/adr/0004-separate-json-and-rendered-transports.md`.
+
+## Backend Use-Case Boundaries
+- Organize each app's `services/` modules around verb-named use cases. Public service
+  inputs and outcomes are typed and transport-neutral; implementation helpers stay
+  private.
+- Models own declarative persistence, constraints, and small entity behavior. Keep
+  orchestration, transactions spanning a use case, authorization decisions, and
+  integration calls in services.
+- Keep `schema.py` limited to msgspec-backed Django Bolt contracts. Services must not
+  depend on Bolt serializers, and Reactivated presentation maps typed service outcomes
+  to template props without querying or changing state.
+- Views, Bolt handlers, admin actions, forms, and signals validate or bind their
+  transport input, call one focused service, then render or translate its outcome.
+  They do not contain reusable business workflows or call another transport.
+- Tests target public service behavior and transport contracts; do not test private
+  helpers directly. No architecture linter is warranted yet: enforce these stable,
+  reviewable seams mechanically only after repeated violations identify a precise rule.
 
 ## Agent skills
 
