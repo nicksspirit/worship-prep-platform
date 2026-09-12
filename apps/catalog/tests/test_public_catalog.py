@@ -16,7 +16,7 @@ from apps.catalog.models import (
     RightsStatus,
     SnapshotStatus,
 )
-from apps.catalog.text import SEARCH_CONFIG, normalize_title
+from apps.catalog.services.catalog_text import SEARCH_CONFIG, normalize_title
 
 FINGERPRINT = f"sha256:{'a' * 64}"
 

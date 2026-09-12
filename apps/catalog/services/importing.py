@@ -34,7 +34,7 @@ from apps.catalog.models import (
     ImportTrigger,
     SnapshotStatus,
 )
-from apps.catalog.text import SEARCH_CONFIG, normalize_title
+from apps.catalog.services.catalog_text import SEARCH_CONFIG, normalize_title
 
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024

@@ -192,7 +192,30 @@ class CatalogReadAPITests(TransactionTestCase):
     def auth(secret):
         return {"Authorization": f"Bearer {secret}"}
 
-    def test_openapi_documents_versioned_read_contract_and_bearer_security(self):
+    def create_continuation(self, *, params=None, secret=None):
+        response = self.client.get(
+            "/api/v1/catalog/search",
+            params=params or {"limit": 2},
+            headers=self.auth(secret or self.reader_secret),
+        )
+        return response.json()["next"]
+
+    @staticmethod
+    def replace_continuation_parameter(continuation, name, value):
+        parsed = urlsplit(continuation)
+        parameters = parse_qs(parsed.query)
+        parameters[name] = [value]
+        return urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                urlencode(parameters, doseq=True),
+                "",
+            )
+        )
+
+    def test_openapi_schema_describes_the_versioned_catalog_contract(self):
         schema = catalog_api._get_openapi_schema()
 
         self.assertEqual(schema["info"]["version"], "1.0.0")
@@ -208,6 +231,8 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertIn("CatalogSearchResponse", schema["components"]["schemas"])
         self.assertIn("CatalogImportResponse", schema["components"]["schemas"])
         self.assertEqual(catalog_api._openapi_config.path, "/api/v1/docs")
+
+    def test_catalog_bolt_handlers_declare_serializer_response_contracts(self):
         for contract in (
             APIErrorResponse,
             CatalogImportResponse,
@@ -222,16 +247,21 @@ class CatalogReadAPITests(TransactionTestCase):
                     catalog_api._handler_meta[handler_id].get("response_type")
                 )
 
+    def test_openapi_machine_document_is_served_from_the_documentation_route(self):
         catalog_api._register_openapi_routes()
         with TestClient(catalog_api, read_django_settings=False) as docs_client:
             machine_schema = docs_client.get("/api/v1/docs/openapi.json")
-            rendered_docs = docs_client.get("/api/v1/docs")
         self.assertEqual(machine_schema.status_code, 200)
         self.assertEqual(machine_schema.json()["info"]["version"], "1.0.0")
-        self.assertEqual(rendered_docs.status_code, 200)
-        self.assertIn("redoc", rendered_docs.text.lower())
 
-    def test_title_and_lyrics_modes_stay_separate_and_accent_insensitive(self):
+    def test_openapi_documentation_renders_swagger_ui(self):
+        catalog_api._register_openapi_routes()
+        with TestClient(catalog_api, read_django_settings=False) as docs_client:
+            rendered_docs = docs_client.get("/api/v1/docs")
+        self.assertEqual(rendered_docs.status_code, 200)
+        self.assertIn("swagger", rendered_docs.text.lower())
+
+    def test_title_search_is_accent_insensitive_and_hides_restricted_lyrics(self):
         title_response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "AMAZING", "mode": "title"},
@@ -244,6 +274,7 @@ class CatalogReadAPITests(TransactionTestCase):
         )
         self.assertNotIn("03-echo", str(title_response.json()))
 
+    def test_lyrics_search_excludes_restricted_songs_without_privileged_access(self):
         lyrics_response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "amazing words", "mode": "lyrics"},
@@ -255,6 +286,7 @@ class CatalogReadAPITests(TransactionTestCase):
             ["01-grace"],
         )
 
+    def test_lyrics_search_includes_restricted_songs_with_privileged_access(self):
         privileged_response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "amazing words", "mode": "lyrics"},
@@ -339,83 +371,58 @@ class CatalogReadAPITests(TransactionTestCase):
             ["05-same"],
         )
 
-    def test_invalid_mismatched_expired_and_pruned_continuations_are_distinct(self):
-        first = self.client.get(
-            "/api/v1/catalog/search",
-            params={"limit": 2},
-            headers=self.auth(self.reader_secret),
-        ).json()
-        parsed = urlsplit(first["next"])
-        parameters = parse_qs(parsed.query)
-        token = parameters["next"][0]
+    def test_rejects_tampered_continuation(self):
+        continuation = self.create_continuation()
+        parsed = urlsplit(continuation)
+        token = parse_qs(parsed.query)["next"][0]
+        tampered = self.replace_continuation_parameter(
+            continuation, "next", f"{token[:-1]}x"
+        )
 
-        tampered = parameters.copy()
-        tampered["next"] = [f"{token[:-1]}x"]
-        tampered_url = urlunsplit(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                parsed.path,
-                urlencode(tampered, doseq=True),
-                "",
-            )
-        )
-        response = self.client.get(
-            tampered_url,
-            headers=self.auth(self.reader_secret),
-        )
+        response = self.client.get(tampered, headers=self.auth(self.reader_secret))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"]["code"], "invalid_cursor")
 
-        mismatch = parameters.copy()
-        mismatch["limit"] = ["3"]
-        mismatch_url = urlunsplit(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                parsed.path,
-                urlencode(mismatch, doseq=True),
-                "",
-            )
+    def test_rejects_continuation_with_changed_query_parameters(self):
+        continuation = self.create_continuation()
+        mismatch = self.replace_continuation_parameter(continuation, "limit", "3")
+
+        response = self.client.get(mismatch, headers=self.auth(self.reader_secret))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "cursor_query_mismatch")
+
+    def test_rejects_continuation_with_changed_access_profile(self):
+        continuation = self.create_continuation(
+            params={"q": "amazing words", "mode": "lyrics", "limit": 1},
+            secret=self.privileged_secret,
         )
+
         response = self.client.get(
-            mismatch_url,
+            continuation,
             headers=self.auth(self.reader_secret),
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"]["code"], "cursor_query_mismatch")
 
-        privileged_lyrics = self.client.get(
-            "/api/v1/catalog/search",
-            params={"q": "amazing words", "mode": "lyrics", "limit": 1},
-            headers=self.auth(self.privileged_secret),
-        ).json()
-        response = self.client.get(
-            privileged_lyrics["next"],
-            headers=self.auth(self.reader_secret),
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"]["code"], "cursor_query_mismatch")
+    def test_rejects_expired_continuation_with_restart_metadata(self):
+        continuation = self.create_continuation()
 
         with patch(
             "django.core.signing.time.time",
             return_value=time.time() + CURSOR_MAX_AGE_SECONDS + 1,
         ):
-            response = self.client.get(
-                first["next"],
-                headers=self.auth(self.reader_secret),
-            )
+            response = self.client.get(continuation, headers=self.auth(self.reader_secret))
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json()["error"]["code"], "cursor_expired")
         self.assertIn("restart", response.json()["error"])
 
+    def test_rejects_continuation_after_its_snapshot_is_pruned(self):
+        continuation = self.create_continuation()
         old_snapshot = CatalogState.objects.get().active_snapshot
         self.activate_catalog(self.song_records())
         old_snapshot.delete()
-        response = self.client.get(
-            first["next"],
-            headers=self.auth(self.reader_secret),
-        )
+
+        response = self.client.get(continuation, headers=self.auth(self.reader_secret))
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json()["error"]["code"], "cursor_expired")
 

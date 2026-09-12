@@ -3,13 +3,16 @@ from io import StringIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
 from allauth.socialaccount.models import SocialAccount, SocialToken
+from invitations.models import Invitation
+from invitations.signals import invite_accepted
 
-from apps.accounts.models import InvitationRequest
+from apps.accounts.models import AccessLevel, InvitationRequest, RequestStatus
 
 
 class AccountFoundationTests(TestCase):
@@ -57,6 +60,105 @@ class AccountFoundationTests(TestCase):
         request = InvitationRequest.objects.get()
         self.assertEqual(request.email, "catalog.admin@example.com")
         self.assertContains(response, "Thank you")
+
+    def test_invitation_request_notifies_active_staff_for_review(self):
+        get_user_model().objects.create_user(
+            email="staff@example.com", password="pass1234", is_staff=True
+        )
+
+        with self.captureOnCommitCallbacks(execute=True), self.settings(
+            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+        ):
+            self.client.post(
+                reverse("request_invitation"),
+                {
+                    "email": "catalog.admin@example.com",
+                    "first_name": "Catalog",
+                    "last_name": "Admin",
+                    "message": "Please invite me.",
+                },
+            )
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].bcc, ["staff@example.com"])
+        self.assertIn("waiting for review", mail.outbox[0].body)
+
+    def test_superuser_approval_sends_an_invitation_and_records_the_review(self):
+        superuser = get_user_model().objects.create_superuser(
+            email="superuser@example.com",
+            password="pass1234",
+            first_name="Super",
+            last_name="User",
+        )
+        request = InvitationRequest.objects.create(
+            email="catalog.admin@example.com",
+            first_name="Catalog",
+            last_name="Admin",
+        )
+        self.client.force_login(superuser)
+
+        with self.captureOnCommitCallbacks(execute=True), self.settings(
+            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+        ):
+            response = self.client.post(
+                reverse("admin:accounts_invitationrequest_changelist"),
+                {
+                    "action": "approve_as_catalog_admin",
+                    "_selected_action": [request.pk],
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.APPROVED)
+        self.assertEqual(request.access_level, AccessLevel.CATALOG_ADMIN)
+        self.assertEqual(request.reviewed_by, superuser)
+        self.assertIsNotNone(request.invitation)
+
+    def test_superuser_rejection_records_the_review(self):
+        superuser = get_user_model().objects.create_superuser(
+            email="superuser@example.com",
+            password="pass1234",
+            first_name="Super",
+            last_name="User",
+        )
+        request = InvitationRequest.objects.create(
+            email="catalog.admin@example.com",
+            first_name="Catalog",
+            last_name="Admin",
+        )
+        self.client.force_login(superuser)
+
+        response = self.client.post(
+            reverse("admin:accounts_invitationrequest_changelist"),
+            {"action": "reject_requests", "_selected_action": [request.pk]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.REJECTED)
+        self.assertEqual(request.reviewed_by, superuser)
+
+    def test_accepting_approved_catalog_admin_invitation_grants_staff_access(self):
+        invitation = Invitation.create(email="catalog.admin@example.com")
+        InvitationRequest.objects.create(
+            email="catalog.admin@example.com",
+            first_name="Catalog",
+            last_name="Admin",
+            status=RequestStatus.APPROVED,
+            access_level=AccessLevel.CATALOG_ADMIN,
+            invitation=invitation,
+        )
+        user = get_user_model().objects.create_user(
+            email="catalog.admin@example.com", password="pass1234"
+        )
+
+        invite_accepted.send(
+            sender=Invitation, email=user.email, invitation=invitation
+        )
+
+        user.refresh_from_db()
+        self.assertTrue(user.is_staff)
 
     def test_unfold_admin_boots_with_greenfield_navigation(self):
         user = get_user_model().objects.create_superuser(

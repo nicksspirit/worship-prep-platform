@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from .models import InvitationRequest, User
+from .services import InvitationRequestInput, submit_invitation_request
 
 
 class UserCreationForm(forms.ModelForm):
@@ -68,7 +69,14 @@ class InvitationRequestForm(forms.ModelForm):
         instance: InvitationRequest = super().save(commit=False)
         instance.email = instance.email.strip().lower()
         if commit:
-            instance.save()
+            return submit_invitation_request(
+                InvitationRequestInput(
+                    email=instance.email,
+                    first_name=instance.first_name,
+                    last_name=instance.last_name,
+                    message=instance.message,
+                )
+            )
         return instance
 
 

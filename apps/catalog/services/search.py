@@ -16,7 +16,7 @@ from apps.catalog.models import (
     RightsStatus,
     SnapshotStatus,
 )
-from apps.catalog.text import SEARCH_CONFIG, normalize_title
+from apps.catalog.services.catalog_text import SEARCH_CONFIG, normalize_title
 
 CURSOR_MAX_AGE_SECONDS = 24 * 60 * 60
 CURSOR_SALT = "worship-prep-platform.catalog-search.v1"

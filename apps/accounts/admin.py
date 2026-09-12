@@ -1,9 +1,6 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.db import IntegrityError
 from django.utils.translation import gettext_lazy as _
-from invitations.exceptions import AlreadyAccepted, AlreadyInvited, UserRegisteredEmail
-from invitations.forms import CleanEmailMixin
 from invitations.utils import (
     get_invitation_admin_add_form,
     get_invitation_admin_change_form,
@@ -14,6 +11,7 @@ from unfold.decorators import display
 
 from .forms import UserChangeForm, UserCreationForm
 from .models import AccessLevel, InvitationRequest, RequestStatus, User
+from .services import approve_invitation_request, reject_invitation_requests
 
 Invitation = get_invitation_model()
 InvitationAdminAddForm = get_invitation_admin_add_form()
@@ -128,15 +126,12 @@ class InvitationRequestAdmin(ModelAdmin):
 
     @admin.action(description=_("Reject selected requests"))
     def reject_requests(self, request, queryset):
-        count = 0
-        for obj in queryset.filter(status=RequestStatus.PENDING):
-            obj.status = RequestStatus.REJECTED
-            obj.reviewed_by = request.user
-            obj.save(update_fields=["status", "reviewed_by", "updated_on"])
-            count += 1
+        result = reject_invitation_requests(
+            list(queryset.values_list("pk", flat=True)), reviewer=request.user
+        )
         self.message_user(
             request,
-            _("Rejected %(count)d request(s).") % {"count": count},
+            _("Rejected %(count)d request(s).") % {"count": result.count},
             level=messages.SUCCESS,
         )
 
@@ -158,60 +153,42 @@ class InvitationRequestAdmin(ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def _approve_and_send(self, request, queryset, access_level: str) -> None:
-        mixin = CleanEmailMixin()
         sent = 0
         for obj in queryset.filter(status=RequestStatus.PENDING):
-            try:
-                mixin.validate_invitation(obj.email)
-            except AlreadyInvited:
+            result = approve_invitation_request(
+                obj.pk,
+                reviewer=request.user,
+                request=request,
+                access_level=access_level,
+            )
+            if result.outcome == "already_invited":
                 self.message_user(
                     request,
                     _("Skipped %(email)s: already invited.") % {"email": obj.email},
                     level=messages.WARNING,
                 )
                 continue
-            except AlreadyAccepted:
+            if result.outcome == "already_accepted":
                 self.message_user(
                     request,
                     _("Skipped %(email)s: invite already accepted.") % {"email": obj.email},
                     level=messages.WARNING,
                 )
                 continue
-            except UserRegisteredEmail:
+            if result.outcome == "already_registered":
                 self.message_user(
                     request,
                     _("Skipped %(email)s: user already registered.") % {"email": obj.email},
                     level=messages.WARNING,
                 )
                 continue
-
-            try:
-                inv = Invitation.create(email=obj.email)
-            except IntegrityError:
+            if result.outcome != "sent":
                 self.message_user(
                     request,
                     _("Skipped %(email)s: could not create invitation.") % {"email": obj.email},
                     level=messages.ERROR,
                 )
                 continue
-
-            inv.inviter = request.user
-            inv.save()
-            inv.send_invitation(request)
-
-            obj.status = RequestStatus.APPROVED
-            obj.access_level = access_level
-            obj.reviewed_by = request.user
-            obj.invitation = inv
-            obj.save(
-                update_fields=[
-                    "status",
-                    "access_level",
-                    "reviewed_by",
-                    "invitation",
-                    "updated_on",
-                ],
-            )
             sent += 1
 
         self.message_user(

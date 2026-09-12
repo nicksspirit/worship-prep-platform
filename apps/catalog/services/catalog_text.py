@@ -1,6 +1,7 @@
 import unicodedata
+from typing import Final
 
-SEARCH_CONFIG = "wpp_simple_unaccent"
+SEARCH_CONFIG: Final = "wpp_simple_unaccent"
 
 
 def normalize_title(value: str) -> str:
