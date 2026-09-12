@@ -12,7 +12,7 @@ from unfold.decorators import action
 
 from .forms import IntegrationApiKeyAdminForm
 from .models import APIKeyScope, IntegrationApiKey
-from .services import generate_api_key_material, revoke_api_key, rotate_api_key
+from .services import IssueApiKey, issue_api_key, revoke_api_key, rotate_api_key
 
 
 class APIKeyStatusFilter(SimpleListFilter):
@@ -156,18 +156,25 @@ class IntegrationApiKeyAdmin(ModelAdmin):
     @admin.display(description=_("Scopes"))
     def scope_display(self, obj: IntegrationApiKey) -> str:
         scope_labels = dict(APIKeyScope.choices)
-        return ", ".join(
-            str(scope_labels.get(scope, scope)) for scope in obj.scopes
-        ) or "—"
+        return (
+            ", ".join(str(scope_labels.get(scope, scope)) for scope in obj.scopes) or "—"
+        )
 
     def save_model(self, request, obj, form, change):
         plaintext_key = None
         if not change:
-            material = generate_api_key_material()
-            obj.key_prefix = material.key_prefix
-            obj.hashed_key = material.hashed_key
-            obj.created_by = request.user
-            plaintext_key = material.plaintext_key
+            issued = issue_api_key(
+                IssueApiKey(
+                    name=obj.name,
+                    scopes=obj.scopes,
+                    created_by=request.user,
+                    expires_on=obj.expires_on,
+                    notes=obj.notes,
+                )
+            )
+            obj.pk = issued.api_key.pk
+            obj._state.adding = False
+            plaintext_key = issued.plaintext_key
 
         super().save_model(request, obj, form, change)
 
@@ -224,12 +231,14 @@ class IntegrationApiKeyAdmin(ModelAdmin):
             self.message_user(request, _("API key not found."), level=messages.ERROR)
             return redirect("admin:api_keys_integrationapikey_changelist")
 
-        replacement, plaintext_key = rotate_api_key(api_key, rotated_by=request.user)
+        replacement = rotate_api_key(api_key, rotated_by=request.user)
         self._message_plaintext_key(
             request,
-            plaintext_key,
+            replacement.plaintext_key,
             _("API key rotated. Copy the replacement key now."),
         )
         return redirect(
-            reverse("admin:api_keys_integrationapikey_change", args=[replacement.pk])
+            reverse(
+                "admin:api_keys_integrationapikey_change", args=[replacement.api_key.pk]
+            )
         )

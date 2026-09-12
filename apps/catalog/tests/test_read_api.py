@@ -19,7 +19,12 @@ from django_bolt.serializers import Serializer
 from django_bolt.testing import TestClient
 
 from apps.api_keys.models import APIKeyScope
-from apps.api_keys.services import check_rate_limit, issue_api_key, rotate_api_key
+from apps.api_keys.services import (
+    IssueApiKey,
+    check_rate_limit,
+    issue_api_key,
+    rotate_api_key,
+)
 from apps.catalog.api import api as catalog_api
 from apps.catalog.models import CatalogEntry, CatalogState, RightsStatus
 from apps.catalog.schema import (
@@ -44,26 +49,33 @@ from apps.catalog.services import (
 
 class CatalogReadAPITests(TransactionTestCase):
     def setUp(self):
-        self.search_key, self.search_secret = issue_api_key(
-            name="Search",
-            scopes=[APIKeyScope.CATALOG_SEARCH],
+        search = issue_api_key(IssueApiKey("Search", [APIKeyScope.CATALOG_SEARCH]))
+        self.search_key, self.search_secret = search.api_key, search.plaintext_key
+        reader = issue_api_key(
+            IssueApiKey(
+                "Reader",
+                [
+                    APIKeyScope.CATALOG_SEARCH,
+                    APIKeyScope.SONG_READ,
+                    APIKeyScope.LYRICS_READ,
+                ],
+            )
         )
-        self.reader_key, self.reader_secret = issue_api_key(
-            name="Reader",
-            scopes=[
-                APIKeyScope.CATALOG_SEARCH,
-                APIKeyScope.SONG_READ,
-                APIKeyScope.LYRICS_READ,
-            ],
+        self.reader_key, self.reader_secret = reader.api_key, reader.plaintext_key
+        privileged = issue_api_key(
+            IssueApiKey(
+                "Privileged reader",
+                [
+                    APIKeyScope.CATALOG_SEARCH,
+                    APIKeyScope.SONG_READ,
+                    APIKeyScope.LYRICS_READ,
+                    APIKeyScope.RESTRICTED_LYRICS_READ,
+                ],
+            )
         )
-        self.privileged_key, self.privileged_secret = issue_api_key(
-            name="Privileged reader",
-            scopes=[
-                APIKeyScope.CATALOG_SEARCH,
-                APIKeyScope.SONG_READ,
-                APIKeyScope.LYRICS_READ,
-                APIKeyScope.RESTRICTED_LYRICS_READ,
-            ],
+        self.privileged_key, self.privileged_secret = (
+            privileged.api_key,
+            privileged.plaintext_key,
         )
         self.activate_catalog(self.song_records())
         CatalogEntry.objects.filter(song_uid="03-echo").update(
@@ -464,7 +476,7 @@ class CatalogReadAPITests(TransactionTestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-        replacement, replacement_secret = rotate_api_key(self.privileged_key)
+        replacement = rotate_api_key(self.privileged_key)
         response = self.client.get(
             "/api/v1/catalog/search",
             headers=self.auth(self.privileged_secret),
@@ -472,12 +484,12 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(response.status_code, 401)
         response = self.client.get(
             "/api/v1/catalog/search",
-            headers=self.auth(replacement_secret),
+            headers=self.auth(replacement.plaintext_key),
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["X-RateLimit-Limit"], "60")
-        replacement.refresh_from_db()
-        self.assertIsNotNone(replacement.last_used_on)
+        replacement.api_key.refresh_from_db()
+        self.assertIsNotNone(replacement.api_key.last_used_on)
 
         response = self.client.get(
             "/api/v1/catalog/search",
@@ -490,7 +502,7 @@ class CatalogReadAPITests(TransactionTestCase):
         response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "  ", "mode": "lyrics"},
-            headers=self.auth(replacement_secret),
+            headers=self.auth(replacement.plaintext_key),
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -501,7 +513,7 @@ class CatalogReadAPITests(TransactionTestCase):
         response = self.client.get(
             "/api/v1/catalog/search",
             params={"q": "x" * 201},
-            headers=self.auth(replacement_secret),
+            headers=self.auth(replacement.plaintext_key),
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"]["code"], "query_too_long")
@@ -517,8 +529,8 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertTrue(second.allowed)
         self.assertEqual(second.remaining, 0)
         self.assertFalse(denied.allowed)
-        self.assertEqual(denied.headers["X-RateLimit-Remaining"], "0")
-        self.assertIn("Retry-After", denied.headers)
+        self.assertEqual(denied.remaining, 0)
+        self.assertGreater(denied.retry_after, 0)
         self.assertTrue(other_key.allowed)
 
         with patch("apps.catalog.api.SEARCH_RATE_LIMIT", 1):

@@ -7,32 +7,51 @@ from django.utils import timezone
 
 from apps.api_keys.forms import IntegrationApiKeyAdminForm
 from apps.api_keys.models import APIKeyScope, IntegrationApiKey
-from apps.api_keys.services import issue_api_key, rotate_api_key
+from apps.api_keys.services import (
+    AuthorizationDenied,
+    IssueApiKey,
+    authorize_api_key,
+    issue_api_key,
+    rotate_api_key,
+)
 
 
 class IntegrationApiKeyFoundationTests(TestCase):
     def test_issue_stores_only_hash_prefix_and_catalog_scopes(self):
-        api_key, plaintext_key = issue_api_key(
-            name="Catalog Importer",
-            scopes=[APIKeyScope.CATALOG_IMPORT],
+        issued = issue_api_key(
+            IssueApiKey(
+                name="Catalog Importer",
+                scopes=[APIKeyScope.CATALOG_IMPORT],
+            )
         )
 
-        self.assertTrue(plaintext_key.startswith(f"{api_key.key_prefix}."))
-        self.assertNotEqual(api_key.hashed_key, plaintext_key)
-        self.assertEqual(api_key.scopes, [APIKeyScope.CATALOG_IMPORT])
+        self.assertTrue(issued.plaintext_key.startswith(f"{issued.api_key.key_prefix}."))
+        self.assertNotEqual(issued.api_key.hashed_key, issued.plaintext_key)
+        self.assertEqual(issued.api_key.scopes, [APIKeyScope.CATALOG_IMPORT])
+
+    def test_authorization_denial_has_no_http_status(self):
+        result = authorize_api_key("", required_scopes=[APIKeyScope.CATALOG_SEARCH])
+
+        self.assertIsInstance(result, AuthorizationDenied)
+        self.assertEqual(result.code, "invalid_api_key")
+        self.assertFalse(hasattr(result, "status_code"))
 
     def test_rotation_revokes_original_and_returns_one_replacement_secret(self):
-        original, _ = issue_api_key(
-            name="Catalog Reader",
-            scopes=[APIKeyScope.CATALOG_SEARCH, APIKeyScope.SONG_READ],
+        original = issue_api_key(
+            IssueApiKey(
+                name="Catalog Reader",
+                scopes=[APIKeyScope.CATALOG_SEARCH, APIKeyScope.SONG_READ],
+            )
         )
 
-        replacement, plaintext_key = rotate_api_key(original)
+        replacement = rotate_api_key(original.api_key)
 
-        original.refresh_from_db()
-        self.assertTrue(original.is_revoked)
-        self.assertEqual(replacement.rotated_from, original)
-        self.assertTrue(plaintext_key.startswith(f"{replacement.key_prefix}."))
+        original.api_key.refresh_from_db()
+        self.assertTrue(original.api_key.is_revoked)
+        self.assertEqual(replacement.api_key.rotated_from, original.api_key)
+        self.assertTrue(
+            replacement.plaintext_key.startswith(f"{replacement.api_key.key_prefix}.")
+        )
 
     def test_admin_form_accepts_target_scope(self):
         form = IntegrationApiKeyAdminForm(

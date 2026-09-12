@@ -18,7 +18,7 @@ from django_bolt.param_functions import File, Header, Path, Query
 
 from apps.api_keys.models import APIKeyScope
 from apps.api_keys.services import (
-    APIKeyAccessError,
+    AuthorizationDenied,
     authorize_api_key,
     check_rate_limit,
 )
@@ -127,10 +127,11 @@ def _restart_url(restart: SearchRestart | None) -> str | None:
 
 
 def _authorize(authorization: str, *scopes: str):
-    try:
-        return authorize_api_key(authorization, required_scopes=scopes)
-    except APIKeyAccessError as exc:
-        return _raw_error(exc.code, exc.message, exc.status_code)
+    result = authorize_api_key(authorization, required_scopes=scopes)
+    if isinstance(result, AuthorizationDenied):
+        status = 401 if result.code == "invalid_api_key" else 403
+        return _raw_error(result.code, result.message, status)
+    return result.api_key
 
 
 def _consume_rate(api_key, *, bucket: str, limit: int):
@@ -140,9 +141,20 @@ def _consume_rate(api_key, *, bucket: str, limit: int):
             "rate_limited",
             "The Integration Client rate limit has been reached.",
             429,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
         )
     return rate
+
+
+def _rate_headers(rate) -> dict[str, str]:
+    headers = {
+        "X-RateLimit-Limit": str(rate.limit),
+        "X-RateLimit-Remaining": str(rate.remaining),
+        "X-RateLimit-Reset": str(rate.reset_at),
+    }
+    if not rate.allowed:
+        headers["Retry-After"] = str(rate.retry_after)
+    return headers
 
 
 def _lyrics_access(entry: CatalogEntry, scopes: list[str]) -> str:
@@ -287,7 +299,7 @@ async def catalog_search(
             "lyrics_query_too_short",
             "Lyrics search requires at least 3 non-whitespace characters.",
             400,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
         )
 
     try:
@@ -311,7 +323,7 @@ async def catalog_search(
             exc.code,
             exc.message,
             exc.status_code,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
             restart_url=_restart_url(exc.restart),
         )
 
@@ -342,7 +354,7 @@ async def catalog_search(
             ),
             has_more=page.has_more,
         ),
-        headers=rate.headers,
+        headers=_rate_headers(rate),
     )
 
 
@@ -388,7 +400,7 @@ async def song_metadata(
             exc.code,
             exc.message,
             exc.status_code,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
         )
     return Response(
         SongMetadataResponse(
@@ -401,7 +413,7 @@ async def song_metadata(
             rights_status=entry.rights_status,
             lyrics_access=_lyrics_access(entry, authorized.scopes),
         ),
-        headers=rate.headers,
+        headers=_rate_headers(rate),
     )
 
 
@@ -455,7 +467,7 @@ async def song_lyrics(
             exc.code,
             exc.message,
             exc.status_code,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
         )
     if (
         entry.rights_status == RightsStatus.RESTRICTED
@@ -465,7 +477,7 @@ async def song_lyrics(
             "restricted_lyrics_forbidden",
             "This key is not permitted to read restricted lyrics.",
             403,
-            headers=rate.headers,
+            headers=_rate_headers(rate),
         )
 
     sections = [
@@ -484,5 +496,5 @@ async def song_lyrics(
             rights_status=entry.rights_status,
             sections=sections,
         ),
-        headers=rate.headers,
+        headers=_rate_headers(rate),
     )

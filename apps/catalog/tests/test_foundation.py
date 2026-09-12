@@ -19,10 +19,9 @@ from django.urls import reverse
 from django_bolt import UploadFile
 
 from apps.api_keys.models import APIKeyScope
-from apps.api_keys.services import issue_api_key
+from apps.api_keys.services import IssueApiKey, issue_api_key
 from apps.catalog.api import api as catalog_api
 from apps.catalog.api import catalog_import
-from apps.catalog.services import rollback_to_snapshot
 from apps.catalog.models import (
     CatalogEntry,
     CatalogImportRun,
@@ -31,6 +30,7 @@ from apps.catalog.models import (
     ImportStatus,
     RightsStatus,
 )
+from apps.catalog.services import rollback_to_snapshot
 
 
 class GreenfieldRuntimeTests(TestCase):
@@ -86,9 +86,9 @@ class GreenfieldRuntimeTests(TestCase):
 
 class CatalogImporterTests(TransactionTestCase):
     def setUp(self):
-        _key, self.plaintext_key = issue_api_key(
-            name="Exporter", scopes=[APIKeyScope.CATALOG_IMPORT]
-        )
+        self.plaintext_key = issue_api_key(
+            IssueApiKey(name="Exporter", scopes=[APIKeyScope.CATALOG_IMPORT])
+        ).plaintext_key
 
     def build_package(self, *, run_id=None, transform_record=None, valid_checksum=True):
         fixture_dir = (
@@ -129,23 +129,20 @@ class CatalogImporterTests(TransactionTestCase):
 
     def test_json_import_is_registered_only_with_bolt(self):
         routes = {
-            (method, path)
-            for method, path, _handler_id, _handler in catalog_api._routes
+            (method, path) for method, path, _handler_id, _handler in catalog_api._routes
         }
         self.assertIn(("POST", "/api/v1/catalog/imports"), routes)
         self.assertEqual(self.client.post("/api/v1/catalog/imports").status_code, 404)
 
     def test_requires_import_scoped_bearer_key(self):
         package, _run_id = self.build_package()
-        upload = UploadFile(
-            filename="catalog.zip", size=len(package), file_data=package
-        )
+        upload = UploadFile(filename="catalog.zip", size=len(package), file_data=package)
         response = async_to_sync(catalog_import)(upload, "")
         self.assertEqual(response[0], 401)
 
-        _search_key, plaintext = issue_api_key(
-            name="Search", scopes=[APIKeyScope.CATALOG_SEARCH]
-        )
+        plaintext = issue_api_key(
+            IssueApiKey(name="Search", scopes=[APIKeyScope.CATALOG_SEARCH])
+        ).plaintext_key
         self.assertEqual(self.post_package(package, key=plaintext).status_code, 403)
 
     def test_valid_package_creates_private_completed_snapshot(self):

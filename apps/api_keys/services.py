@@ -21,8 +21,28 @@ API_KEY_SECRET_BYTES = 32
 API_KEY_HASH_SALT = "worship_prep_platform.api_keys"
 
 
+@dataclass(frozen=True, slots=True)
+class IssueApiKey:
+    """Request a new Integration Client credential."""
+
+    name: str
+    scopes: Iterable[str]
+    created_by: object | None = None
+    expires_on: object | None = None
+    notes: str = ""
+    rotated_from: IntegrationApiKey | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedApiKey:
+    """A persisted credential and its one-time plaintext value."""
+
+    api_key: IntegrationApiKey
+    plaintext_key: str
+
+
 @dataclass(slots=True)
-class GeneratedAPIKeyMaterial:
+class _GeneratedAPIKeyMaterial:
     """One-time generated API key material used during issuance."""
 
     key_prefix: str
@@ -30,36 +50,30 @@ class GeneratedAPIKeyMaterial:
     hashed_key: str
 
 
-class APIKeyAccessError(ValueError):
-    """An Integration Client credential cannot authorize the requested resource."""
+@dataclass(frozen=True, slots=True)
+class AuthorizationDenied:
+    """A credential cannot authorize the requested resource."""
 
-    def __init__(self, code: str, message: str, status_code: int):
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status_code = status_code
+    code: str
+    message: str
 
 
 @dataclass(frozen=True, slots=True)
-class RateLimitResult:
-    """Outcome and response metadata for one per-key rate-limit check."""
+class AuthorizedAPIKey:
+    """A credential authorized for the requested scopes."""
+
+    api_key: IntegrationApiKey
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimitOutcome:
+    """Outcome of one per-key rate-limit check."""
 
     allowed: bool
     limit: int
     remaining: int
     reset_at: int
     retry_after: int
-
-    @property
-    def headers(self) -> dict[str, str]:
-        headers = {
-            "X-RateLimit-Limit": str(self.limit),
-            "X-RateLimit-Remaining": str(self.remaining),
-            "X-RateLimit-Reset": str(self.reset_at),
-        }
-        if not self.allowed:
-            headers["Retry-After"] = str(self.retry_after)
-        return headers
 
 
 def hash_api_key(raw_key: str) -> str:
@@ -85,15 +99,14 @@ def authorize_api_key(
     authorization: str | None,
     *,
     required_scopes: Iterable[str],
-) -> IntegrationApiKey:
+) -> AuthorizedAPIKey | AuthorizationDenied:
     """Authenticate a Bearer key and distinguish invalid credentials from scope denial."""
 
     scheme, separator, raw_key = str(authorization or "").partition(" ")
     if separator != " " or scheme.lower() != "bearer" or not raw_key:
-        raise APIKeyAccessError(
+        return AuthorizationDenied(
             "invalid_api_key",
             "A valid Integration Client Bearer key is required.",
-            401,
         )
 
     prefix = parse_api_key_prefix(raw_key)
@@ -107,23 +120,21 @@ def authorize_api_key(
         or not constant_time_compare(api_key.hashed_key, hash_api_key(raw_key))
         or api_key.status != "active"
     ):
-        raise APIKeyAccessError(
+        return AuthorizationDenied(
             "invalid_api_key",
             "A valid Integration Client Bearer key is required.",
-            401,
         )
 
     missing_scopes = sorted(set(required_scopes) - set(api_key.scopes))
     if missing_scopes:
-        raise APIKeyAccessError(
+        return AuthorizationDenied(
             "insufficient_scope",
             f"This resource requires scope: {', '.join(missing_scopes)}.",
-            403,
         )
 
     api_key.last_used_on = timezone.now()
     api_key.save(update_fields=["last_used_on", "updated_on"])
-    return api_key
+    return AuthorizedAPIKey(api_key)
 
 
 @transaction.atomic
@@ -132,7 +143,7 @@ def check_rate_limit(
     *,
     bucket: str,
     limit: int,
-) -> RateLimitResult:
+) -> RateLimitOutcome:
     """Consume one request from a database-coordinated one-minute key window."""
 
     now = timezone.now()
@@ -158,7 +169,7 @@ def check_rate_limit(
     window.save(update_fields=["window_started_at", "request_count"])
 
     retry_after = max(1, int((reset_at - now).total_seconds()))
-    return RateLimitResult(
+    return RateLimitOutcome(
         allowed=allowed,
         limit=limit,
         remaining=max(0, limit - window.request_count),
@@ -184,44 +195,36 @@ def _next_key_prefix() -> str:
             return candidate
 
 
-def generate_api_key_material() -> GeneratedAPIKeyMaterial:
+def _generate_api_key_material() -> _GeneratedAPIKeyMaterial:
     """Generate a unique API key prefix and secret."""
 
     prefix = _next_key_prefix()
     secret = secrets.token_urlsafe(API_KEY_SECRET_BYTES)
     plaintext = build_api_key(prefix, secret)
-    return GeneratedAPIKeyMaterial(
+    return _GeneratedAPIKeyMaterial(
         key_prefix=prefix,
         plaintext_key=plaintext,
         hashed_key=hash_api_key(plaintext),
     )
 
 
-def issue_api_key(
-    *,
-    name: str,
-    scopes: Iterable[str],
-    created_by=None,
-    expires_on=None,
-    notes: str = "",
-    rotated_from: IntegrationApiKey | None = None,
-) -> tuple[IntegrationApiKey, str]:
+def issue_api_key(request: IssueApiKey) -> IssuedApiKey:
     """Create and persist a new API key, returning the plaintext once."""
 
-    material = generate_api_key_material()
+    material = _generate_api_key_material()
 
     api_key = IntegrationApiKey(
-        name=name,
+        name=request.name,
         key_prefix=material.key_prefix,
         hashed_key=material.hashed_key,
-        scopes=normalize_api_key_scopes(scopes),
-        created_by=created_by,
-        expires_on=expires_on,
-        notes=notes,
-        rotated_from=rotated_from,
+        scopes=normalize_api_key_scopes(request.scopes),
+        created_by=request.created_by,
+        expires_on=request.expires_on,
+        notes=request.notes,
+        rotated_from=request.rotated_from,
     )
     api_key.save()
-    return api_key, material.plaintext_key
+    return IssuedApiKey(api_key, material.plaintext_key)
 
 
 @transaction.atomic
@@ -229,20 +232,22 @@ def rotate_api_key(
     api_key: IntegrationApiKey,
     *,
     rotated_by=None,
-) -> tuple[IntegrationApiKey, str]:
+) -> IssuedApiKey:
     """Issue a replacement key and revoke the original."""
 
-    replacement, plaintext = issue_api_key(
-        name=api_key.name,
-        scopes=api_key.scopes,
-        created_by=rotated_by,
-        expires_on=api_key.expires_on,
-        notes=api_key.notes,
-        rotated_from=api_key,
+    replacement = issue_api_key(
+        IssueApiKey(
+            name=api_key.name,
+            scopes=api_key.scopes,
+            created_by=rotated_by,
+            expires_on=api_key.expires_on,
+            notes=api_key.notes,
+            rotated_from=api_key,
+        )
     )
     api_key.revoke()
     api_key.save(update_fields=["is_active", "revoked_on", "updated_on"])
-    return replacement, plaintext
+    return replacement
 
 
 def revoke_api_key(api_key: IntegrationApiKey) -> None:
