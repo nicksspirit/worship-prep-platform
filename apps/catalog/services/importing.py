@@ -34,8 +34,7 @@ from apps.catalog.models import (
     ImportTrigger,
     SnapshotStatus,
 )
-from apps.catalog.text import normalize_title
-from apps.catalog.text import SEARCH_CONFIG
+from apps.catalog.text import SEARCH_CONFIG, normalize_title
 
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -614,9 +613,18 @@ def _finish_failed_run(
     _event(run, "import", "failed", details={"code": code})
     _try_write_report(run)
     if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
-        from apps.catalog.operations import notify_scheduled_import_failure
+        from apps.catalog.services.administration import (
+            ScheduledImportFailure,
+            notify_scheduled_import_failure,
+        )
 
-        notify_scheduled_import_failure(run)
+        notify_scheduled_import_failure(
+            ScheduledImportFailure(
+                run_id=str(run.pk),
+                failure_code=run.failure_code,
+                failure_summary=run.failure_summary,
+            )
+        )
 
 
 def _process_run(

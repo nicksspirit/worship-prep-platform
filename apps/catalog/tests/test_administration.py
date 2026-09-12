@@ -15,11 +15,6 @@ from django.test import TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.catalog.services import (
-    ImportRejected,
-    import_package,
-    recover_import_run,
-)
 from apps.catalog.models import (
     CatalogEntry,
     CatalogImportEvent,
@@ -32,7 +27,12 @@ from apps.catalog.models import (
     RightsBasis,
     RightsStatus,
 )
-from apps.catalog.rights import change_lyrics_rights
+from apps.catalog.services import (
+    ImportRejected,
+    change_lyrics_rights,
+    import_package,
+    recover_import_run,
+)
 
 
 class CatalogAdministrationTests(TransactionTestCase):
@@ -178,9 +178,8 @@ class CatalogAdministrationTests(TransactionTestCase):
         with patch(
             "apps.catalog.services.importing._stage_and_promote",
             side_effect=RuntimeError("temporary database failure"),
-        ):
-            with self.assertRaises(RuntimeError):
-                import_package(package)
+        ), self.assertRaises(RuntimeError):
+            import_package(package)
         run = CatalogState.objects.filter(pk=1).first()
         self.assertTrue(run is None or run.active_snapshot is None)
         self.assertFalse(CatalogSongRights.objects.exists())
@@ -253,9 +252,8 @@ class CatalogAdministrationTests(TransactionTestCase):
         with patch(
             "apps.catalog.services.importing._stage_and_promote",
             side_effect=RuntimeError("temporary database failure"),
-        ):
-            with self.assertRaises(RuntimeError):
-                import_package(package, trigger=ImportTrigger.SCHEDULED)
+        ), self.assertRaises(RuntimeError):
+            import_package(package, trigger=ImportTrigger.SCHEDULED)
 
         result = import_package(package, trigger=ImportTrigger.SCHEDULED)
 

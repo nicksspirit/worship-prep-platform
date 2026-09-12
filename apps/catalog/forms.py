@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from unfold.widgets import UnfoldAdminTextareaWidget
 
 from apps.catalog.models import CatalogSongRights
-from apps.catalog.rights import ALLOWED_BASES
+from apps.catalog.services import ALLOWED_BASES
 
 
 class CatalogSongRightsAdminForm(forms.ModelForm):
