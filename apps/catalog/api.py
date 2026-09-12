@@ -48,6 +48,11 @@ from apps.catalog.services.importing import (
     MAX_EXPORTER_EVENTS_BYTES,
     MAX_PACKAGE_BYTES,
 )
+from apps.catalog.services.api import (
+    CatalogAPIError,
+    SearchCatalogRequest,
+    search_for_client,
+)
 
 SEARCH_RATE_LIMIT = 60
 LYRICS_RATE_LIMIT = 30
@@ -276,56 +281,27 @@ async def catalog_search(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    required_scopes = [APIKeyScope.CATALOG_SEARCH]
-    if mode == "lyrics":
-        required_scopes.append(APIKeyScope.LYRICS_READ)
-    authorized = await _database_call(
-        _authorize,
-        authorization,
-        *required_scopes,
+    result = await _database_call(
+        search_for_client,
+        SearchCatalogRequest(
+            q, mode, limit, continuation, authorization, SEARCH_RATE_LIMIT
+        ),
     )
-    if isinstance(authorized, tuple):
-        return authorized
-    rate = await _database_call(
-        _consume_rate,
-        authorized,
-        bucket="catalog.search",
-        limit=SEARCH_RATE_LIMIT,
-    )
-    if isinstance(rate, tuple):
-        return rate
-    if mode == "lyrics" and len(q.strip()) < 3:
+    if isinstance(result, CatalogAPIError):
+        status = {
+            "invalid_api_key": 401,
+            "insufficient_scope": 403,
+            "rate_limited": 429,
+            "cursor_expired": 410,
+        }.get(result.code, 400)
         return _raw_error(
-            "lyrics_query_too_short",
-            "Lyrics search requires at least 3 non-whitespace characters.",
-            400,
-            headers=_rate_headers(rate),
+            result.code,
+            result.message,
+            status,
+            headers=_rate_headers(result.rate) if result.rate else None,
+            restart_url=_restart_url(result.restart),
         )
-
-    try:
-        page = await _database_call(
-            search_catalog,
-            SearchCatalog(
-                query=q,
-                mode=mode,
-                limit=limit,
-                continuation=continuation,
-                access=CatalogAccess(
-                    may_read_lyrics=True,
-                    may_read_restricted_lyrics=(
-                        APIKeyScope.RESTRICTED_LYRICS_READ in authorized.scopes
-                    ),
-                ),
-            ),
-        )
-    except CatalogReadError as exc:
-        return _raw_error(
-            exc.code,
-            exc.message,
-            exc.status_code,
-            headers=_rate_headers(rate),
-            restart_url=_restart_url(exc.restart),
-        )
+    page = result.page
 
     results = [
         CatalogSearchSong(
@@ -335,7 +311,12 @@ async def catalog_search(
             slide_count=entry.slide_count,
             content_changed_at=entry.content_changed_at,
             rights_status=entry.rights_status,
-            lyrics_access=_lyrics_access(entry, authorized.scopes),
+            lyrics_access=(
+                "available"
+                if entry.rights_status != RightsStatus.RESTRICTED
+                or result.may_read_restricted_lyrics
+                else "restricted"
+            ),
         )
         for entry in page.items
     ]
@@ -354,7 +335,11 @@ async def catalog_search(
             ),
             has_more=page.has_more,
         ),
-        headers=_rate_headers(rate),
+        headers={
+            "X-RateLimit-Limit": str(result.limit),
+            "X-RateLimit-Remaining": str(result.remaining),
+            "X-RateLimit-Reset": str(result.reset_at),
+        },
     )
 
 
