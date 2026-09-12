@@ -21,7 +21,6 @@ from django_bolt.testing import TestClient
 from apps.api_keys.models import APIKeyScope
 from apps.api_keys.services import check_rate_limit, issue_api_key, rotate_api_key
 from apps.catalog.api import api as catalog_api
-from apps.catalog.services import import_package
 from apps.catalog.models import CatalogEntry, CatalogState, RightsStatus
 from apps.catalog.schema import (
     APIErrorResponse,
@@ -30,7 +29,17 @@ from apps.catalog.schema import (
     SongLyricsResponse,
     SongMetadataResponse,
 )
-from apps.catalog.search import CURSOR_MAX_AGE_SECONDS, search_catalog
+from apps.catalog.services import (
+    CURSOR_MAX_AGE_SECONDS,
+    CatalogAccess,
+    GetCatalogSong,
+    SearchCatalog,
+    get_catalog_song,
+    import_package,
+)
+from apps.catalog.services import (
+    search_catalog as search_catalog_service,
+)
 
 
 class CatalogReadAPITests(TransactionTestCase):
@@ -256,6 +265,23 @@ class CatalogReadAPITests(TransactionTestCase):
             [item["song_uid"] for item in response.json()["results"]],
             ["01-grace"],
         )
+
+    def test_typed_read_operations_select_rights_safe_catalog_data(self):
+        page = search_catalog_service(
+            SearchCatalog(
+                query="amazing words",
+                mode="lyrics",
+                access=CatalogAccess(True, False),
+            )
+        )
+        self.assertEqual([item.song_uid for item in page.items], ["01-grace"])
+
+        song = get_catalog_song(
+            GetCatalogSong(song_uid="03-echo", access=CatalogAccess(True, False))
+        )
+        self.assertFalse(song.lyrics_available)
+        self.assertIsNone(song.cleaned_lyrics)
+        self.assertEqual(song.sections, [])
 
     def test_keyset_continuation_is_deterministic_and_snapshot_pinned(self):
         first = self.client.get(
@@ -528,8 +554,11 @@ class CatalogReadAPITests(TransactionTestCase):
         self.activate_catalog(records)
         import_duration = perf_counter() - import_started_at
 
-        first_page = search_catalog(query="Song", mode="title", limit=100)
-        continuation = parse_qs(urlsplit(first_page.next_url).query)["next"][0]
+        first_page = search_catalog_service(
+            SearchCatalog(query="Song", mode="title", limit=100)
+        )
+        continuation = first_page.continuation
+        assert continuation is not None
 
         def percentile_95(operation):
             durations = []
@@ -540,17 +569,20 @@ class CatalogReadAPITests(TransactionTestCase):
             return sorted(durations)[18]
 
         title_p95 = percentile_95(
-            lambda: search_catalog(query="Song", mode="title", limit=20)
+            lambda: search_catalog_service(
+                SearchCatalog(query="Song", mode="title", limit=20)
+            )
         )
         lyrics_p95 = percentile_95(
-            lambda: search_catalog(query="grace truth", mode="lyrics", limit=20)
+            lambda: search_catalog_service(
+                SearchCatalog(query="grace truth", mode="lyrics", limit=20)
+            )
         )
         continuation_p95 = percentile_95(
-            lambda: search_catalog(
-                query="Song",
-                mode="title",
-                limit=100,
-                continuation=continuation,
+            lambda: search_catalog_service(
+                SearchCatalog(
+                    query="Song", mode="title", limit=100, continuation=continuation
+                )
             )
         )
 
@@ -562,7 +594,9 @@ class CatalogReadAPITests(TransactionTestCase):
         def concurrent_search():
             try:
                 return len(
-                    search_catalog(query="Song", mode="title", limit=20).entries
+                    search_catalog_service(
+                        SearchCatalog(query="Song", mode="title", limit=20)
+                    ).items
                 )
             finally:
                 connections.close_all()
