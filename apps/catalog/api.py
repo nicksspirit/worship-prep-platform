@@ -16,13 +16,7 @@ from django_bolt import (
 from django_bolt.openapi.spec import Components, SecurityScheme
 from django_bolt.param_functions import File, Header, Path, Query
 
-from apps.api_keys.models import APIKeyScope
-from apps.api_keys.services import (
-    AuthorizationDenied,
-    authorize_api_key,
-    check_rate_limit,
-)
-from apps.catalog.models import CatalogEntry, RightsStatus
+from apps.catalog.models import RightsStatus
 from apps.catalog.schema import (
     APIErrorDetail,
     APIErrorResponse,
@@ -33,25 +27,19 @@ from apps.catalog.schema import (
     SongLyricsSection,
     SongMetadataResponse,
 )
-from apps.catalog.services import (
-    CatalogAccess,
-    CatalogReadError,
-    GetCatalogSong,
-    ImportRejected,
-    SearchCatalog,
-    SearchRestart,
-    get_catalog_song,
-    import_package,
-    search_catalog,
+from apps.catalog.services import SearchRestart
+from apps.catalog.services.api import (
+    CatalogAPIError,
+    ImportCatalogRequest,
+    ReadCatalogSongRequest,
+    SearchCatalogRequest,
+    import_for_client,
+    read_song_for_client,
+    search_for_client,
 )
 from apps.catalog.services.importing import (
     MAX_EXPORTER_EVENTS_BYTES,
     MAX_PACKAGE_BYTES,
-)
-from apps.catalog.services.api import (
-    CatalogAPIError,
-    SearchCatalogRequest,
-    search_for_client,
 )
 
 SEARCH_RATE_LIMIT = 60
@@ -131,26 +119,6 @@ def _restart_url(restart: SearchRestart | None) -> str | None:
     return _search_url(query=restart.query, mode=restart.mode, limit=restart.limit)
 
 
-def _authorize(authorization: str, *scopes: str):
-    result = authorize_api_key(authorization, required_scopes=scopes)
-    if isinstance(result, AuthorizationDenied):
-        status = 401 if result.code == "invalid_api_key" else 403
-        return _raw_error(result.code, result.message, status)
-    return result.api_key
-
-
-def _consume_rate(api_key, *, bucket: str, limit: int):
-    rate = check_rate_limit(api_key, bucket=bucket, limit=limit)
-    if not rate.allowed:
-        return _raw_error(
-            "rate_limited",
-            "The Integration Client rate limit has been reached.",
-            429,
-            headers=_rate_headers(rate),
-        )
-    return rate
-
-
 def _rate_headers(rate) -> dict[str, str]:
     headers = {
         "X-RateLimit-Limit": str(rate.limit),
@@ -160,14 +128,6 @@ def _rate_headers(rate) -> dict[str, str]:
     if not rate.allowed:
         headers["Retry-After"] = str(rate.retry_after)
     return headers
-
-
-def _lyrics_access(entry: CatalogEntry, scopes: list[str]) -> str:
-    if entry.rights_status != RightsStatus.RESTRICTED:
-        return "available"
-    if APIKeyScope.RESTRICTED_LYRICS_READ in scopes:
-        return "available"
-    return "restricted"
 
 
 def _run_database_call(service, *args, **kwargs):
@@ -227,24 +187,23 @@ async def catalog_import(
 ):
     """Receive a Catalog Import Package from an import-scoped client."""
 
-    authorized = await _database_call(
-        _authorize,
-        authorization,
-        APIKeyScope.CATALOG_IMPORT,
-    )
-    if isinstance(authorized, tuple):
-        return authorized
-
-    try:
-        result = await _database_call(
-            import_package,
+    outcome = await _database_call(
+        import_for_client,
+        ImportCatalogRequest(
             package.file.read(),
-            exporter_events=events.file.read() if events else b"",
-            trigger=import_trigger,
-        )
-    except ImportRejected as exc:
-        status = 409 if exc.code == "run_id_conflict" else 422
-        return _raw_error(exc.code, exc.summary, status)
+            events.file.read() if events else b"",
+            import_trigger,
+            authorization,
+        ),
+    )
+    if isinstance(outcome, CatalogAPIError):
+        status = {
+            "invalid_api_key": 401,
+            "insufficient_scope": 403,
+            "run_id_conflict": 409,
+        }.get(outcome.code, 422)
+        return _raw_error(outcome.code, outcome.message, status)
+    result = outcome.result
     return Response(
         CatalogImportResponse(
             run_id=str(result.run.pk),
@@ -360,33 +319,24 @@ async def song_metadata(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    authorized = await _database_call(
-        _authorize,
-        authorization,
-        APIKeyScope.SONG_READ,
+    result = await _database_call(
+        read_song_for_client,
+        ReadCatalogSongRequest(song_uid, authorization, False, SONG_RATE_LIMIT),
     )
-    if isinstance(authorized, tuple):
-        return authorized
-    rate = await _database_call(
-        _consume_rate,
-        authorized,
-        bucket="catalog.song",
-        limit=SONG_RATE_LIMIT,
-    )
-    if isinstance(rate, tuple):
-        return rate
-    try:
-        entry = await _database_call(
-            get_catalog_song,
-            GetCatalogSong(song_uid=song_uid, access=CatalogAccess(False, False)),
-        )
-    except CatalogReadError as exc:
+    if isinstance(result, CatalogAPIError):
+        status = {
+            "invalid_api_key": 401,
+            "insufficient_scope": 403,
+            "rate_limited": 429,
+            "song_not_found": 404,
+        }.get(result.code, 400)
         return _raw_error(
-            exc.code,
-            exc.message,
-            exc.status_code,
-            headers=_rate_headers(rate),
+            result.code,
+            result.message,
+            status,
+            headers=_rate_headers(result.rate) if result.rate else None,
         )
+    entry = result.song
     return Response(
         SongMetadataResponse(
             song_uid=entry.song_uid,
@@ -396,9 +346,16 @@ async def song_metadata(
             slide_count=entry.slide_count,
             content_changed_at=entry.content_changed_at,
             rights_status=entry.rights_status,
-            lyrics_access=_lyrics_access(entry, authorized.scopes),
+            lyrics_access="available"
+            if entry.rights_status != RightsStatus.RESTRICTED
+            or result.may_read_restricted_lyrics
+            else "restricted",
         ),
-        headers=_rate_headers(rate),
+        headers={
+            "X-RateLimit-Limit": str(result.limit),
+            "X-RateLimit-Remaining": str(result.remaining),
+            "X-RateLimit-Reset": str(result.reset_at),
+        },
     )
 
 
@@ -421,49 +378,25 @@ async def song_lyrics(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    authorized = await _database_call(
-        _authorize,
-        authorization,
-        APIKeyScope.LYRICS_READ,
+    result = await _database_call(
+        read_song_for_client,
+        ReadCatalogSongRequest(song_uid, authorization, True, LYRICS_RATE_LIMIT),
     )
-    if isinstance(authorized, tuple):
-        return authorized
-    rate = await _database_call(
-        _consume_rate,
-        authorized,
-        bucket="catalog.lyrics",
-        limit=LYRICS_RATE_LIMIT,
-    )
-    if isinstance(rate, tuple):
-        return rate
-    try:
-        entry = await _database_call(
-            get_catalog_song,
-            GetCatalogSong(
-                song_uid=song_uid,
-                access=CatalogAccess(
-                    True,
-                    APIKeyScope.RESTRICTED_LYRICS_READ in authorized.scopes,
-                ),
-            ),
-        )
-    except CatalogReadError as exc:
+    if isinstance(result, CatalogAPIError):
+        status = {
+            "invalid_api_key": 401,
+            "insufficient_scope": 403,
+            "restricted_lyrics_forbidden": 403,
+            "rate_limited": 429,
+            "song_not_found": 404,
+        }.get(result.code, 400)
         return _raw_error(
-            exc.code,
-            exc.message,
-            exc.status_code,
-            headers=_rate_headers(rate),
+            result.code,
+            result.message,
+            status,
+            headers=_rate_headers(result.rate) if result.rate else None,
         )
-    if (
-        entry.rights_status == RightsStatus.RESTRICTED
-        and APIKeyScope.RESTRICTED_LYRICS_READ not in authorized.scopes
-    ):
-        return _raw_error(
-            "restricted_lyrics_forbidden",
-            "This key is not permitted to read restricted lyrics.",
-            403,
-            headers=_rate_headers(rate),
-        )
+    entry = result.song
 
     sections = [
         SongLyricsSection(
@@ -481,5 +414,9 @@ async def song_lyrics(
             rights_status=entry.rights_status,
             sections=sections,
         ),
-        headers=_rate_headers(rate),
+        headers={
+            "X-RateLimit-Limit": str(result.limit),
+            "X-RateLimit-Remaining": str(result.remaining),
+            "X-RateLimit-Reset": str(result.reset_at),
+        },
     )
