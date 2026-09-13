@@ -2,6 +2,21 @@
 
 Research date: 2026-07-26
 
+## Status
+
+Historical research. The shipped implementation deliberately chose a simpler
+search shape; this note remains useful for future relevance and scale work, not
+as a description of the current architecture.
+
+## Current implementation (2026-09-12)
+
+The Catalog uses separate `title_search` and `lyrics_search` vectors with GIN
+indexes, the project-owned `wpp_simple_unaccent` configuration, plain-text
+queries, normalized-title keyset pagination, and a title-only trigram fallback.
+It does not use the combined weighted vector, `websearch_to_tsquery`, rank-based
+ordering, or `ts_headline` proposed below. Those changes require corpus evidence
+and a separate product decision.
+
 ## Decision
 
 V1 should use PostgreSQL full-text search as its primary retrieval path:

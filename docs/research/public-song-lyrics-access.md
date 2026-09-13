@@ -1,6 +1,6 @@
 # Public Song Lyrics Access: Licensing Constraints and Product Options
 
-**Status:** Planning research for the Worship Prep Platform pivot  
+**Status:** Historical licensing research; not the current product policy
 **Jurisdiction assumed:** United States  
 **Last reviewed:** 2026-07-26
 
@@ -9,6 +9,17 @@
 > subscription. The church should have its actual agreements reviewed by
 > qualified counsel or obtain written confirmation from its licensing provider
 > before exposing copyrighted lyrics.
+
+## Current implementation (2026-09-12)
+
+The current product policy is recorded in ADR-0006 and ADR-0007. It tracks
+`approved`, `unknown`, and `restricted` rights statuses; public and standard
+Integration Client reads disclose lyrics for approved and unknown entries, while
+restricted entries remain metadata-only. This differs from the more cautious
+planning recommendation below, which treats unknown copyrighted songs as
+metadata-only. This research does not establish that the required permissions
+have been verified. Before a public production launch, an authorized owner must
+either document the applicable permissions or restrict unknown entries.
 
 ## Decision
 
