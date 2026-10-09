@@ -39,3 +39,11 @@ The new migration graph requires a fresh database; it is not an incremental upgr
 for databases with the previous migration history. Keep the private backup and
 operational record outside version control. Application tables remain inaccessible
 to Supabase's `anon` and `authenticated` roles; the product uses Django and Bolt.
+
+Supabase's `rls_enabled_no_policy` advisor notice is informational: RLS without
+policies rejects row access by ordinary roles. Explicit restrictive
+`deny_supabase_api` policies reject every command for `anon` and `authenticated`,
+so the advisor can see the intended boundary. Table and column privileges remain
+revoked. The application's database connection continues to use its existing
+privileged role; browser and Integration Client authorization stays in Django and
+Bolt. See [Supabase's advisor guidance](https://github.com/supabase/splinter/blob/main/docs/0008_rls_enabled_no_policy.md).
