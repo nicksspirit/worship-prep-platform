@@ -90,7 +90,7 @@ export const Layout = (props: Props) => {
             <div className="flex w-1/3 items-center justify-end gap-3">
               {user?.is_authenticated ? (
                 <div className="dropdown dropdown-end">
-                  <div tabIndex={0} role="button" className="flex items-center gap-2 cursor-pointer hover:bg-chapel-neutral-200 p-1.5 rounded-full transition-colors">
+                  <button type="button" aria-label="Account menu" tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-chapel-neutral-200 p-1.5 rounded-full transition-colors">
                     <div className="h-9 w-9 rounded-full bg-chapel-neutral-300 overflow-hidden flex items-center justify-center">
                       {user.avatar_url ? (
                         <img src={user.avatar_url} alt={user.full_name || "Profile"} className="h-full w-full object-cover" />
@@ -103,13 +103,22 @@ export const Layout = (props: Props) => {
                     <svg className="h-4 w-4 text-chapel-neutral-600 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
-                  </div>
+                  </button>
                   <ul tabIndex={0} className="dropdown-content z-1 menu p-2 shadow bg-white border border-chapel-neutral-200 rounded-box w-52 mt-2">
                     {user.is_staff && (
                       <li>
                         <a href="/admin/" className="w-full text-left text-chapel-neutral-700 hover:text-chapel-primary-600 font-medium px-4 py-2">Admin Portal</a>
                       </li>
                     )}
+                    <li>
+                      <a href={reverse("account_email")} className="w-full text-left text-chapel-neutral-700 hover:text-chapel-primary-600 font-medium px-4 py-2">Change Email</a>
+                    </li>
+                    <li>
+                      <a href={reverse("account_change_password")} className="w-full text-left text-chapel-neutral-700 hover:text-chapel-primary-600 font-medium px-4 py-2">Change Password</a>
+                    </li>
+                    <li>
+                      <a href={reverse("socialaccount_connections")} className="w-full text-left text-chapel-neutral-700 hover:text-chapel-primary-600 font-medium px-4 py-2">Account Connections</a>
+                    </li>
                     <li>
                       <form method="post" action="/accounts/logout/" className="w-full p-0 flex">
                         <CSRFToken />
