@@ -28,15 +28,21 @@ def _build_privilege_revocations(schema, tables, roles):
     for object_type in ("SEQUENCES", "FUNCTIONS"):
         statements.extend(
             [
-                f"REVOKE ALL PRIVILEGES ON ALL {object_type} IN SCHEMA "
-                f"{schema} FROM {role_list}",
-                f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} "
-                f"REVOKE ALL PRIVILEGES ON {object_type} FROM {role_list}",
+                (
+                    f"REVOKE ALL PRIVILEGES ON ALL {object_type} IN SCHEMA "
+                    f"{schema} FROM {role_list}"
+                ),
+                (
+                    f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} "
+                    f"REVOKE ALL PRIVILEGES ON {object_type} FROM {role_list}"
+                ),
             ]
         )
     return statements + [
-        f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} "
-        f"REVOKE ALL PRIVILEGES ON TABLES FROM {role_list}"
+        (
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} "
+            f"REVOKE ALL PRIVILEGES ON TABLES FROM {role_list}"
+        )
     ]
 
 

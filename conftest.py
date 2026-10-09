@@ -39,6 +39,7 @@ def _build_reactivated_renderer(project_root: Path) -> None:
         cwd=project_root,
         capture_output=True,
         text=True,
+        check=False,
     )
     if build.returncode:
         raise RuntimeError(

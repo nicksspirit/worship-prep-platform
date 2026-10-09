@@ -1,8 +1,7 @@
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-
-from allauth.socialaccount.models import SocialAccount
 
 
 class Command(BaseCommand):

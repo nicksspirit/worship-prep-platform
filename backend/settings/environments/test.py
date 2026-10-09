@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from backend.settings.components.database import DATABASES
-
-if TYPE_CHECKING:
-    from backend.settings.components.storage import STORAGES_LOCAL
+from backend.settings.components.storage import STORAGES_LOCAL
 
 STORAGES = STORAGES_LOCAL
 STORAGES["catalog_imports"] = {

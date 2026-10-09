@@ -4,11 +4,11 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = [  # noqa: RUF012
         ("catalog", "0001_initial"),
         ("common", "0002_deny_supabase_api_access"),
     ]
-    operations = [
+    operations = [  # noqa: RUF012
         # Move existing objects in place so search indexes and mappings stay intact.
         migrations.RunSQL(
             sql=[

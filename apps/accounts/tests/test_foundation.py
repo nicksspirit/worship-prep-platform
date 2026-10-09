@@ -1,6 +1,7 @@
 from contextlib import redirect_stdout
 from io import StringIO
 
+from allauth.socialaccount.models import SocialAccount, SocialToken
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -8,7 +9,6 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 from django.urls import reverse
-from allauth.socialaccount.models import SocialAccount, SocialToken
 from invitations.models import Invitation
 from invitations.signals import invite_accepted
 

@@ -488,7 +488,7 @@ class CatalogReadAPITests(TransactionTestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_rotated_api_key_rejects_the_old_secret(self):
-        replacement = rotate_api_key(self.privileged_key)
+        rotate_api_key(self.privileged_key)
         response = self.client.get(
             "/api/v1/catalog/search",
             headers=self.auth(self.privileged_secret),
