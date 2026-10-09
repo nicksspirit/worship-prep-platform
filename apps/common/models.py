@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.db import models
 from django.utils import timezone
 from django_stubs_ext.db.models import TypedModelMeta
@@ -12,9 +14,8 @@ class BaseModel(models.Model):
 
     class Meta(TypedModelMeta):
         abstract = True
-        ordering = ["-created_on"]
+        ordering: ClassVar[list[str]] = ["-created_on"]
 
     def save(self, *args, **kwargs):
         self.full_clean()
-
         return super().save(*args, **kwargs)

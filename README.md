@@ -30,6 +30,10 @@ migrations or running the API locally. Local automated tests boot a disposable
 PostgreSQL 16 database through Testcontainers, so Docker must be running. GitHub Actions
 uses its native PostgreSQL service container instead.
 
+The application uses `public` as its only production schema. The regenerated
+first-party migrations require a fresh application database; see
+[ADR-0010](docs/adr/0010-rebuild-application-in-public.md) for the reset boundary.
+
 ```bash
 poe test
 ```
