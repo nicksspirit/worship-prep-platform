@@ -159,7 +159,7 @@ def django_db_modify_db_settings(
                 "NAME": os.environ["WPP_TEST_POSTGRES_DATABASE"],
                 "USER": os.environ["WPP_TEST_POSTGRES_USER"],
                 "PASSWORD": os.environ["WPP_TEST_POSTGRES_PASSWORD"],
-                "OPTIONS": {},
+                "OPTIONS": {"options": "-c search_path=public,extensions"},
                 "CONN_MAX_AGE": 0,
             }
         )
@@ -180,7 +180,7 @@ def django_db_modify_db_settings(
             "USER": container.username,
             "PASSWORD": container.password,
             # Drop sslmode etc. from the developer's DATABASE_URL; the container is local.
-            "OPTIONS": {},
+            "OPTIONS": {"options": "-c search_path=public,extensions"},
             "CONN_MAX_AGE": 0,
         }
     )

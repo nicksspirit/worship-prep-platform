@@ -47,3 +47,10 @@ so the advisor can see the intended boundary. Table and column privileges remain
 revoked. The application's database connection continues to use its existing
 privileged role; browser and Integration Client authorization stays in Django and
 Bolt. See [Supabase's advisor guidance](https://github.com/supabase/splinter/blob/main/docs/0008_rls_enabled_no_policy.md).
+
+The `unaccent` and `pg_trgm` extensions live in the infrastructure schema
+`extensions`, outside the application schema exposed by the Data API. PostgreSQL
+connections use `search_path=public,extensions` so app tables remain in `public`
+and Django's search lookups can resolve extension operators. Production connection
+paths must also include `extensions`. Move the extensions in place to preserve search
+indexes and dictionary mappings. See [Supabase's extension guidance](https://github.com/supabase/splinter/blob/main/docs/0014_extension_in_public.md).
