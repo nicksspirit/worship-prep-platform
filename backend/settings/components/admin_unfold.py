@@ -1,7 +1,9 @@
+from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
+    "STYLES": [lambda request: static("admin-fields.css")],
     "SITE_TITLE": "Worship Prep Admin",
     "SITE_HEADER": "Worship Prep Platform",
     "SITE_URL": "/",
