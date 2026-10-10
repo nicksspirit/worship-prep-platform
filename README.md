@@ -133,6 +133,13 @@ No catalog entry or external formatting call is made. See the
 [intake flow](docs/design/unlisted-song-intake.md). Reordering and optional external
 formatters remain separate work.
 
+### Follow-up work
+
+- [Draft song reordering in cart and admin](https://github.com/nicksspirit/worship-prep-platform/issues/57).
+- [Optional n8n or replacement lyrics formatter](https://github.com/nicksspirit/worship-prep-platform/issues/58).
+- [WhatsApp Technical Team notifications](https://github.com/nicksspirit/worship-prep-platform/issues/59), pending provider and destination decisions.
+- [Real SMTP verification](https://github.com/nicksspirit/worship-prep-platform/issues/60), using controlled recipients.
+
 ## Catalog Administration and Automation
 
 Invited Catalog Administrators can inspect Catalog Import Runs, exporter/importer event
