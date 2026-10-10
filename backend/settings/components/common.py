@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.api_keys",
     "apps.catalog",
+    "apps.song_carts",
 ]
 
 MIDDLEWARE = [
@@ -67,6 +68,7 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "apps.common.context_processors.auth",
+                "apps.song_carts.context_processors.song_cart",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.csrf",
                 "django.template.context_processors.request",

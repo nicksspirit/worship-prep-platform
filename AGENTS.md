@@ -85,6 +85,8 @@
 - Serve rendered UI with Django views and Reactivated templates. Keep domain and
   application services independent of both transports so an API handler and a view can
   reuse behavior without calling one another.
+- Use class-based Django views for the `song_carts` app and register routes with
+  `.as_view()`.
 - Operational/framework routes such as health checks, readiness checks, Django admin,
   and authentication callbacks may remain on Django's standard HTTP stack.
 - See `docs/adr/0004-separate-json-and-rendered-transports.md`.

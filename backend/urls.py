@@ -131,5 +131,6 @@ urlpatterns = [
     path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),
     path("", include("apps.catalog.urls")),
+    path("", include("apps.song_carts.urls")),
     path("", include("apps.accounts.urls")),
 ]

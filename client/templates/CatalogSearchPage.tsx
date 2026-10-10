@@ -341,6 +341,9 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                     <p className="mt-1 text-xs text-chapel-neutral-500">
                                                         Updated <time dateTime={song.song_freshness.iso} title={song.song_freshness.absolute}>{song.song_freshness.relative}</time>
                                                     </p>
+                                                    <a href={reverse("song_carts:add", {song_uid: song.song_uid})} className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-chapel-primary-500 underline underline-offset-4" aria-label={`Add ${song.title} to a song cart`}>
+                                                        Add to song cart
+                                                    </a>
                                                 </div>
                                                 <div className="border-l border-chapel-neutral-300 pl-4 text-sm leading-6 text-chapel-neutral-600">
                                                     {song.lyrics_available ? (

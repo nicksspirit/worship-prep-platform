@@ -10,6 +10,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from django.utils.html import strip_tags
 from invitations.models import Invitation
 from invitations.signals import invite_accepted
 
@@ -84,7 +85,7 @@ class AccountFoundationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Account Connections")
         self.assertContains(response, "No third-party accounts are connected.")
-        self.assertContains(response, "Connect Google")
+        self.assertIn("Connect Google", strip_tags(response.content.decode()))
         self.assertNotContains(response, "Menu:")
 
     def test_account_connections_page_hides_connected_provider_from_add_section(self):

@@ -32,6 +32,7 @@ type SongDetailPageProps = {
     song_freshness: Freshness;
     catalog_freshness: Freshness | null;
     catalog_url: string;
+    add_to_cart_url: string;
 };
 
 const ProjectionPreview = ({title, slides}: {title: string; slides: ProjectionSlide[]}) => {
@@ -103,7 +104,7 @@ const ProjectionPreview = ({title, slides}: {title: string; slides: ProjectionSl
         <section className="mt-20 border-t border-chapel-neutral-300 pt-12" aria-labelledby="projection-preview-heading">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-chapel-primary-500">Approximate 16:9 canvas</p>
+                    <p className="text-xs font-normal text-chapel-neutral-700">Approximate 16:9 canvas</p>
                     <h2 id="projection-preview-heading" className="mt-2 text-4xl sm:text-5xl">Projection Preview</h2>
                 </div>
                 <div className="max-w-md">
@@ -222,25 +223,28 @@ export const Template = (props: SongDetailPageProps) => (
                         <p className="mt-16 text-xs font-bold uppercase tracking-[0.18em] text-chapel-primary-500">Song Detail</p>
                         <h1 className="mt-4 max-w-4xl text-[clamp(3.7rem,8vw,6rem)] leading-[0.86] tracking-[-0.035em] text-balance">{props.title}</h1>
                         <p className="mt-8 text-lg font-semibold">Author: {props.author}</p>
+                        <a href={props.add_to_cart_url} className="mt-8 inline-flex border border-chapel-neutral-950 bg-chapel-neutral-950 px-6 py-4 text-sm font-bold text-white hover:bg-chapel-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">
+                            Add to song cart
+                        </a>
                     </div>
                     <aside className="relative bg-chapel-secondary-950 px-6 py-12 text-white lg:my-12 lg:bg-transparent lg:px-12 lg:py-16" aria-label="Song information">
-                        <dl className="space-y-7 lg:text-chapel-secondary-950">
+                        <dl className="space-y-7">
                             <div className="border-b border-current/20 pb-5">
-                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-60">Song freshness</dt>
+                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">Song freshness</dt>
                                 <dd className="mt-2 font-serif text-2xl"><time dateTime={props.song_freshness.iso} title={props.song_freshness.absolute}>{props.song_freshness.relative}</time></dd>
                             </div>
                             <div className="border-b border-current/20 pb-5">
-                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-60">Catalog freshness</dt>
+                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">Catalog freshness</dt>
                                 <dd className="mt-2 font-serif text-2xl">
                                     {props.catalog_freshness ? <time dateTime={props.catalog_freshness.iso} title={props.catalog_freshness.absolute}>{props.catalog_freshness.relative}</time> : "Awaiting import"}
                                 </dd>
                             </div>
                             <div className="border-b border-current/20 pb-5">
-                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-60">Lyrics rights status</dt>
+                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">Lyrics rights status</dt>
                                 <dd className="mt-2 font-serif text-2xl capitalize">{props.rights_status}</dd>
                             </div>
                             <div>
-                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-60">Projection structure</dt>
+                                <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">Projection structure</dt>
                                 <dd className="mt-2 font-serif text-2xl">{props.lyrics_available ? `${props.slide_count} ${props.slide_count === 1 ? "slide" : "slides"}` : "Not available"}</dd>
                             </div>
                         </dl>

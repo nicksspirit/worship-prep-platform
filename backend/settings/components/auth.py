@@ -7,7 +7,7 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
-LOGIN_REDIRECT_URL = "/admin/"
+LOGIN_REDIRECT_URL = "/after-sign-in/"
 LOGOUT_REDIRECT_URL = "/"
 
 ACCOUNT_LOGIN_METHODS = ["email"]

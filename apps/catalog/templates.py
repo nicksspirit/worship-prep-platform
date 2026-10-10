@@ -68,3 +68,4 @@ class SongDetailPage(NamedTuple):
     song_freshness: FreshnessProps
     catalog_freshness: FreshnessProps | None
     catalog_url: str
+    add_to_cart_url: str

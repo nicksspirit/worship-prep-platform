@@ -1,0 +1,29 @@
+from django.urls import path
+
+from apps.song_carts import views
+
+app_name = "song_carts"
+
+urlpatterns = [
+    path("song-carts/", views.CartListView.as_view(), name="list"),
+    path("song-carts/add/<path:song_uid>/", views.AddSongView.as_view(), name="add"),
+    path("song-carts/<uuid:cart_id>/", views.CartDetailView.as_view(), name="detail"),
+    path(
+        "song-carts/<uuid:cart_id>/comments/",
+        views.AddCommentView.as_view(), name="add_comment",
+    ),
+    path(
+        "song-carts/<uuid:cart_id>/comments/<int:comment_id>/edit/",
+        views.EditCommentView.as_view(), name="edit_comment",
+    ),
+    path(
+        "song-carts/<uuid:cart_id>/remove/<int:song_id>/",
+        views.RemoveSongView.as_view(),
+        name="remove",
+    ),
+    path(
+        "song-carts/<uuid:cart_id>/checkout/",
+        views.CheckoutView.as_view(),
+        name="checkout",
+    ),
+]

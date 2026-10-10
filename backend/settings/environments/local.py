@@ -5,3 +5,4 @@ from __future__ import annotations
 from backend.settings.components.storage import STORAGES_LOCAL
 
 STORAGES = STORAGES_LOCAL
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

@@ -76,6 +76,8 @@ from .templates import (
 
 class HomePageView(View):
     def get(self, request, *args, **kwargs) -> HttpResponse:
+        if request.user.is_authenticated and request.user.is_staff:
+            return redirect("admin:index")
         return redirect("catalog:search")
 
 
