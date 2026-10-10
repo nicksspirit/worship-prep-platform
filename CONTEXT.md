@@ -1,10 +1,84 @@
-# Worship Song Discovery
+# Worship Song Discovery and Preparation
 
 This context provides public discovery of songs held in the church's EasyWorship
-collection without changing that collection through the application. Operational
-administration remains invitation-only.
+collection and lets signed-in users submit song selections for service dates without
+changing that collection. Account access remains invitation-only.
 
 ## Language
+
+**Song Cart**:
+One person's selection of songs for a specific service date, grouped into predefined
+Service Sections. A draft can be changed; checkout submits the selection for
+administrator confirmation and requests Technical Team notification. Service dates
+may be Sundays or other days.
+_Avoid_: shopping cart, catalog snapshot
+
+**Service Section**:
+One of three predefined parts of a church service that groups selected songs:
+Call to Worship, Praise, or Worship. These are distinct service sections.
+_Avoid_: Song Section, lyric section
+
+**Selected Song**:
+A catalog or unlisted song placed in one Service Section of a Song Cart.
+_Avoid_: Catalog Entry, Song Section
+
+**Song Order**:
+The intended sequence of selected songs within a Service Section. Songs initially
+follow their addition order and can be rearranged before the order is finalized.
+_Avoid_: alphabetical order, catalog order
+
+**Unlisted Song**:
+A song requested for a service that the user cannot find in the Song Catalog.
+_Avoid_: new Catalog Entry, catalog import
+
+**Submission Comment**:
+A user-authored message in a Song Selection Submission's single comment thread,
+communicating preparation instructions or requested amendments. It may identify a
+song by its reference; Technical Team responses are emailed to the submitter.
+_Avoid_: per-song comment thread, administrator comment, changing submitted lyrics
+
+**Prepared Lyrics**:
+An unlisted song's supplied lyrics formatted into ordered lyric sections and slides
+for projection preparation, previewable before final submission.
+_Avoid_: rewritten lyrics, Catalog Import Package
+
+**Song Cart Checkout**:
+The final submission of a nonempty Song Cart for its chosen service date, requesting
+that the Technical Team be notified of its selected songs.
+_Avoid_: payment, catalog import
+
+**Song Selection Submission**:
+A dated song selection attributed to the user who created it. It is Draft while
+being prepared, Pending after the user submits it, and Confirmed after an
+authorized Technical Team member opens its details in the admin interface. The
+team can reject a Pending or Confirmed submission with a reason, retaining its history.
+_Avoid_: payment, email delivery
+
+**Submission State**:
+The progress of a Song Selection Submission: Draft, Pending, Confirmed, or Rejected.
+Only an authorized Technical Team member can move a Pending submission to Confirmed.
+_Avoid_: notification status, past submission
+
+**Submission Confirmation**:
+Acknowledgement that a Technical Team member has seen a submission's details.
+It records the first reviewer and time; it does not establish projection readiness.
+_Avoid_: user checkout, email delivery, projection ready
+
+**Submission Receipt**:
+An acknowledgement to the submitter that their selection has been saved as Pending.
+_Avoid_: Submission Confirmation, Technical Team review
+
+**Submission Notification**:
+An email informing the Technical Team of a saved Song Selection Submission.
+Notification delivery is distinct from submission success.
+_Avoid_: submission, Technical Team acknowledgement
+
+**Technical Team**:
+The church team responsible for preparing the selected songs for use during a service.
+This team receives Song Cart submissions; it is not synonymous with application
+administrators. Authorized team members acknowledge submissions and communicate
+with their submitters.
+_Avoid_: all staff users, Catalog Administrator
 
 **EasyWorship Library**:
 The authoritative collection of songs maintained in EasyWorship and supplied to the

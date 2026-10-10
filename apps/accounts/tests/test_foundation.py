@@ -1,18 +1,56 @@
 from contextlib import redirect_stdout
 from io import StringIO
+from types import SimpleNamespace
 
+from allauth.socialaccount.models import SocialAccount, SocialToken
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
-from allauth.socialaccount.models import SocialAccount, SocialToken
+from django.utils.html import strip_tags
 from invitations.models import Invitation
 from invitations.signals import invite_accepted
 
 from apps.accounts.models import AccessLevel, InvitationRequest, RequestStatus
+from apps.accounts.views import _serialize_account_form
+
+
+class AccountFormSerializationTests(SimpleTestCase):
+    def test_password_guidance_html_is_serialized_as_text_list_items(self):
+        class Form:
+            fields = {
+                "password1": SimpleNamespace(
+                    widget=SimpleNamespace(
+                        is_hidden=False,
+                        attrs={"id": "id_password1"},
+                        input_type="password",
+                    ),
+                    required=True,
+                )
+            }
+            errors = {}
+
+            def __getitem__(self, name):
+                return SimpleNamespace(
+                    value=lambda: "",
+                    help_text=(
+                        "<ul><li>Use at least 8 characters.</li>"
+                        "<li>Avoid common passwords.</li></ul>"
+                    ),
+                    label="New password",
+                    html_name=name,
+                )
+
+        serialized = _serialize_account_form(Form())
+
+        self.assertIsNone(serialized["fields"]["password1"]["help_text"])
+        self.assertEqual(
+            serialized["fields"]["password1"]["help_items"],
+            ["Use at least 8 characters.", "Avoid common passwords."],
+        )
 
 
 class AccountFoundationTests(TestCase):
@@ -35,6 +73,36 @@ class AccountFoundationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Sign In")
         self.assertContains(response, reverse("request_invitation"))
+
+    def test_account_connections_page_uses_reactivated_presentation(self):
+        user = get_user_model().objects.create_user(
+            email="connections@example.com", password="pass1234"
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("socialaccount_connections"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Account Connections")
+        self.assertContains(response, "No third-party accounts are connected.")
+        self.assertIn("Connect Google", strip_tags(response.content.decode()))
+        self.assertNotContains(response, "Menu:")
+
+    def test_account_connections_page_hides_connected_provider_from_add_section(self):
+        user = get_user_model().objects.create_user(
+            email="connections@example.com", password="pass1234"
+        )
+        SocialAccount.objects.create(
+            user=user, provider="google", uid="google-123", extra_data={}
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("socialaccount_connections"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Google")
+        self.assertNotContains(response, "Add an account")
+        self.assertNotContains(response, "Connect Google")
 
     def test_closed_signup_explains_invitation_only_access(self):
         response = self.client.get(reverse("account_signup"))

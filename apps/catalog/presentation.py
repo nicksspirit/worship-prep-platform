@@ -228,4 +228,5 @@ def present_song(song: CatalogSong) -> SongDetailPage:
         freshness,
         _freshness(song.snapshot_completed_at),
         reverse("catalog:search"),
+        reverse("song_carts:add", args=[song.song_uid]),
     )

@@ -27,6 +27,7 @@ from .search import (
 __all__ = [
     "ALLOWED_BASES",
     "CURSOR_MAX_AGE_SECONDS",
+    "SEARCH_CONFIG",
     "CatalogAccess",
     "CatalogReadError",
     "CatalogSearchItem",
@@ -37,7 +38,6 @@ __all__ = [
     "ImportRejected",
     "ImportResult",
     "ScheduledImportFailure",
-    "SEARCH_CONFIG",
     "SearchCatalog",
     "SearchRestart",
     "change_lyrics_rights",

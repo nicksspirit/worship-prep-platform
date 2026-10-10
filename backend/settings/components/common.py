@@ -1,4 +1,5 @@
 from backend.settings import env
+from backend.settings.components import BASE_DIR
 
 SITE_ID = env.int("SITE_ID", default=1)
 
@@ -28,6 +29,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.api_keys",
     "apps.catalog",
+    "apps.song_carts",
 ]
 
 MIDDLEWARE = [
@@ -35,7 +37,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "apps.common.middleware.ApiCsrfExemptMiddleware",
+    "apps.common.middleware.CsrfBypassApiMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
@@ -49,7 +51,7 @@ ROOT_URLCONF = "backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -66,6 +68,7 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "apps.common.context_processors.auth",
+                "apps.song_carts.context_processors.song_cart",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.csrf",
                 "django.template.context_processors.request",

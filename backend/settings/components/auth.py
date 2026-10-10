@@ -7,7 +7,7 @@ AUTHENTICATION_BACKENDS = [
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
-LOGIN_REDIRECT_URL = "/admin/"
+LOGIN_REDIRECT_URL = "/after-sign-in/"
 LOGOUT_REDIRECT_URL = "/"
 
 ACCOUNT_LOGIN_METHODS = ["email"]
@@ -15,6 +15,7 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_USER_MODEL_USERNAME_FIELD: str | None = None
+ACCOUNT_EMAIL_SUBJECT_PREFIX = "Worship Prep Platform | "
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {

@@ -1,0 +1,90 @@
+{% load static unfold %}
+{% if submission %}
+<div class="mt-6 flex flex-col gap-6">
+    {% for song in submission.songs %}
+        {% if not song.song_uid %}
+        <section class="border border-base-200 rounded-default p-6 dark:border-base-800" aria-labelledby="unlisted-song-{{ song.id }}">
+            <h2 id="unlisted-song-{{ song.id }}" class="break-words text-lg font-semibold text-font-important-light dark:text-font-important-dark">#{{ song.id }} · {{ song.title }}</h2>
+            <p class="mt-2">Unlisted song · {% if song.reviewed_at %}Lyrics reviewed by submitter{% else %}Lyrics review needed{% endif %}</p>
+            <h3 class="font-medium mt-4 text-font-important-light dark:text-font-important-dark">Prepared lyrics</h3>
+            <pre class="mt-3 whitespace-pre-wrap break-words text-font-important-light dark:text-font-important-dark">{{ song.formatted_text }}</pre>
+            <details class="mt-4">
+                <summary class="cursor-pointer font-medium">Original pasted lyrics</summary>
+                <pre class="mt-3 whitespace-pre-wrap break-words text-font-important-light dark:text-font-important-dark">{{ song.original_lyrics }}</pre>
+            </details>
+        </section>
+        {% endif %}
+    {% endfor %}
+    {% if can_review_submission and submission.status == "pending" %}
+        <section class="border border-base-200 rounded-default p-6 dark:border-base-800" aria-labelledby="acknowledgement-title">
+            <h2 id="acknowledgement-title" class="text-lg font-semibold text-font-important-light dark:text-font-important-dark">Confirming this submission as seen</h2>
+            <p id="acknowledgement-result" class="mt-2" role="status">Opening these details records that the Technical Team has seen the submission and emails the submitter.</p>
+            <form method="post" action="{% url 'admin:song_carts_songcart_confirm' submission.id %}" class="mt-4" data-auto-confirm aria-describedby="acknowledgement-result">
+                {% csrf_token %}
+                {% component "unfold/components/button.html" with submit=1 %}Confirm as seen{% endcomponent %}
+            </form>
+            <noscript><p class="mt-2">Select “Confirm as seen” to record your acknowledgement.</p></noscript>
+        </section>
+        <script src="{% static 'submission-review.js' %}" defer></script>
+    {% endif %}
+
+    <section aria-labelledby="submission-comments-title">
+        <h2 id="submission-comments-title" class="text-lg font-semibold mb-4 text-font-important-light dark:text-font-important-dark">Submitter’s comments</h2>
+        <p class="mb-4">One thread for this submission. Song references use the selected song’s ID shown above. Respond by email below.</p>
+        {% for comment in submission.comments %}
+            <article class="border-t border-base-200 py-4 dark:border-base-800">
+                <h3 class="font-medium text-font-important-light dark:text-font-important-dark">{{ submission.owner_name|default:submission.owner_email }} · {{ comment.created_at|date:"M j, Y H:i" }} UTC</h3>
+                {% if comment.updated_at %}<p class="text-sm mt-1">Updated {{ comment.updated_at|date:"M j, Y H:i" }} UTC</p>{% endif %}
+                <p class="whitespace-pre-wrap break-words mt-3 text-font-important-light dark:text-font-important-dark">{{ comment.body }}</p>
+            </article>
+        {% empty %}
+            <p class="border-t border-base-200 py-4 dark:border-base-800">The submitter has not added any comments.</p>
+        {% endfor %}
+    </section>
+
+    {% if can_review_submission and submission.status != "draft" %}
+    <section class="border-t border-base-200 pt-6 dark:border-base-800" aria-labelledby="submission-reply-title">
+        <h2 id="submission-reply-title" class="text-lg font-semibold text-font-important-light dark:text-font-important-dark">Email the submitter</h2>
+        <p class="mt-2">Send one response to {{ submission.owner_email }} about the submission and its comments. This email will not add a comment to the thread.</p>
+        <form method="post" action="{% url 'admin:song_carts_songcart_reply' submission.id %}" class="mt-4 flex flex-col gap-3">
+            {% csrf_token %}
+            <input type="hidden" name="request_id" value="{{ reply_request_id }}">
+            <label for="submission-email-body" class="font-medium">Email response</label>
+            <textarea id="submission-email-body" name="body" rows="6" maxlength="10000" class="w-full text-font-important-light dark:text-font-important-dark" required></textarea>
+            <div>{% component "unfold/components/button.html" with submit=1 %}Send email response{% endcomponent %}</div>
+        </form>
+    </section>
+    {% endif %}
+
+    {% if can_review_submission and submission.status == "pending" or can_review_submission and submission.status == "confirmed" %}
+    <details class="border-t border-base-200 pt-6 dark:border-base-800">
+        <summary class="font-semibold cursor-pointer text-font-important-light dark:text-font-important-dark">Reject this submission</summary>
+        <p class="mt-3">Rejection requires a reason and sends a new email. Earlier confirmation remains in the record.</p>
+        <form method="post" action="{% url 'admin:song_carts_songcart_reject' submission.id %}" class="mt-4 flex flex-col gap-3">
+            {% csrf_token %}
+            <label for="submission-rejection-reason" class="font-medium">Reason for rejection</label>
+            <textarea id="submission-rejection-reason" name="reason" rows="4" maxlength="2000" class="w-full text-font-important-light dark:text-font-important-dark" required></textarea>
+            <div>{% component "unfold/components/button.html" with submit=1 variant="default" %}Reject and email reason{% endcomponent %}</div>
+        </form>
+    </details>
+    {% endif %}
+
+    <section class="border-t border-base-200 pt-6 dark:border-base-800" aria-labelledby="submission-emails-title">
+        <h2 id="submission-emails-title" class="text-lg font-semibold text-font-important-light dark:text-font-important-dark">Email delivery</h2>
+        <p class="mt-2 mb-4">Delivery is separate from the submission’s status. Retry sends only messages that have not been delivered.</p>
+        {% for email in submission.emails %}
+            <div class="border-t border-base-200 py-3 dark:border-base-800">
+                <p class="font-medium text-font-important-light dark:text-font-important-dark">{{ email.label }} · {{ email.status|capfirst }}</p>
+                {% if email.sent_at %}<p class="mt-1">Sent {{ email.sent_at|date:"M j, Y H:i" }} UTC</p>{% endif %}
+                {% if email.status == "failed" %}<p class="mt-1">Delivery failed. The message remains saved for retry.</p>{% endif %}
+            </div>
+        {% empty %}<p>No email events have been recorded.</p>{% endfor %}
+        {% if can_review_submission and submission.emails %}
+            <form method="post" action="{% url 'admin:song_carts_songcart_retry_emails' submission.id %}" class="mt-4">
+                {% csrf_token %}
+                {% component "unfold/components/button.html" with submit=1 variant="default" %}Retry undelivered emails{% endcomponent %}
+            </form>
+        {% endif %}
+    </section>
+</div>
+{% endif %}

@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted
+Schema-cutover procedure superseded by
+[ADR-0010](0010-rebuild-application-in-public.md). The historical procedure below
+preserved a legacy Google identity; the new reset starts application identity from
+scratch. Create administrators after the verified reset.
 
 ## Date
 

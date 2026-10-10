@@ -1,18 +1,19 @@
 import io
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from django.conf import settings
 from django.test import SimpleTestCase
 
 from apps.catalog.services.importing import (
+    ExistingCatalogSong,
     InspectedPackage,
     ValidatedPackage,
     _read_archive,
     _validate_records,
+    prepare_catalog_entries,
 )
-from apps.catalog.services.importing import ExistingCatalogSong, prepare_catalog_entries
 
 
 class PrepareCatalogEntriesTests(SimpleTestCase):
@@ -39,8 +40,8 @@ class PrepareCatalogEntriesTests(SimpleTestCase):
         )
 
     def test_prepares_entry_with_carried_freshness_and_existing_rights(self):
-        promoted_at = datetime(2026, 9, 6, tzinfo=timezone.utc)
-        original_change = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        promoted_at = datetime(2026, 9, 6, tzinfo=UTC)
+        original_change = datetime(2026, 8, 1, tzinfo=UTC)
         fingerprint = "sha256:semantic"
         record = {
             "source": {"song_uid": "song-1", "song_item_uid": "item-1"},

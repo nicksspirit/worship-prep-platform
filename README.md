@@ -1,8 +1,9 @@
 # Worship Prep Platform
 
-Worship Prep Platform is becoming a public, read-only Song Catalog sourced from the
-church's EasyWorship Library. The EasyWorship Library remains authoritative; the
-platform will ingest immutable snapshots without writing back to the source.
+Worship Prep Platform provides a public, read-only Song Catalog sourced from the
+church's EasyWorship Library and personal song carts for service preparation. The
+EasyWorship Library remains authoritative; the platform ingests immutable snapshots
+without writing back to the source.
 
 This stacked branch contains the complete six-slice Song Catalog pivot: the greenfield
 foundation, the portable
@@ -30,6 +31,10 @@ migrations or running the API locally. Local automated tests boot a disposable
 PostgreSQL 16 database through Testcontainers, so Docker must be running. GitHub Actions
 uses its native PostgreSQL service container instead.
 
+The application uses `public` as its only production schema. The regenerated
+first-party migrations require a fresh application database; see
+[ADR-0010](docs/adr/0010-rebuild-application-in-public.md) for the reset boundary.
+
 ```bash
 poe test
 ```
@@ -43,6 +48,8 @@ poe test
 - `apps.catalog`: immutable Song Catalog snapshots, import processing, search, signed
   continuations, rights-aware reads, audited Lyrics Rights Provenance, recovery,
   rollback, and failure alerts.
+- `apps.song_carts`: personal dated song selections, submission history, owner
+  comments, Technical Team acknowledgement, and email delivery records.
 - `apps.common`: shared Django infrastructure, model utilities, middleware, and
   Reactivated context.
 
@@ -91,6 +98,47 @@ Rendered pages reuse the transport-neutral catalog search/read services directly
 do not call the Integration Client API, and restricted lyric fields are removed before
 the Reactivated props are serialized. See
 [ADR-0006](docs/adr/0006-public-catalog-presentation.md).
+
+## Service Song Carts
+
+Signed-in users can add catalog songs to a personal cart for any service date from
+search results or Song Detail. The fixed sections are Call to Worship, Praise, and
+Worship. Drafts allow song removal. Submitting locks the selection as Pending,
+emails the owner a receipt, and notifies active staff in the `Technical Team` Django
+group. The **My submissions** page includes owned drafts and past submissions with
+state filters and sorting.
+
+The Unfold admin home shows a Pending queue and submitted counts, excluding drafts.
+General staff can inspect all selections; Technical Team members acknowledge, reject,
+and reply. Opening a visible Pending admin detail records one Confirmed acknowledgement
+through a CSRF-protected POST and emails the owner. Confirmed means seen by the team.
+Rejection requires a reason and preserves any previous acknowledgement.
+
+Each selection has one owner comment thread. Comments stay editable in Draft, then
+for 15 minutes after submission or posting; later changes use a follow-up comment.
+Admins read the thread and compose email responses rather than posting comments.
+Each email has its own delivery outcome and manual retry. Local mode previews email
+in the application terminal; production uses the existing SMTP configuration.
+
+Assign active staff reviewers to `Technical Team` using the superuser-managed Users
+admin. Configure the Django Site domain for links in notification emails. Migration
+0002 converts older owner-confirmed selections to Pending without resending email,
+and maps the former combined Praise & Worship section to Praise. See
+[ADR-0013](docs/adr/0013-acknowledge-song-submissions-and-communicate-by-email.md).
+Users can add unlisted songs with a title and pasted lyrics, save a local projection
+preview, and mark the prepared lyrics reviewed before submission. Draft edits clear
+review; submitted lyrics stay locked. Original and prepared lyrics remain in the
+selection, with formatted text available to the Technical Team in admin and email.
+No catalog entry or external formatting call is made. See the
+[intake flow](docs/design/unlisted-song-intake.md). Reordering and optional external
+formatters remain separate work.
+
+### Follow-up work
+
+- [Draft song reordering in cart and admin](https://github.com/nicksspirit/worship-prep-platform/issues/57).
+- [Optional n8n or replacement lyrics formatter](https://github.com/nicksspirit/worship-prep-platform/issues/58).
+- [WhatsApp Technical Team notifications](https://github.com/nicksspirit/worship-prep-platform/issues/59), pending provider and destination decisions.
+- [Real SMTP verification](https://github.com/nicksspirit/worship-prep-platform/issues/60), using controlled recipients.
 
 ## Catalog Administration and Automation
 

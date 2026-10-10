@@ -145,17 +145,18 @@ The expected meaning of the database URLs is:
 - `DATABASE_URL`: Supabase pooled connection, used by running services
 - `DIRECT_URL`: Supabase direct `5432` connection, used only by migrations
 
-The existing `worship-prep-portal` production database preserves the pre-pivot tables
-in `public`. Both URLs must therefore target the isolated greenfield schema by including
+The `worship-prep-portal` application uses `public` as its only application schema.
+Both URLs must explicitly select it by including
 this query parameter (append it with `&` when the URL already has a query string):
 
 ```text
-options=-c%20search_path%3Dwpp_catalog_v1%2Cpublic
+options=-c%20search_path%3Dpublic
 ```
 
-Do not encode the space as `+`; libpq treats that value differently and falls back to
-`public`. See [ADR-0008](adr/0008-isolate-greenfield-production-schema.md) for the
-reasoning and migration-ledger bootstrap requirement.
+Encode the space as `%20` to preserve the intended connection option. See
+[ADR-0010](adr/0010-rebuild-application-in-public.md) for the reset decision.
+The regenerated first-party migrations require a fresh application database;
+do not apply them to the previous migration history or use fake migrations.
 
 The expected meaning of the storage variables is:
 
@@ -447,10 +448,10 @@ Replace `wpp-app-zxdtzfpwua-uw.a.run.app` with your real current service hostnam
 
 ## Step 10: Update Google OAuth Redirect URIs
 
-If this deployment is the `wpp_catalog_v1` to `wpp_app` schema promotion, complete the
-identity rebuild in [ADR-0009](adr/0009-recreate-catalog-superuser-google-identity.md)
-before testing the redirect URI. It creates the catalog superuser interactively and
-recreates the Google identity link without copying OAuth tokens or secrets.
+After a fresh database reset, create the catalog superuser interactively with
+`poe manage createsuperuser` before testing Google sign-in. The reset does not copy
+legacy accounts, Google identity links, or OAuth tokens. See
+[ADR-0010](adr/0010-rebuild-application-in-public.md).
 
 This app uses django-allauth for Google login. The callback path is:
 

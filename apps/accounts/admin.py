@@ -31,7 +31,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     fieldsets = [
         (None, {"fields": ["email", "password"]}),
         ("Personal info", {"fields": ["first_name", "last_name"]}),
-        ("Permissions", {"fields": ["is_staff"]}),
+        ("Permissions", {"fields": ["is_staff", "groups"]}),
     ]
     add_fieldsets = [
         (
@@ -44,7 +44,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     ]
     search_fields = ["email", "first_name", "last_name"]
     ordering = ["email"]
-    filter_horizontal = []
+    filter_horizontal = ["groups"]
 
     def has_module_permission(self, request):
         return request.user.is_superuser

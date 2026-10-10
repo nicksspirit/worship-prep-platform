@@ -2,8 +2,8 @@
 
 from .invitations import (
     InvitationApproval,
-    InvitationRequestInput,
     InvitationRejection,
+    InvitationRequestInput,
     approve_invitation_request,
     assign_staff_from_invitation,
     notify_invitation_request,
@@ -13,8 +13,8 @@ from .invitations import (
 
 __all__ = [
     "InvitationApproval",
-    "InvitationRequestInput",
     "InvitationRejection",
+    "InvitationRequestInput",
     "approve_invitation_request",
     "assign_staff_from_invitation",
     "notify_invitation_request",

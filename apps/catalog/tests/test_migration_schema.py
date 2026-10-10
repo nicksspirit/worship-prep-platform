@@ -1,77 +1,51 @@
-import importlib
-from contextlib import nullcontext
-from unittest import TestCase
+"""Verify the custom operations retained in the regenerated migrations."""
 
-
-class FakeCursor:
-    def __init__(self):
-        self.statements = []
-        self._result = []
-
-    def execute(self, statement, params=None):
-        self.statements.append((statement, params))
-        if statement.strip() == "SELECT current_schema()":
-            self._result = [("wpp_catalog_v1",)]
-        elif "FROM pg_catalog.pg_roles" in statement:
-            self._result = []
-
-    def fetchone(self):
-        return self._result[0]
-
-    def fetchall(self):
-        return self._result
-
-
-class FakeConnection:
-    vendor = "postgresql"
-
-    def __init__(self, cursor):
-        self._cursor = cursor
-
-    def cursor(self):
-        return nullcontext(self._cursor)
-
-
-class FakeSchemaEditor:
-    def __init__(self, cursor):
-        self.connection = FakeConnection(cursor)
-
-    @staticmethod
-    def quote_name(name):
-        return f'"{name}"'
-
-
-class EmptyApps:
-    @staticmethod
-    def get_models(include_auto_created=True):
-        return []
+from django.apps import apps
+from django.db import connection
+from django.test import TestCase
 
 
 class MigrationSchemaTests(TestCase):
-    def test_catalog_hardening_uses_active_schema(self):
-        migration = importlib.import_module(
-            "apps.catalog.migrations.0004_catalog_administration"
+    def test_all_application_tables_enable_row_level_security(self):
+        tables = {
+            model._meta.db_table
+            for model in apps.get_models(include_auto_created=True)
+            if model._meta.managed
+        } | {"django_migrations"}
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT relname, relrowsecurity FROM pg_class "
+                "WHERE relnamespace = current_schema()::regnamespace "
+                "AND relname = ANY(%s)",
+                [sorted(tables)],
+            )
+            security = dict(cursor.fetchall())
+
+        self.assertEqual(set(security), tables)
+        self.assertTrue(all(security.values()))
+
+    def test_catalog_search_configuration_removes_accents(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT to_tsvector('public.wpp_simple_unaccent', 'café')::text"
+            )
+            vector = cursor.fetchone()[0]
+
+        self.assertEqual(vector, "'cafe':1")
+
+    def test_catalog_search_indexes_exist(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT indexname FROM pg_indexes "
+                "WHERE schemaname = current_schema() "
+                "AND tablename = 'catalog_catalogentry'"
+            )
+            indexes = {row[0] for row in cursor.fetchall()}
+
+        self.assertTrue(
+            {
+                "catalog_title_fts_gin", "catalog_lyrics_fts_gin",
+                "catalog_title_trgm_gin", "catalog_page_order_idx",
+            } <= indexes
         )
-        cursor = FakeCursor()
-
-        migration.harden_administration_tables(None, FakeSchemaEditor(cursor))
-
-        sql = "\n".join(statement for statement, _ in cursor.statements)
-        self.assertIn(
-            'ALTER TABLE "wpp_catalog_v1"."catalog_catalogsongrights"', sql
-        )
-        self.assertNotIn("public.catalog_catalogsongrights", sql)
-
-    def test_common_hardening_uses_active_schema(self):
-        migration = importlib.import_module(
-            "apps.common.migrations.0001_harden_supabase_api_exposure"
-        )
-        cursor = FakeCursor()
-
-        migration.harden_supabase_api_exposure(EmptyApps(), FakeSchemaEditor(cursor))
-
-        sql = "\n".join(statement for statement, _ in cursor.statements)
-        self.assertIn(
-            'ALTER TABLE IF EXISTS "wpp_catalog_v1"."django_migrations"', sql
-        )
-        self.assertNotIn("public.django_migrations", sql)

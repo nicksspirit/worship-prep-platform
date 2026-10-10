@@ -1,7 +1,10 @@
+from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
+    "DASHBOARD_CALLBACK": "apps.song_carts.admin_dashboard.show_submissions",
+    "STYLES": [lambda request: static("admin-fields.css") + "?v=2"],
     "SITE_TITLE": "Worship Prep Admin",
     "SITE_HEADER": "Worship Prep Platform",
     "SITE_URL": "/",
@@ -40,6 +43,18 @@ UNFOLD = {
         "show_search": True,
         "show_all_applications": False,
         "navigation": [
+            {
+                "title": _("Service Preparation"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Submissions"),
+                        "icon": "queue_music",
+                        "link": reverse_lazy("admin:index"),
+                    },
+                ],
+            },
             {
                 "title": _("Song Catalog"),
                 "separator": True,

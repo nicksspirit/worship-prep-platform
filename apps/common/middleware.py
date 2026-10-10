@@ -3,7 +3,7 @@
 from django.utils.deprecation import MiddlewareMixin
 
 
-class ApiCsrfExemptMiddleware(MiddlewareMixin):
+class CsrfBypassApiMiddleware(MiddlewareMixin):
     """
     Exempts /api/v1/ from CSRF for machine-to-machine API key auth.
 
@@ -15,6 +15,6 @@ class ApiCsrfExemptMiddleware(MiddlewareMixin):
         if request.path.startswith("/api/v1/"):
             request.csrf_exempt = True
             bolt_req = getattr(request, "_bolt_request", None)
+
             if bolt_req is not None and hasattr(bolt_req, "state"):
                 bolt_req.state["_csrf_exempt"] = True
-        return None

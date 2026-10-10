@@ -287,6 +287,10 @@ export const Template = (props: CatalogSearchPageProps) => {
                     <section className="min-w-0 px-6 py-9 sm:px-8 lg:px-12 lg:py-14" aria-labelledby="catalog-results-heading">
                         <div className="border-b border-chapel-neutral-300 pb-9">
                             <SearchForm props={props} />
+                            <div className="mt-5 flex flex-wrap items-center gap-x-2">
+                                <p className="text-sm text-chapel-neutral-700">Can’t find your song?</p>
+                                <a href={`${reverse("song_carts:add_unlisted")}${props.mode === "title" && props.query.trim() ? `?title=${encodeURIComponent(props.query.trim())}` : ""}`} className="inline-flex min-h-11 items-center text-sm font-bold text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Add an unlisted song</a>
+                            </div>
                         </div>
 
                         <div className="pt-10">
@@ -341,6 +345,9 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                     <p className="mt-1 text-xs text-chapel-neutral-500">
                                                         Updated <time dateTime={song.song_freshness.iso} title={song.song_freshness.absolute}>{song.song_freshness.relative}</time>
                                                     </p>
+                                                    <a href={reverse("song_carts:add", {song_uid: song.song_uid})} className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-chapel-primary-500 underline underline-offset-4" aria-label={`Add ${song.title} to a song cart`}>
+                                                        Add to song cart
+                                                    </a>
                                                 </div>
                                                 <div className="border-l border-chapel-neutral-300 pl-4 text-sm leading-6 text-chapel-neutral-600">
                                                     {song.lyrics_available ? (

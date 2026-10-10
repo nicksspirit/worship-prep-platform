@@ -172,7 +172,7 @@ export const Template = (props: SignInPageProps) => {
                                 </button>
                                 
                                 <a href={props.reset_password_url} className="text-xs font-bold uppercase tracking-widest text-chapel-neutral-500 hover:text-chapel-neutral-950 text-center transition-colors">
-                                    Recover Password
+                                    Reset Password
                                 </a>
                             </div>
                         </form>
