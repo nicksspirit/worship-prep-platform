@@ -2,9 +2,14 @@
 
 ## Status
 
-Accepted design; implementation pending. Supersedes ADR-0011's product scope,
+Partially implemented: three sections and local unlisted intake are available;
+draft reordering and external formatter adapters remain pending. Supersedes ADR-0011's product scope,
 section choices, and notification recipients. ADR-0013 supersedes its confirmation,
 per-song notes, and recipient decisions.
+
+The [implemented intake flow](../design/unlisted-song-intake.md) uses required title
+and lyrics, one submission comment thread, and explicit review of saved content
+before checkout. Draft edits invalidate review; stale preview approvals are rejected.
 
 ## Date
 
@@ -21,7 +26,8 @@ available before introducing n8n or another formatting integration.
 
 Retain personal carts keyed by owner and service date and their selected-song items.
 Section choices are fixed values, not a separate configuration model. Catalog items
-have optional notes; unlisted songs require title, pasted lyrics, and notes. Unlisted
+use the submission's comment thread for instructions; unlisted songs require title
+and pasted lyrics. Unlisted
 songs belong to the selection and do not create imported catalog entries.
 
 Keep original lyrics and the reviewed prepared content with the item. Use the existing
@@ -36,7 +42,8 @@ validation, authorization, persistence, and submission. Formatters do not write 
 application database or submit selections. No general pipeline engine is needed.
 
 Checkout locks the final selection, attributed to its owner and date, and then emails
-one configured Technical Team address. Submission and notification outcomes remain
+active staff members of the Technical Team Django group. Submission and notification
+outcomes remain
 separate. Repeat submission must not create another confirmation. Retain manual email
 retry initially. Preserve existing transport and database access restrictions.
 
@@ -49,7 +56,7 @@ Both user and administrator reordering are limited to drafts, as confirmed on
 Retain reviewed content independently of later imports. Catalog entries without
 available previews may be selected as metadata-only items; the Technical Team can
 look them up by title in EasyWorship. Empty sections are valid; an empty cart cannot
-be submitted. The email includes date, submitter, ordered songs, notes, and available
+be submitted. The email includes date, submitter, ordered songs, comments, and available
 formatted lyric text so the team can work without a new application account.
 
 ## Alternatives Considered

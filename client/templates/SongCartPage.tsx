@@ -9,7 +9,7 @@ type Props = {
     status: string;
     notification_status: string;
     song_count: number;
-    sections: {label: string; songs: {id: number; title: string; author: string; song_url: string; remove_url: string}[]}[];
+    sections: {label: string; songs: {id: number; title: string; author: string; song_url: string; remove_url: string; is_unlisted: boolean; is_reviewed: boolean}[]}[];
     checkout_url: string;
     error: string | null;
     submitted_at_label: string | null;
@@ -29,6 +29,7 @@ export const Template = (props: Props) => {
     const draft = props.status === "draft";
     const confirmed = props.status === "confirmed";
     const rejected = props.status === "rejected";
+    const reviewNeeded = props.sections.some((section) => section.songs.some((song) => song.is_unlisted && !song.is_reviewed));
     return (
         <Layout title={props.title}>
             <main className="mx-auto max-w-6xl px-6 py-12 sm:py-20">
@@ -69,6 +70,8 @@ export const Template = (props: Props) => {
                                                     <a href={song.song_url} className="break-words font-serif text-2xl hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">{song.title}</a>
                                                     {song.author && <p className="mt-1 text-sm text-chapel-neutral-700">{song.author}</p>}
                                                     <p className="mt-2 text-xs tabular-nums text-chapel-neutral-700">Song reference #{song.id}</p>
+                                                    {song.is_unlisted && <p className={`mt-2 text-sm ${song.is_reviewed ? "text-chapel-neutral-700" : "font-medium text-chapel-primary-600"}`}>Unlisted song · {song.is_reviewed ? "Lyrics reviewed" : "Review needed"}</p>}
+                                                    {draft && song.is_unlisted && !song.is_reviewed && <a href={song.song_url} className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500" aria-label={`Review lyrics for ${song.title}`}>Review lyrics</a>}
                                                 </div>
                                                 {draft && <form method="post" action={song.remove_url}><CSRFToken /><button type="submit" aria-label={`Remove ${song.title} from ${section.label}`} className="min-h-11 px-2 text-sm text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Remove</button></form>}
                                             </li>
@@ -83,9 +86,11 @@ export const Template = (props: Props) => {
                         <p className="mt-5 text-lg font-bold">{props.song_count} {props.song_count === 1 ? "song" : "songs"}</p>
                         <p className="mt-2 text-sm leading-6 text-chapel-neutral-700">{draft ? "Check the songs and service date before submitting. Submission locks the selection and notifies the Technical Team. You can still add comments afterwards." : "The songs and service date are locked. Use the comment thread to communicate any requested changes."}</p>
                         {draft && <>
-                            <form method="post" action={props.checkout_url} className="mt-6"><CSRFToken /><button type="submit" disabled={props.song_count === 0} className="w-full border border-chapel-neutral-950 bg-chapel-neutral-950 px-5 py-4 text-sm font-bold text-white hover:bg-chapel-primary-500 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Submit song selection</button></form>
-                            {props.song_count === 0 && <p className="mt-3 text-sm text-chapel-neutral-700">Add at least one song to submit.</p>}
+                            <form method="post" action={props.checkout_url} className="mt-6"><CSRFToken /><button type="submit" disabled={props.song_count === 0 || reviewNeeded} aria-describedby={reviewNeeded ? "review-needed" : props.song_count === 0 ? "empty-cart" : undefined} className="w-full border border-chapel-neutral-950 bg-chapel-neutral-950 px-5 py-4 text-sm font-bold text-white hover:bg-chapel-primary-500 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Submit song selection</button></form>
+                            {props.song_count === 0 && <p id="empty-cart" className="mt-3 text-sm text-chapel-neutral-700">Add at least one song to submit.</p>}
+                            {reviewNeeded && <p id="review-needed" className="mt-3 text-sm leading-6 text-chapel-neutral-700">Review the lyrics for each unlisted song before submitting. Use the “Review lyrics” links in your selection.</p>}
                             <a href={reverse("catalog:search")} className="mt-4 inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Add another song →</a>
+                            <a href={`${reverse("song_carts:add_unlisted")}?service_date=${encodeURIComponent(props.service_date)}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Add an unlisted song</a>
                         </>}
                         {props.deliveries.length > 0 && (
                             <section aria-labelledby="email-delivery-heading" className="mt-6 border-t border-chapel-neutral-300 pt-5">

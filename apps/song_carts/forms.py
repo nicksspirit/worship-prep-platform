@@ -19,3 +19,8 @@ class RejectionForm(forms.Form):
 class SubmissionReplyForm(forms.Form):
     body = forms.CharField(max_length=10000, strip=True)
     request_id = forms.UUIDField()
+
+
+class UnlistedSongForm(AddSongForm):
+    title = forms.CharField(max_length=512, strip=True)
+    lyrics = forms.CharField(max_length=20000, strip=False)

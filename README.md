@@ -125,7 +125,13 @@ admin. Configure the Django Site domain for links in notification emails. Migrat
 0002 converts older owner-confirmed selections to Pending without resending email,
 and maps the former combined Praise & Worship section to Praise. See
 [ADR-0013](docs/adr/0013-acknowledge-song-submissions-and-communicate-by-email.md).
-Unlisted song intake, reordering, and optional lyric formatting remain separate work.
+Users can add unlisted songs with a title and pasted lyrics, save a local projection
+preview, and mark the prepared lyrics reviewed before submission. Draft edits clear
+review; submitted lyrics stay locked. Original and prepared lyrics remain in the
+selection, with formatted text available to the Technical Team in admin and email.
+No catalog entry or external formatting call is made. See the
+[intake flow](docs/design/unlisted-song-intake.md). Reordering and optional external
+formatters remain separate work.
 
 ## Catalog Administration and Automation
 

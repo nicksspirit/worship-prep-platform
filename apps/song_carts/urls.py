@@ -1,11 +1,21 @@
 from django.urls import path
 
 from apps.song_carts import views
+from apps.song_carts.unlisted_views import ReviewUnlistedSongView, UnlistedSongView
 
 app_name = "song_carts"
 
 urlpatterns = [
     path("song-carts/", views.CartListView.as_view(), name="list"),
+    path("song-carts/unlisted/", UnlistedSongView.as_view(), name="add_unlisted"),
+    path(
+        "song-carts/<uuid:cart_id>/unlisted/<int:song_id>/",
+        UnlistedSongView.as_view(), name="unlisted_detail",
+    ),
+    path(
+        "song-carts/<uuid:cart_id>/unlisted/<int:song_id>/review/",
+        ReviewUnlistedSongView.as_view(), name="review_unlisted",
+    ),
     path("song-carts/add/<path:song_uid>/", views.AddSongView.as_view(), name="add"),
     path("song-carts/<uuid:cart_id>/", views.CartDetailView.as_view(), name="detail"),
     path(

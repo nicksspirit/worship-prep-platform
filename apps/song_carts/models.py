@@ -77,9 +77,12 @@ class SongCartItem(models.Model):
 
     cart = models.ForeignKey(SongCart, on_delete=models.CASCADE, related_name="songs")
     section = models.CharField(max_length=32, choices=ServiceSection)
-    song_uid = models.CharField(max_length=255)
+    song_uid = models.CharField(max_length=255, blank=True, null=True)
     title = models.CharField(max_length=512)
     authors = models.JSONField(default=list, blank=True)
+    original_lyrics = models.TextField(blank=True)
+    prepared_sections = models.JSONField(default=list, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["id"]
@@ -87,7 +90,14 @@ class SongCartItem(models.Model):
             models.UniqueConstraint(
                 fields=["cart", "section", "song_uid"],
                 name="song_cart_section_song_unique",
-            )
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(song_uid__isnull=False, original_lyrics="")
+                    | (models.Q(song_uid__isnull=True) & ~models.Q(original_lyrics=""))
+                ),
+                name="song_cart_item_source_consistent",
+            ),
         ]
 
     def __str__(self) -> str:

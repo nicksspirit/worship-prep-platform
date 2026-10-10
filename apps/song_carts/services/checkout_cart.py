@@ -24,6 +24,8 @@ def checkout_cart(cart_id: UUID, *, user: User) -> UUID:
         return cart.id
     if not cart.songs.exists():
         raise ValidationError("Add at least one song before submission.")
+    if cart.songs.filter(song_uid__isnull=True, reviewed_at__isnull=True).exists():
+        raise ValidationError("Review the prepared lyrics for every unlisted song first.")
     cart.status = CartStatus.PENDING
     cart.submitted_at = timezone.now()
     cart.save(update_fields=["status", "submitted_at"])

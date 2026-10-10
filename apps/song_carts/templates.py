@@ -2,6 +2,8 @@ from typing import NamedTuple
 
 from reactivated import template
 
+from apps.catalog.templates import SlideProps
+
 
 class CartSongProps(NamedTuple):
     id: int
@@ -9,6 +11,8 @@ class CartSongProps(NamedTuple):
     author: str
     song_url: str
     remove_url: str
+    is_unlisted: bool
+    is_reviewed: bool
 
 
 class ServiceSectionProps(NamedTuple):
@@ -88,3 +92,23 @@ class AddSongPage(NamedTuple):
     section: str
     sections: list[SectionChoiceProps]
     errors: dict[str, list[str]]
+
+
+@template
+class UnlistedSongPage(NamedTuple):
+    title: str
+    song_title: str
+    lyrics: str
+    service_date: str
+    date_label: str | None
+    section: str
+    sections: list[SectionChoiceProps]
+    action_url: str
+    cart_url: str | None
+    can_edit: bool
+    reviewed: bool
+    review_url: str | None
+    fingerprint: str
+    errors: dict[str, list[str]]
+    slides: list[SlideProps]
+    formatted_text: str

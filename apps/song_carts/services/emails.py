@@ -15,6 +15,7 @@ from apps.song_carts.models import (
     CartStatus, EmailKind, NotificationStatus, ServiceSection, SongCart, SubmissionEmail,
 )
 from .access import TECHNICAL_TEAM, _require_active, _require_team
+from .prepare_lyrics import _format_sections, _read_sections
 
 logger = structlog.get_logger(__name__)
 
@@ -46,11 +47,15 @@ def _submission_body(cart: SongCart) -> str:
     for section, label in ServiceSection.choices:
         lines.append(label)
         selected = [song for song in songs if song.section == section]
-        lines.extend(
-            f"{index}. #{song.id} {song.title}"
-            + (f" — {', '.join(song.authors)}" if song.authors else "")
-            for index, song in enumerate(selected, 1)
-        )
+        for index, song in enumerate(selected, 1):
+            lines.append(
+                f"{index}. #{song.id} {song.title}"
+                + (f" — {', '.join(song.authors)}" if song.authors else "")
+            )
+            if song.song_uid is None:
+                lines.append("Unlisted song — reviewed projection text")
+                lines.append(_format_sections(_read_sections(song.prepared_sections)))
+                lines.append("")
         if not selected:
             lines.append("No songs selected.")
         lines.append("")

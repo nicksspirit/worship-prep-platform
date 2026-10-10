@@ -9,6 +9,7 @@ from apps.accounts.models import User
 from apps.song_carts.models import CartStatus, SongCart
 from .access import _require_active, _require_staff
 from .comments import _can_edit, _edit_deadline
+from .prepare_lyrics import PreparedSection, _format_sections, _read_sections
 
 SORTS = {
     "service_date_desc": ("-service_date", "-created_at"),
@@ -43,9 +44,13 @@ def read_active_cart(
 class CartSong:
     id: int
     section: str
-    song_uid: str
+    song_uid: str | None
     title: str
     authors: tuple[str, ...]
+    original_lyrics: str
+    sections: tuple[PreparedSection, ...]
+    formatted_text: str
+    reviewed_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -105,6 +110,8 @@ def _describe(cart: SongCart, *, user: User) -> CartDetails:
         notification_status=cart.notification_status,
         songs=tuple(CartSong(
             song.id, song.section, song.song_uid, song.title, tuple(song.authors),
+            song.original_lyrics, _read_sections(song.prepared_sections),
+            _format_sections(_read_sections(song.prepared_sections)), song.reviewed_at,
         ) for song in cart.songs.all()),
         owner_name=cart.owner.get_full_name() or cart.owner.email,
         owner_email=cart.owner.email, submitted_at=cart.submitted_at,

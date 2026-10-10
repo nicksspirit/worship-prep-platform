@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
     "DASHBOARD_CALLBACK": "apps.song_carts.admin_dashboard.show_submissions",
-    "STYLES": [lambda request: static("admin-fields.css")],
+    "STYLES": [lambda request: static("admin-fields.css") + "?v=2"],
     "SITE_TITLE": "Worship Prep Admin",
     "SITE_HEADER": "Worship Prep Platform",
     "SITE_URL": "/",

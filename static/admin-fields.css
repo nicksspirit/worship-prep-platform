@@ -49,3 +49,7 @@
   background-color: #334155;
   color: #cbd5e1;
 }
+
+.dark #content .readonly a {
+  color: var(--color-primary-400);
+}

@@ -6,7 +6,8 @@ The newer [submission management design](submission-management.md) replaces this
 document's per-song notes with one user comment thread per submission and introduces
 Pending, first-view Technical Team confirmation, rejection, and email responses.
 Use that design for these areas; the remaining song preparation decisions below
-still apply. The submission interview is in progress.
+still apply. The [implemented unlisted intake](unlisted-song-intake.md) supersedes
+the historical title/lyrics/notes form and preparation proposals below.
 
 Product decisions and operational edge cases agreed, including draft-only user and
 admin reordering. Build the basic experience first, with optional,
