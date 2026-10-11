@@ -5,9 +5,18 @@ on:
     paths:
       - "deploy/start-django.sh"
       - "deploy/nginx.conf.template"
+      - "deploy/nginx-bolt.conf.template"
+      - "deploy/nginx-logging.conf.template"
+      - "deploy/start-bolt.sh"
+      - "deploy/install-nginx.sh"
+      - "deploy/supervise.sh"
       - "docker/Dockerfile"
+      - "docker/Dockerfile.proxy-test"
       - "cloudbuild.yaml"
       - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_large_imports.py"
+      - "tests/integration/proxy_fixture.py"
+      - "exporter/tests/deliver-fixture/**"
       - "tests/integration/test_shutdown.py"
       - "apps/common/**"
       - "apps/catalog/api.py"
@@ -19,9 +28,18 @@ on:
     paths:
       - "deploy/start-django.sh"
       - "deploy/nginx.conf.template"
+      - "deploy/nginx-bolt.conf.template"
+      - "deploy/nginx-logging.conf.template"
+      - "deploy/start-bolt.sh"
+      - "deploy/install-nginx.sh"
+      - "deploy/supervise.sh"
       - "docker/Dockerfile"
+      - "docker/Dockerfile.proxy-test"
       - "cloudbuild.yaml"
       - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_large_imports.py"
+      - "tests/integration/proxy_fixture.py"
+      - "exporter/tests/deliver-fixture/**"
       - "tests/integration/test_shutdown.py"
       - "apps/common/**"
       - "apps/catalog/api.py"
@@ -35,27 +53,34 @@ permissions:
 jobs:
   proxy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - name: Install project runtime
-        run: uv sync --group test --group prod --frozen
-      - name: Install Nginx
-        run: sudo apt-get update && sudo apt-get install -y nginx
-      - name: Stop the packaged default server
-        run: sudo systemctl stop nginx
+      - name: Build the production-compatible HTTP/2 fixture
+        run: docker build -f docker/Dockerfile.proxy-test -t wpp-http2-test .
       - name: Check routing and streamed imports
-        # The Cloud Run origin test binds the default HTTPS port 443.
-        run: sudo "$PWD/.venv/bin/python" tests/integration/test_api_proxy.py
+        run: docker run --rm wpp-http2-test python tests/integration/test_api_proxy.py
       - name: Check structured Django and Gunicorn logs
-        run: .venv/bin/python manage.py test apps.common.tests.test_request_logging --noinput
-        env:
-          DJANGO_ENV: test
+        run: docker run --rm --user 1000:1000 wpp-http2-test python manage.py test apps.common.tests.test_request_logging --noinput
       - name: Check graceful shutdown and child cleanup
-        # Both suites render the same Nginx config and temporary directories.
-        run: sudo env PATH="$PWD/.venv/bin:$PATH" "$PWD/.venv/bin/python" tests/integration/test_shutdown.py
+        run: docker run --rm --user 1000:1000 wpp-http2-test python tests/integration/test_shutdown.py
+      - name: Start disposable importer PostgreSQL
+        run: |
+          docker network create wpp-http2-tests
+          docker run -d --name wpp-http2-postgres --network wpp-http2-tests \
+            -e POSTGRES_PASSWORD=http2-fixture -e POSTGRES_DB=http2_fixture postgres:16-alpine
+          for attempt in $(seq 1 30); do
+            if docker exec wpp-http2-postgres pg_isready -U postgres; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Check real exporter delivery and importer limits through both services
+        run: >-
+          docker run --rm --user 1000:1000 --network wpp-http2-tests
+          -e WPP_HTTP2_TEST_DATABASE_URL=postgresql://postgres:http2-fixture@wpp-http2-postgres:5432/http2_fixture
+          wpp-http2-test
+      - name: Remove temporary database
+        if: always()
+        run: |
+          docker rm -f wpp-http2-postgres || true
+          docker network rm wpp-http2-tests || true

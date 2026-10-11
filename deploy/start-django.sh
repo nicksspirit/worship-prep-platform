@@ -32,12 +32,14 @@ if [[ "${BOLT_ADDRESS}" != *:* ]]; then
   BOLT_ADDRESS="${BOLT_ADDRESS}:443"
 fi
 
+sed -e "s/__GCP_PROJECT_ID__/${GCP_PROJECT_ID}/g" \
+  deploy/nginx-logging.conf.template > /tmp/wpp-nginx-logging.conf
+
 sed -e "s/__PORT__/${PORT}/g" \
   -e "s/__BOLT_HOST__/${BOLT_UPSTREAM_URL#https:\/\/}/g" \
   -e "s/__BOLT_ADDRESS__/${BOLT_ADDRESS}/g" \
-  -e "s/__GCP_PROJECT_ID__/${GCP_PROJECT_ID}/g" \
   deploy/nginx.conf.template > /tmp/wpp-nginx.conf
-nginx -t -c /tmp/wpp-nginx.conf
+nginx -e stderr -t -c /tmp/wpp-nginx.conf
 
 # Give each server its own process group so forced cleanup includes its workers.
 set -m
@@ -45,27 +47,8 @@ gunicorn backend.wsgi:application \
   --bind "127.0.0.1:8000" \
   --workers "${WORKERS}" \
   --config python:backend.gunicorn &
-DJANGO_PID=$!
-nginx -c /tmp/wpp-nginx.conf -g 'daemon off;' &
+BACKEND_PID=$!
+nginx -e stderr -c /tmp/wpp-nginx.conf -g 'daemon off;' &
 PROXY_PID=$!
 
-stop_servers() {
-  trap '' TERM INT
-  kill -QUIT "$PROXY_PID" 2>/dev/null || true
-  kill -TERM "$DJANGO_PID" 2>/dev/null || true
-  # Cloud Run allows ten seconds; reserve two for forced cleanup and reaping.
-  (
-    sleep 8
-    kill -KILL -- "-$DJANGO_PID" "-$PROXY_PID" 2>/dev/null || true
-  ) &
-  DEADLINE_PID=$!
-  wait "$DJANGO_PID" "$PROXY_PID" 2>/dev/null || true
-  kill -KILL -- "-$DEADLINE_PID" "-$DJANGO_PID" "-$PROXY_PID" 2>/dev/null || true
-  wait 2>/dev/null || true
-}
-
-trap stop_servers EXIT
-trap 'exit 0' TERM INT
-wait -n "$DJANGO_PID" "$PROXY_PID" || true
-echo "A supervised server exited unexpectedly; stopping the app service." >&2
-exit 1
+source deploy/supervise.sh

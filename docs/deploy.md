@@ -15,7 +15,7 @@ This repository deploys three Cloud Run resources:
 All three resources use the same Docker image. The difference is the startup command:
 
 - `wpp-app` runs `deploy/start-django.sh` (Nginx ingress and local Gunicorn)
-- `wpp-api` runs `deploy/start-bolt.sh`
+- `wpp-api` runs `deploy/start-bolt.sh` (Nginx h2c ingress and local Bolt)
 - `wpp-migrate` runs `deploy/start-migrate.sh`
 
 ## Assumptions
@@ -60,7 +60,7 @@ At a high level, deployment works like this:
 
 The app service forwards `/api/` requests to the Bolt service over verified HTTPS.
 Nginx keeps up to 16 idle upstream connections per worker and reuses them over
-HTTP/1.1. Portless HTTPS origins use port 443; an explicit upstream port is
+HTTP/2. Portless HTTPS origins use port 443; an explicit upstream port is
 preserved. It verifies the certificate chain and Bolt hostname on each TLS
 connection; moving the origin into an upstream pool does not weaken verification.
 The launcher validates the rendered Nginx configuration before starting either
@@ -73,6 +73,13 @@ Both Cloud Run services remain public so Integration Clients can reach Bolt
 directly. Protected API routes enforce application authentication and scopes using
 Integration Client credentials. Public Cloud Run access does not grant access to
 those routes; route-specific IAM grants cannot restrict an existing public grant.
+
+Cloud Build enables HTTP/2 on both services. Cloud Run terminates TLS and forwards
+h2c to each container's Nginx listener. Bolt 0.6.0 serves HTTP/1 on loopback behind
+its Nginx ingress. The pinned official Nginx 1.30.5 runtime supports HTTP/2 upstream
+proxying. Each ingress permits a 130 MiB multipart request while the importer keeps
+its 128 MiB package and 1 MiB exporter-event limits. See the
+[HTTP/2 verification procedure](http2-catalog-imports.md) before rollout.
 
 When Cloud Run terminates an app instance, the launcher sends SIGQUIT to Nginx and
 SIGTERM to Gunicorn. Both stop accepting new work and drain active requests for up
@@ -90,8 +97,8 @@ curl -i -X OPTIONS https://app.rccgcm.org/api/v1/catalog/imports
 ```
 
 Expect HTTP 204 and `Allow: POST, OPTIONS`. Check `/admin/` and `/install` too.
-Cloud Run's existing HTTP/1 ingress limit remains 32 MiB, even though the application
-package limit is 128 MiB. Larger uploads require HTTP/2 ingress as a separate change.
+The complete API path uses HTTP/2 across both Cloud Run service boundaries,
+supporting packages above 32 MiB up to the unchanged 128 MiB package limit.
 
 The repo already contains the automation for this in:
 

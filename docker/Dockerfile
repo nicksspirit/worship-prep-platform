@@ -130,10 +130,8 @@ ENV DJANGO_ENV="prod" \
     SUPABASE_S3_SECRET_KEY="${SUPABASE_S3_SECRET_KEY}" \
     SUPABASE_S3_REGION="${SUPABASE_S3_REGION}"
 
-RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends curl nginx \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
+COPY deploy/install-nginx.sh /tmp/install-nginx.sh
+RUN bash /tmp/install-nginx.sh && rm /tmp/install-nginx.sh
 
 COPY --from=build-prod --chown=wpp:rccgcm /venv /venv
 COPY --from=node-deps --chown=wpp:rccgcm /code/node_modules /code/node_modules

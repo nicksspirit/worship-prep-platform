@@ -9,7 +9,6 @@ import importlib.util
 import json
 import os
 import shutil
-import ssl
 import subprocess
 import sys
 import tempfile
@@ -18,6 +17,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from proxy_fixture import TLSProxy
 
 
 class Backend(BaseHTTPRequestHandler):
@@ -98,6 +98,8 @@ class ProxyTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[2]
         (cls.root / "deploy").mkdir()
         shutil.copy(source / "deploy/start-django.sh", cls.root / "deploy")
+        shutil.copy(source / "deploy/supervise.sh", cls.root / "deploy")
+        shutil.copy(source / "deploy/nginx-logging.conf.template", cls.root / "deploy")
         certificate = cls.root / "certificate.pem"
         private_key = cls.root / "private-key.pem"
         subprocess.run(
@@ -113,16 +115,17 @@ class ProxyTests(unittest.TestCase):
             template.replace("/etc/ssl/certs/ca-certificates.crt", str(certificate))
         )
         cls.bolt = ThreadingHTTPServer(
-            ("127.0.0.1", 443 if cls.use_default_https_port else 0), Backend
+            ("127.0.0.1", 0), Backend
         )
         cls.bolt.backend = "bolt"
         cls.bolt.received_chunk = threading.Event()
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certificate, private_key)
-        cls.bolt.socket = context.wrap_socket(cls.bolt.socket, server_side=True)
         threading.Thread(target=cls.bolt.serve_forever, daemon=True).start()
+        cls.tls = TLSProxy(
+            cls.root, cls.bolt.server_port, certificate, private_key,
+            port=443 if cls.use_default_https_port else None,
+        )
         cls.bolt_host = (
-            "localhost" if cls.use_default_https_port else f"localhost:{cls.bolt.server_port}"
+            "localhost" if cls.use_default_https_port else f"localhost:{cls.tls.port}"
         )
         # Only Gunicorn is replaced; the production launcher and Nginx are real.
         (cls.root / "gunicorn").write_text(
@@ -161,6 +164,7 @@ class ProxyTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.process.terminate()
         cls.process.wait(timeout=10)
+        cls.tls.close()
         cls.bolt.shutdown()
         cls.bolt.server_close()
         cls.logs.close()
@@ -171,7 +175,9 @@ class ProxyTests(unittest.TestCase):
         connection = http.client.HTTPConnection("127.0.0.1", cls.port, timeout=10)
         connection.request(method, path, body=body, headers=headers or {}, encode_chunked=chunked)
         response = connection.getresponse()
-        result = response.status, dict(response.getheaders()), response.read()
+        result = response.status, {
+            name.title(): value for name, value in response.getheaders()
+        }, response.read()
         connection.close()
         return result
 
@@ -267,10 +273,21 @@ class ProxyTests(unittest.TestCase):
 
         self.assertEqual((status, headers["Server"]), (200, "nginx"))
 
+    def test_app_ingress_accepts_cleartext_http2(self):
+        result = subprocess.run(
+            ["curl", "--http2-prior-knowledge", "--fail", "--silent", "--show-error",
+             f"http://127.0.0.1:{self.port}/admin/"],
+            capture_output=True, text=True, timeout=10,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["backend"], "django")
+
     def test_repeated_api_requests_reuse_upstream_connection(self):
         responses = [self.request("GET", "/api/v1/catalog/songs") for _ in range(3)]
 
         self.assertEqual([response[0] for response in responses], [200, 200, 200])
+        self.assertEqual({response[1]["X-Upstream-Protocol"] for response in responses}, {"HTTP/2.0"})
         connections = {response[1]["X-Backend-Connection"] for response in responses}
         self.assertEqual(len(connections), 1)
 
