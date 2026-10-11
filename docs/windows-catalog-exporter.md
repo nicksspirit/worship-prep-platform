@@ -2,6 +2,8 @@
 
 Complete these steps on the Windows computer that contains the EasyWorship Library.
 
+The platform website is [https://app.rccgcm.org](https://app.rccgcm.org).
+
 ## 1. Obtain the API key
 
 Create a key in **Admin → API Keys → Add API key** after the admin fix is deployed.
@@ -50,7 +52,8 @@ $env:WPP_EASYWORSHIP_DATA_DIR = $dataDir
 
 ## 4. Install the exporter
 
-Download the installer from the application. Supply the separate API service address:
+Download the installer from the platform website.
+Set the installer's `-PlatformUrl` argument to the API service address that accepts catalog imports:
 
 ```powershell
 $installer = Join-Path $env:TEMP 'install-catalog-exporter.ps1'
@@ -71,6 +74,8 @@ Wait for `Catalog Exporter diagnostics passed.` and the installation confirmatio
 
 The current `/install` bootstrap supplies the application address as the API address.
 Use the explicit command above for this deployment.
+The platform website's `/api/v1/catalog/imports` route returned HTTP 404 when checked on October 10, 2026.
+The API service's same route accepted `OPTIONS` and advertised `POST` support.
 
 ## 5. Run and verify the first import
 
