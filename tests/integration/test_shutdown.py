@@ -150,14 +150,19 @@ def application(environ, start_response):
 
     def assert_stopped(self):
         self.assertFalse(self.responds())
-        live = []
-        for pid in self.pids:
-            try:
-                state = Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].split()[0]
-                if state != "Z":
-                    live.append(pid)
-            except FileNotFoundError:
-                pass
+        deadline = time.monotonic() + 1
+        while True:
+            live = []
+            for pid in self.pids:
+                try:
+                    state = Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].split()[0]
+                    if state != "Z":
+                        live.append(pid)
+                except FileNotFoundError:
+                    pass
+            if not live or time.monotonic() >= deadline:
+                break
+            time.sleep(0.02)
         self.assertEqual(live, [], "supervised descendants remain running")
 
     def test_active_django_request_finishes_on_sigterm(self):

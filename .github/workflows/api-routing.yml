@@ -42,4 +42,5 @@ jobs:
         # The Cloud Run origin test binds the default HTTPS port 443.
         run: sudo "$(command -v python3)" tests/integration/test_api_proxy.py
       - name: Check graceful shutdown and child cleanup
-        run: python tests/integration/test_shutdown.py
+        # Both suites render the same Nginx config and temporary directories.
+        run: sudo env PATH="$PATH" "$(command -v python)" tests/integration/test_shutdown.py
