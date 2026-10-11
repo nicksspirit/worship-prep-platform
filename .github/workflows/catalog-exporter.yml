@@ -7,6 +7,7 @@ on:
       - "contracts/catalog-import/**"
       - "exporter/**"
       - "static/install-catalog-exporter.ps1"
+      - "tests/integration/test_windows_installer.ps1"
   push:
     branches: [main]
     tags: ["exporter/v*"]
@@ -15,6 +16,7 @@ on:
       - "contracts/catalog-import/**"
       - "exporter/**"
       - "static/install-catalog-exporter.ps1"
+      - "tests/integration/test_windows_installer.ps1"
 
 permissions:
   contents: read
@@ -69,6 +71,9 @@ jobs:
       - name: Validate installer commands and syntax
         shell: powershell
         run: ./static/install-catalog-exporter.ps1 -Mode Validate
+      - name: Check installer functions and passwordless task registration
+        shell: powershell
+        run: ./tests/integration/test_windows_installer.ps1
       - name: Assert weekly Pacific retry policy
         shell: powershell
         run: |
@@ -80,7 +85,6 @@ jobs:
             '-RestartCount 1',
             'New-TimeSpan -Minutes 30',
             'DataProtectionScope]::CurrentUser',
-            '$BinaryDirectory = Join-Path $LocalDirectory "bin"',
             'WPP_EASYWORSHIP_DATA_DIR',
             'WPP_CATALOG_EXPORTER_API_KEY_FILE'
           )) {
