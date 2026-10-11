@@ -29,7 +29,7 @@ substitutions:
 
   # Shared deployment values. Escaped newlines keep each flag a single argument.
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}
-  _SERVICE_ENV: "^|^DJANGO_ENV=prod|\
+  _SERVICE_ENV: "^|^DJANGO_ENV=prod|GCP_PROJECT_ID=${PROJECT_ID}|\
     SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET}|\
     SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET}|\
     SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT}|\

@@ -590,6 +590,57 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
   --format=json
 ```
 
+### Follow a Catalog Import in Cloud Logging
+
+Cloud Build sets `GCP_PROJECT_ID` on both services. Nginx propagates bounded
+`X-Request-ID` and `X-Cloud-Trace-Context` values; JSON request logs and Catalog
+Importer outcome events carry the same full Cloud Logging trace. Valid Cloud Run
+trace context is preserved through the app proxy into Bolt. For direct local
+runs without a project ID, request IDs still work and no Cloud Logging trace is
+attached by the applications.
+
+Find an import's request ID in a `request_finished` event, or start with its
+Catalog Import Run ID:
+
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND jsonPayload.run_id="RUN_UUID"' \
+  --project=worship-prep-portal --limit=50 --format=json
+```
+
+Copy `jsonPayload.request_id` to find the request across app and API container
+logs, including failures rejected before a Catalog Import Run exists:
+
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND jsonPayload.request_id="REQUEST_ID"' \
+  --project=worship-prep-portal --limit=100 --format=json
+```
+
+Copy the trace identity from `logging.googleapis.com/trace` (shown as `trace`
+after Cloud Logging ingests the JSON) to include Cloud Run request logs:
+
+```bash
+gcloud logging read 'trace="projects/worship-prep-portal/traces/TRACE_ID"' \
+  --project=worship-prep-portal --limit=100 --format=json
+```
+
+`catalog_import_received` records the validated package identity even when a
+request fails before saving a run. `catalog_import_result` events record the original run ID on success, failure,
+and retry, with a safe failure code when processing fails. Request logs include
+method, status, and elapsed time; Nginx also includes upstream status and timing
+as strings, allowing missing values and multiple upstream attempts. Bolt rejects
+some malformed input in Rust before Python dispatch; those requests have the
+Nginx ingress event but no Python completion event. Both ingresses must preserve
+the correlation headers.
+
+Access logs omit query strings, authorization, request bodies, and response
+content. Django emits request completion events instead of Gunicorn's plain
+access log. Request-specific Nginx error diagnostics are disabled because they
+include raw request URLs; Nginx startup diagnostics remain on stderr, and failed
+requests retain status and upstream metadata in the JSON access log. Application
+exception logs retain exception type without exception messages, traceback source,
+or local variables, which can contain credentials or private lyrics. Do not paste
+credentials or source content into manual log messages.
+
 ## Troubleshooting
 
 ### `deploy.sh` fails immediately with "Set SUPABASE_STORAGE_BUCKET" or "Set SUPABASE_S3_ENDPOINT"
