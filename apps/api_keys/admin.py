@@ -173,6 +173,7 @@ class IntegrationApiKeyAdmin(ModelAdmin):
                 )
             )
             obj.pk = issued.api_key.pk
+            obj.refresh_from_db()
             obj._state.adding = False
             plaintext_key = issued.plaintext_key
 
