@@ -2,19 +2,17 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from invitations.utils import (
-    get_invitation_admin_add_form,
     get_invitation_admin_change_form,
     get_invitation_model,
 )
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
 
-from .forms import UserChangeForm, UserCreationForm
-from .models import AccessLevel, InvitationRequest, RequestStatus, User
+from .forms import InvitationAdminAddForm, UserChangeForm, UserCreationForm
+from .models import AccessLevel, InvitationAccess, InvitationRequest, RequestStatus, User
 from .services import approve_invitation_request, reject_invitation_requests
 
 Invitation = get_invitation_model()
-InvitationAdminAddForm = get_invitation_admin_add_form()
 InvitationAdminChangeForm = get_invitation_admin_change_form()
 
 if admin.site.is_registered(Invitation):
@@ -84,7 +82,7 @@ class InvitationRequestAdmin(ModelAdmin):
         "reviewed_by",
     ]
     ordering = ["-created_on"]
-    actions = ["approve_as_catalog_admin", "reject_requests"]
+    actions = ["approve_as_member", "approve_as_catalog_admin", "reject_requests"]
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -112,6 +110,7 @@ class InvitationRequestAdmin(ModelAdmin):
     @display(
         description=_("Access level"),
         label={
+            "Member": "info",
             "Catalog Administrator": "warning",
         },
     )
@@ -119,6 +118,10 @@ class InvitationRequestAdmin(ModelAdmin):
         if not obj.access_level:
             return "—"
         return str(obj.get_access_level_display())
+
+    @admin.action(description=_("Approve and invite as Member"))
+    def approve_as_member(self, request, queryset):
+        self._approve_and_send(request, queryset, AccessLevel.MEMBER)
 
     @admin.action(description=_("Approve and invite as Catalog Administrator"))
     def approve_as_catalog_admin(self, request, queryset):
@@ -158,7 +161,7 @@ class InvitationRequestAdmin(ModelAdmin):
             result = approve_invitation_request(
                 obj.pk,
                 reviewer=request.user,
-                request=request,
+                deliver=lambda invitation: invitation.send_invitation(request),
                 access_level=access_level,
             )
             if result.outcome == "already_invited":
@@ -200,7 +203,7 @@ class InvitationRequestAdmin(ModelAdmin):
 
 @admin.register(Invitation)
 class InvitationAdmin(ModelAdmin):
-    list_display = ("email", "sent", "accepted", "created")
+    list_display = ("email", "access_level_display", "sent", "accepted", "created")
     list_filter = ("sent", "accepted")
     raw_id_fields = ("inviter",)
     readonly_fields = ("key", "sent", "accepted", "created")
@@ -222,14 +225,33 @@ class InvitationAdmin(ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return ("email", "key", "sent", "accepted", "created", "inviter")
+            return (
+                "email", "access_level_display", "key", "sent", "accepted",
+                "created", "inviter",
+            )
         return self.readonly_fields
+
+    @admin.display(description=_("Access level"))
+    def access_level_display(self, obj):
+        access = InvitationAccess.objects.filter(invitation=obj).first()
+        if access is not None:
+            return access.get_access_level_display()
+        invitation_request = InvitationRequest.objects.filter(
+            invitation=obj, status=RequestStatus.APPROVED
+        ).first()
+        return (
+            invitation_request.get_access_level_display()
+            if invitation_request is not None and invitation_request.access_level
+            else AccessLevel.MEMBER.label
+        )
 
     def get_form(self, request, obj=None, **kwargs):
         if obj:
             kwargs["form"] = InvitationAdminChangeForm
         else:
-            kwargs["form"] = InvitationAdminAddForm
-            kwargs["form"].user = request.user
-            kwargs["form"].request = request
+            kwargs["form"] = type(
+                "BoundInvitationAdminAddForm",
+                (InvitationAdminAddForm,),
+                {"request": request},
+            )
         return super().get_form(request, obj, **kwargs)

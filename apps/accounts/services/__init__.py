@@ -8,6 +8,7 @@ from .invitations import (
     assign_staff_from_invitation,
     notify_invitation_request,
     reject_invitation_requests,
+    send_invitation,
     submit_invitation_request,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "assign_staff_from_invitation",
     "notify_invitation_request",
     "reject_invitation_requests",
+    "send_invitation",
     "submit_invitation_request",
 ]

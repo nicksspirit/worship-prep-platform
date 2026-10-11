@@ -17,8 +17,9 @@ _T = ty.TypeVar("_T", bound="models.Model")
 
 
 class AccessLevel(models.TextChoices):
-    """Access tier granted when an invitation request is approved."""
+    """Access tier granted when an invitation is accepted."""
 
+    MEMBER = "member", _("Member")
     CATALOG_ADMIN = "catalog_admin", _("Catalog Administrator")
 
 
@@ -46,8 +47,7 @@ class InvitationRequest(BaseModel):
     access_level = models.CharField(
         max_length=20,
         choices=AccessLevel.choices,
-        blank=True,
-        default="",
+        default=AccessLevel.MEMBER,
     )
     reviewed_by = models.ForeignKey(
         "accounts.User",
@@ -70,6 +70,17 @@ class InvitationRequest(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.email} ({self.get_status_display()})"
+
+
+class InvitationAccess(models.Model):
+    """Access selected for an invitation sent without a public request."""
+
+    invitation = models.OneToOneField(
+        "invitations.Invitation", on_delete=models.CASCADE, related_name="access"
+    )
+    access_level = models.CharField(
+        max_length=20, choices=AccessLevel.choices, default=AccessLevel.MEMBER
+    )
 
 
 class HasMeta(ty.Protocol):

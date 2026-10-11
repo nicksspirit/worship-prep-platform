@@ -39,6 +39,63 @@ first-party migrations require a fresh application database; see
 poe test
 ```
 
+## Local invitation and email testing
+
+Start the development inbox and open http://localhost:8025:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d mailpit
+```
+
+For a Django server running on the host, set these values in your local `.env`
+and restart `poe dev`:
+
+```dotenv
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=127.0.0.1
+EMAIL_PORT=1025
+EMAIL_USE_TLS=false
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+```
+
+The Compose Django and Bolt services already use Mailpit. Local mode otherwise keeps
+email in the terminal. Mailpit captures mail for every recipient in one browser inbox
+without delivering it externally, so no real recipient accounts are needed. Its SMTP
+and inbox ports are bound to localhost. Captured messages disappear when the container
+is recreated. Production continues to use its SMTP provider.
+Invitation emails include branded HTML, a plain-text alternative, and an acceptance
+link to the account setup form.
+
+Use a local database for this exercise. Create an initial Superuser with
+`poe manage createsuperuser` if needed, then test each role with a different email:
+
+1. Sign out and request an invitation from the sign-in page. In Mailpit, confirm that
+   active staff receive the review notification. For its review link, set the Django
+   Site domain to the local app address (for `poe dev`, `localhost:8001`).
+2. Sign in as a Superuser. In **Invitation requests**, select the request and choose
+   **Approve and invite as Member** or **Approve and invite as Catalog Administrator**.
+3. Open the invitation email in Mailpit. Sign out before following its acceptance link
+   and completing signup. Members can search, add catalog or unlisted songs, and submit
+   their own song carts. They see no Admin link, and `/admin/` requires staff access.
+4. Repeat with the other role. Catalog Administrators receive staff access and can
+   inspect submissions and catalog administration. Invitation approval and user
+   management remain Superuser-only. Submission acknowledgement and replies additionally
+   require membership in the **Technical Team** group.
+
+Public requests always start as **Member**; the requester cannot select staff access.
+To invite someone directly, a Superuser opens **Invitations → Add invitation**, enters
+their email, and chooses **Member** (the default) or **Catalog Administrator** before
+saving. The selected role is recorded with the invitation and applied after signup;
+Catalog Administrators do not receive Superuser privileges or invitation management.
+
+Focused regression checks cover emailed acceptance links, signup role assignment,
+admin access, and song preparation/submission:
+
+```bash
+poe test apps/accounts apps/song_carts
+```
+
 ## Foundation Modules
 
 - `apps.accounts`: custom user identity, invitation requests, sign-in, and invitation
@@ -118,7 +175,8 @@ Each selection has one owner comment thread. Comments stay editable in Draft, th
 for 15 minutes after submission or posting; later changes use a follow-up comment.
 Admins read the thread and compose email responses rather than posting comments.
 Each email has its own delivery outcome and manual retry. Local mode previews email
-in the application terminal; production uses the existing SMTP configuration.
+in the application terminal or the development inbox described above; production uses
+the existing SMTP configuration.
 
 Assign active staff reviewers to `Technical Team` using the superuser-managed Users
 admin. Configure the Django Site domain for links in notification emails. Migration

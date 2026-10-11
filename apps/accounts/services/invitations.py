@@ -1,20 +1,29 @@
 """Invitation request use cases."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
 import structlog
 from django.conf import settings
 from django.contrib.sites.models import Site
+from django.core.exceptions import PermissionDenied
 from django.core.mail import EmailMessage
+from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
-from django.http import HttpRequest
 from django.urls import reverse
 from invitations.exceptions import AlreadyAccepted, AlreadyInvited, UserRegisteredEmail
 from invitations.forms import CleanEmailMixin
+from invitations.models import Invitation as InvitationModel
 from invitations.utils import get_invitation_model
 
-from apps.accounts.models import AccessLevel, InvitationRequest, RequestStatus, User
+from apps.accounts.models import (
+    AccessLevel,
+    InvitationAccess,
+    InvitationRequest,
+    RequestStatus,
+    User,
+)
 
 logger = structlog.get_logger(__name__)
 Invitation = get_invitation_model()
@@ -55,7 +64,30 @@ def submit_invitation_request(data: InvitationRequestInput) -> InvitationRequest
         first_name=data.first_name,
         last_name=data.last_name,
         message=data.message,
+        access_level=AccessLevel.MEMBER,
     )
+
+
+@transaction.atomic
+def send_invitation(
+    email: str,
+    *,
+    inviter: User,
+    deliver: Callable[[InvitationModel], None],
+    access_level: AccessLevel = AccessLevel.MEMBER,
+) -> InvitationModel:
+    """Send a Superuser's direct invitation with the selected access tier."""
+
+    if not inviter.is_active or not inviter.is_superuser:
+        raise PermissionDenied
+    access_level = AccessLevel(access_level)
+    email = email.strip().lower()
+    validate_email(email)
+    CleanEmailMixin().validate_invitation(email)
+    invitation = Invitation.create(email=email, inviter=inviter)
+    InvitationAccess.objects.create(invitation=invitation, access_level=access_level)
+    deliver(invitation)
+    return invitation
 
 
 @transaction.atomic
@@ -63,11 +95,14 @@ def approve_invitation_request(
     invitation_request_id: int,
     *,
     reviewer: User,
-    request: HttpRequest,
-    access_level: str = AccessLevel.CATALOG_ADMIN,
+    deliver: Callable[[InvitationModel], None],
+    access_level: str = AccessLevel.MEMBER,
 ) -> InvitationApproval:
     """Approve one pending request, create its invitation, and send it."""
 
+    if not reviewer.is_active or not reviewer.is_superuser:
+        raise PermissionDenied
+    access_level = AccessLevel(access_level)
     invitation_request = InvitationRequest.objects.select_for_update().get(
         pk=invitation_request_id
     )
@@ -91,7 +126,7 @@ def approve_invitation_request(
     except IntegrityError:
         return InvitationApproval(invitation_request.email, "failed")
 
-    invitation.send_invitation(request)
+    deliver(invitation)
     invitation_request.status = RequestStatus.APPROVED
     invitation_request.access_level = access_level
     invitation_request.reviewed_by = reviewer
@@ -174,14 +209,19 @@ def assign_staff_from_invitation(email: str, invitation) -> None:
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
         return
-    invitation_request = (
-        InvitationRequest.objects.filter(invitation=invitation).first()
-        or InvitationRequest.objects.filter(email__iexact=email).first()
-    )
-    if (
-        invitation_request is not None
-        and invitation_request.access_level == AccessLevel.CATALOG_ADMIN
-        and not user.is_staff
-    ):
+    direct_access = InvitationAccess.objects.filter(
+        invitation=invitation, invitation__email__iexact=email
+    ).first()
+    invitation_request = InvitationRequest.objects.filter(
+        invitation=invitation,
+        email__iexact=email,
+        status=RequestStatus.APPROVED,
+    ).first()
+    access_level = AccessLevel.MEMBER
+    if direct_access is not None:
+        access_level = direct_access.access_level
+    elif invitation_request is not None:
+        access_level = invitation_request.access_level
+    if access_level == AccessLevel.CATALOG_ADMIN and not user.is_staff:
         user.is_staff = True
         user.save(update_fields=["is_staff"])

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
+from backend.settings import env
 from backend.settings.components.storage import STORAGES_LOCAL
 
 STORAGES = STORAGES_LOCAL
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = env.str("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

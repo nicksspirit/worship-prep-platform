@@ -137,6 +137,11 @@ An invited, authenticated person permitted to perform selected operational work 
 Song Catalog. A person cannot self-register as a Catalog Administrator.
 _Avoid_: Catalog Visitor, public user
 
+**Member**:
+An invited, authenticated person who prepares and submits their own Song Carts,
+including Unlisted Songs, without access to application administration.
+_Avoid_: Catalog Administrator, staff
+
 **Superuser**:
 An authenticated operator with exclusive authority to manage invitations, Integration
 Client keys, and a Song Catalog entry's Lyrics Rights Status.

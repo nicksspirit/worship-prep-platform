@@ -2,9 +2,38 @@ from django import forms
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from invitations.forms import CleanEmailMixin
+from invitations.utils import get_invitation_model
 
-from .models import InvitationRequest, User
-from .services import InvitationRequestInput, submit_invitation_request
+from .models import AccessLevel, InvitationRequest, User
+from .services import InvitationRequestInput, send_invitation, submit_invitation_request
+
+
+class InvitationAdminAddForm(forms.ModelForm, CleanEmailMixin):
+    """Bind the recipient and access tier chosen by a Superuser."""
+
+    access_level = forms.ChoiceField(
+        choices=AccessLevel.choices,
+        initial=AccessLevel.MEMBER,
+        help_text=_(
+            "Members can prepare and submit songs. Catalog Administrators also "
+            "get staff access to administration."
+        ),
+    )
+
+    class Meta:
+        model = get_invitation_model()
+        fields = ["email"]
+
+    def save(self, commit=True):
+        super().save(commit=False)
+        self.instance = send_invitation(
+            self.cleaned_data["email"],
+            inviter=self.request.user,
+            deliver=lambda invitation: invitation.send_invitation(self.request),
+            access_level=AccessLevel(self.cleaned_data["access_level"]),
+        )
+        return self.instance
 
 
 class UserCreationForm(forms.ModelForm):

@@ -152,7 +152,7 @@ class AccountEmailStatesPage(NamedTuple):
 @template
 class AccountSettingsPage(NamedTuple):
     title: str
-    page: Literal["emails", "change-password", "set-password", "reauthenticate"]
+    page: Literal["emails", "change-password", "set-password", "reauthenticate", "signup"]
     form: AccountForm
     action_url: str
     email_addresses: list[AccountEmailAddress]
@@ -160,6 +160,7 @@ class AccountSettingsPage(NamedTuple):
     reset_password_url: str | None
     redirect_field: RedirectField | None
     reauthentication_alternatives: list[ReauthenticationAlternative]
+    google_login_url: str | None = None
 
 
 @template

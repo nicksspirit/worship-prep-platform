@@ -1,0 +1,15 @@
+{% autoescape off %}
+CHAPEL OF MERCY  |  WORSHIP PREP PLATFORM
+
+You're invited
+
+Create your Worship Prep Platform account using the link below:
+
+{{ invite_url }}
+
+Use {{ email }} when creating your account. Choose a password, then sign in to search songs and prepare your song submissions.
+
+This invitation expires. If it has expired, ask your church administrator for a new invitation.
+
+If you were not expecting this invitation, you can ignore this email.
+{% endautoescape %}

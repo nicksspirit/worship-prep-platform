@@ -25,7 +25,7 @@ type Form = {
 
 type Props = {
     title: string;
-    page: "emails" | "change-password" | "set-password" | "reauthenticate";
+    page: "emails" | "change-password" | "set-password" | "reauthenticate" | "signup";
     form: Form;
     action_url: string;
     email_addresses?: {email: string; verified: boolean; primary: boolean}[];
@@ -33,6 +33,7 @@ type Props = {
     reset_password_url?: string | null;
     redirect_field?: {name: string; value: string} | null;
     reauthentication_alternatives?: {description: string; url: string}[];
+    google_login_url?: string | null;
 };
 
 const pageCopy = {
@@ -40,6 +41,7 @@ const pageCopy = {
     "change-password": {heading: "Change password", description: "Choose a new password to keep your account secure."},
     "set-password": {heading: "Set password", description: "Add a password so you can sign in with your email address."},
     reauthenticate: {heading: "Confirm access", description: "Enter your password to safeguard your account."},
+    signup: {heading: "Create your account", description: "Confirm your invited email address and choose a password to start preparing song submissions."},
 } as const;
 
 export const Template = (props: Props) => {
@@ -128,13 +130,20 @@ export const Template = (props: Props) => {
                                 {renderErrors(nonFieldErrors)}
                                 <div className="flex flex-col items-start gap-5">
                                     <button type="submit" className="minimal-btn min-w-56">
-                                        {props.page === "change-password" ? "Change password" : props.page === "set-password" ? "Set password" : "Confirm"}
+                                        {props.page === "signup" ? "Create account" : props.page === "change-password" ? "Change password" : props.page === "set-password" ? "Set password" : "Confirm"}
                                     </button>
                                     {props.page === "change-password" && props.reset_password_url && (
                                         <a href={props.reset_password_url} className="text-xs font-bold uppercase tracking-widest text-chapel-neutral-600 underline underline-offset-4 transition-colors hover:text-chapel-primary-500">Forgot password?</a>
                                     )}
                                 </div>
                             </form>
+                            {props.page === "signup" && props.google_login_url && (
+                                <form action={props.google_login_url} method="post" className="mt-6">
+                                    <CSRFToken />
+                                    {props.redirect_field && <input type="hidden" name={props.redirect_field.name} value={props.redirect_field.value} />}
+                                    <button type="submit" className="minimal-btn-outline min-w-56">Continue with Google</button>
+                                </form>
+                            )}
                             {props.reauthentication_alternatives && props.reauthentication_alternatives.length > 0 && (
                                 <div className="mt-10 border-t border-chapel-neutral-300 pt-6">
                                     <h2 className="font-serif text-2xl">Other ways to confirm</h2>

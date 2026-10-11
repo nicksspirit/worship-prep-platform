@@ -160,7 +160,7 @@ def _account_settings_page(
     request,
     context,
     *,
-    page: Literal["emails", "change-password", "set-password", "reauthenticate"],
+    page: Literal["emails", "change-password", "set-password", "reauthenticate", "signup"],
     title: str,
 ) -> HttpResponse:
     addresses = [
@@ -190,6 +190,7 @@ def _account_settings_page(
             reauthentication_alternatives=context.get(
                 "reauthentication_alternatives", []
             ),
+            google_login_url=reverse("google_login") if page == "signup" else None,
         ),
     )
     return page_data.render(request)
@@ -488,6 +489,11 @@ class AccountConnectionsView(AllauthConnectionsView):
 
 class InvitationRequiredView(SignupView):
     """Present an invitation-only access notice when public signup is closed."""
+
+    def render_to_response(self, context, **response_kwargs):
+        return _account_settings_page(
+            self.request, context, page="signup", title="Create Account"
+        )
 
     def closed(self) -> HttpResponse:
         page = cast(
