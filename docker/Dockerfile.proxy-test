@@ -8,6 +8,7 @@ FROM python:3.13-slim-bookworm
 COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=go /deliver-fixture /tmp/deliver-fixture
 ENV PATH="/code/.venv/bin:/usr/sbin:$PATH" \
+    UV_COMPILE_BYTECODE=1 \
     DJANGO_ENV=test \
     DJANGO_SETTINGS_MODULE=backend.settings
 WORKDIR /code
