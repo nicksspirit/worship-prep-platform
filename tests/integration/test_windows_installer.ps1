@@ -85,7 +85,9 @@ try {
     if ($task.Principal.LogonType -ne "Interactive" -or
         $task.Principal.RunLevel -ne "Limited" -or
         $task.Principal.UserId -notin @($currentUser.User.Value, $currentUser.Name)) {
-        throw "Task must use passwordless Interactive logon for the current account with limited privileges."
+        throw ("Task principal differs: logon={0}, privileges={1}, account={2}; expected SID={3}, name={4}." -f
+            $task.Principal.LogonType, $task.Principal.RunLevel, $task.Principal.UserId,
+            $currentUser.User.Value, $currentUser.Name)
     }
     if ($task.Triggers[0].DaysOfWeek -ne 1 -or
         $task.Triggers[0].WeeksInterval -ne 1 -or
