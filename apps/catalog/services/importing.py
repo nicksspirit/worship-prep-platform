@@ -687,6 +687,7 @@ def import_package(
     inspected = _read_archive(package)
     manifest = inspected.manifest
     run_id = UUID(manifest["run_id"])
+    logger.info("catalog_import_received", run_id=str(run_id))
     if trigger not in ImportTrigger.values:
         raise ImportRejected("invalid_import_trigger", "Import trigger is invalid.")
     events = _read_exporter_events(exporter_events, run_id=run_id)

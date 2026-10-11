@@ -623,7 +623,8 @@ gcloud logging read 'trace="projects/worship-prep-portal/traces/TRACE_ID"' \
   --project=worship-prep-portal --limit=100 --format=json
 ```
 
-`catalog_import_result` events record the original run ID on success, failure,
+`catalog_import_received` records the validated package identity even when a
+request fails before saving a run. `catalog_import_result` events record the original run ID on success, failure,
 and retry, with a safe failure code when processing fails. Request logs include
 method, status, and elapsed time; Nginx also includes upstream status and timing
 as strings, allowing missing values and multiple upstream attempts. Bolt rejects

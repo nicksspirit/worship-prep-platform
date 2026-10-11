@@ -27,6 +27,8 @@ class ShutdownTests(unittest.TestCase):
         (self.root / "deploy").mkdir()
         (self.root / "backend").mkdir()
         (self.root / "backend/__init__.py").touch()
+        # This fixture exercises supervision with a minimal WSGI app.
+        (self.root / "backend/gunicorn.py").write_text("accesslog = None\nerrorlog = '-'\n")
         shutil.copy(source / "deploy/start-django.sh", self.root / "deploy")
         certificate = self.root / "certificate.pem"
         key = self.root / "key.pem"

@@ -1,9 +1,18 @@
 """Request log contracts through Django's HTTP client."""
 
+import http.client
 import io
 import json
 import logging
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
 from contextlib import contextmanager
+from importlib.util import find_spec
+from unittest import skipUnless
 
 from django.test import SimpleTestCase
 from django.urls import path
@@ -168,4 +177,130 @@ class DjangoRequestLogTests(SimpleTestCase):
                 if event["event"] == "request_finished"
             ),
             [f"concurrent-{number}" for number in range(8)],
+        )
+
+    @skipUnless(
+        find_spec("gunicorn") and find_spec("storages"), "Requires production runtime"
+    )
+    def test_gunicorn_production_events_are_json_and_requests_keep_the_trace(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        with tempfile.TemporaryFile(mode="w+") as logs:
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "gunicorn",
+                    "backend.wsgi:application",
+                    "--config",
+                    "python:backend.gunicorn",
+                    "--bind",
+                    f"127.0.0.1:{port}",
+                    "--workers",
+                    "1",
+                ],
+                stdout=logs,
+                stderr=logs,
+                env={
+                    **os.environ,
+                    "DJANGO_SETTINGS_MODULE": "backend.settings",
+                    "DJANGO_ENV": "prod",
+                    "DATABASE_URL": "sqlite:///:memory:",
+                    "SUPABASE_STORAGE_BUCKET": "test-only",
+                    "SUPABASE_CATALOG_IMPORT_BUCKET": "test-only-imports",
+                    "SUPABASE_S3_ENDPOINT": "https://unused.example.invalid",
+                    "SUPABASE_S3_ACCESS_KEY": "test-only",
+                    "SUPABASE_S3_SECRET_KEY": "test-only",
+                    "GCP_PROJECT_ID": "wpp-test-project",
+                    "ALLOWED_HOSTS": "127.0.0.1",
+                    "PYTHONWARNINGS": "ignore:No directory at:UserWarning",
+                },
+            )
+            try:
+                for attempt in range(100):
+                    try:
+                        connection = http.client.HTTPConnection(
+                            "127.0.0.1", port, timeout=2
+                        )
+                        connection.request(
+                            "GET",
+                            "/health/?key=private-query",
+                            headers={
+                                "Authorization": "Bearer private-key",
+                                "X-Request-ID": "gunicorn-123",
+                                "X-Cloud-Trace-Context": "0123456789abcdef0123456789abcdef/42;o=1",
+                            },
+                        )
+                        response = connection.getresponse()
+                        status = response.status
+                        response.read()
+                        connection.close()
+                        break
+                    except OSError:
+                        if process.poll() is not None:
+                            break
+                        time.sleep(0.05)
+                else:
+                    self.fail("Gunicorn did not start")
+            finally:
+                process.terminate()
+                process.wait(timeout=10)
+            logs.seek(0)
+            output = logs.read()
+        self.assertEqual(process.returncode, 0, output)
+        self.assertEqual(status, 200)
+        events = [json.loads(line) for line in output.splitlines()]
+        self.assertTrue(any(event["logger"] == "gunicorn.error" for event in events))
+        outcome = next(event for event in events if event["event"] == "request_finished")
+        self.assertEqual(
+            (outcome["request_id"], outcome["logging.googleapis.com/trace"]),
+            (
+                "gunicorn-123",
+                "projects/wpp-test-project/traces/0123456789abcdef0123456789abcdef",
+            ),
+        )
+        self.assertNotIn("private-query", output)
+        self.assertNotIn("private-key", output)
+
+    def test_concurrent_bolt_requests_keep_separate_trace_contexts(self):
+        import asyncio
+
+        from asgiref.sync import async_to_sync
+        from django_bolt.testing import AsyncTestClient
+
+        from apps.catalog.api import api
+
+        async def request_concurrently():
+            async with AsyncTestClient(api, read_django_settings=False) as client:
+                return await asyncio.gather(
+                    *[
+                        client.post(
+                            "/api/v1/catalog/imports",
+                            headers={
+                                "x-request-id": f"bolt-concurrent-{number}",
+                                "x-cloud-trace-context": f"{number + 1:032x}/42;o=1",
+                            },
+                        )
+                        for number in range(4)
+                    ]
+                )
+
+        with self.settings(GCP_PROJECT_ID="wpp-test-project"), capture_logs() as logs:
+            responses = async_to_sync(request_concurrently)()
+        self.assertEqual([response.status_code for response in responses], [422] * 4)
+        events = [json.loads(line) for line in logs.getvalue().splitlines()]
+        outcomes = {
+            event["request_id"]: event["logging.googleapis.com/trace"]
+            for event in events
+            if event["event"] == "request_finished"
+        }
+        self.assertEqual(
+            outcomes,
+            {
+                "bolt-concurrent-0": "projects/wpp-test-project/traces/00000000000000000000000000000001",
+                "bolt-concurrent-1": "projects/wpp-test-project/traces/00000000000000000000000000000002",
+                "bolt-concurrent-2": "projects/wpp-test-project/traces/00000000000000000000000000000003",
+                "bolt-concurrent-3": "projects/wpp-test-project/traces/00000000000000000000000000000004",
+            },
         )

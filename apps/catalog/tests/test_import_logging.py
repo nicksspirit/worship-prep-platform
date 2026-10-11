@@ -135,3 +135,45 @@ class CatalogImportLogTests(TransactionTestCase):
         self.assertTrue(all("run_id" not in event for event in events))
         self.assertNotIn("private-key", logs.getvalue())
         self.assertNotIn(lyrics, logs.getvalue())
+
+    def test_run_conflict_is_correlated_with_the_validated_package_identity(self):
+        secret = issue_api_key(
+            IssueApiKey("Exporter", [APIKeyScope.CATALOG_IMPORT])
+        ).plaintext_key
+        package, run_id, _ = self.package()
+        with TestClient(api, read_django_settings=False) as client:
+            self.assertEqual(
+                client.post(
+                    "/api/v1/catalog/imports",
+                    files={"package": ("catalog.zip", package, "application/zip")},
+                    headers={"authorization": f"Bearer {secret}"},
+                ).status_code,
+                201,
+            )
+            original = zipfile.ZipFile(io.BytesIO(package))
+            manifest = json.loads(original.read("manifest.json"))
+            manifest["exporter_version"] = "conflicting-package"
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive:
+                archive.writestr("manifest.json", json.dumps(manifest))
+                archive.writestr("songs.ndjson", original.read("songs.ndjson"))
+            original.close()
+            with capture_logs() as logs:
+                response = client.post(
+                    "/api/v1/catalog/imports",
+                    files={
+                        "package": ("catalog.zip", buffer.getvalue(), "application/zip")
+                    },
+                    headers={
+                        "authorization": f"Bearer {secret}",
+                        "x-request-id": "conflict-123",
+                    },
+                )
+        self.assertEqual(response.status_code, 409)
+        events = [json.loads(line) for line in logs.getvalue().splitlines()]
+        received = next(
+            event for event in events if event["event"] == "catalog_import_received"
+        )
+        self.assertEqual(
+            (received["run_id"], received["request_id"]), (run_id, "conflict-123")
+        )
