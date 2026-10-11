@@ -64,11 +64,14 @@ Invoke-WebRequest -UseBasicParsing `
 ```
 
 Paste the full API key into **Paste the one-time Catalog Import API key**.
-Enter this Windows account's password at the scheduled-task prompt. Use the password, not the Windows Hello PIN.
+The installer does not ask for a Windows account password or Windows Hello PIN.
 
 The installer verifies the executable's SHA-256 checksum and encrypts the API key for this Windows account.
 It creates **Worship Prep Catalog Import** for Sunday at **3:00 AM Pacific**.
 It retries a failed command once after 30 minutes.
+The task uses passwordless **Interactive** logon for the same account that protects the API key.
+Keep that account signed in and the computer awake for scheduled imports.
+You can lock the screen. Signing out prevents the task from running.
 
 Wait for `Catalog Exporter diagnostics passed.` and the installation confirmation.
 
@@ -112,8 +115,12 @@ Confirm that the new run has status **Completed**. Check the song count and warn
 Check the scheduled task:
 
 ```powershell
-Get-ScheduledTask -TaskName 'Worship Prep Catalog Import'
+Get-ScheduledTask -TaskName 'Worship Prep Catalog Import' |
+  Select-Object TaskName, State,
+    @{Name='LogonType'; Expression={$_.Principal.LogonType}}
 ```
+
+Expect **Ready** and **Interactive** after installation.
 
 To start a scheduled run immediately:
 

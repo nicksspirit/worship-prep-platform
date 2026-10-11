@@ -52,7 +52,7 @@ On the EasyWorship Windows machine, set `WPP_EASYWORSHIP_DATA_DIR` once for the 
 user that runs EasyWorship, then open a new built-in Windows PowerShell 5.1 or later
 session and use the platform's one-line bootstrap. The installer obtains the latest
 `exporter/v*` release, verifies its checksum, protects the one-time API key with DPAPI,
-and creates a weekly 3:00 AM Pacific task with one retry after 30 minutes:
+and creates a passwordless weekly 3:00 AM Pacific task with one retry after 30 minutes:
 
 ```powershell
 [Environment]::SetEnvironmentVariable(
@@ -63,14 +63,20 @@ and creates a weekly 3:00 AM Pacific task with one retry after 30 minutes:
 ```
 
 ```powershell
-irm https://wpp-api.example.com/install | iex
+irm https://app.rccgcm.org/install | iex
 ```
 
 The weekday defaults to Sunday. Windows must use the `Pacific Standard Time` zone so
 daylight-saving transitions remain aligned with America/Los_Angeles. Re-run the command
 after machine or account changes to reinstall; `-Mode Diagnose` remains available from
-the downloaded installer. The platform URL is the Django Bolt API service base URL, not
-the rendered web-app URL.
+the downloaded installer. The platform URL is `https://app.rccgcm.org`; its ingress
+forwards `/api/` requests to Django Bolt.
+
+The task uses the current account's SID with `Interactive` logon and limited privileges.
+The installer does not request or store a Windows password. The same Windows account
+must remain signed in, and the computer must be awake for scheduled imports. Locking
+the screen is allowed; signing out prevents the task from running. The API key remains
+protected with current-user DPAPI.
 
 The installer places `catalog-exporter.exe` in `%USERPROFILE%\.local\bin`, durable
 packages and outbox state in `%USERPROFILE%\.local\state\WorshipPrep\CatalogExporter`,
@@ -92,6 +98,19 @@ An authorized operator can start an immediate run without changing the weekly sc
 ```powershell
 Start-ScheduledTask -TaskName 'Worship Prep Catalog Import'
 ```
+
+The installer passes paths, release data, and account identity explicitly to its
+functions. Path calculation, release selection, and task construction do not write
+files or register tasks. The entry point performs installation and registration.
+Run the Windows checks from the repository root:
+
+```powershell
+./static/install-catalog-exporter.ps1 -Mode Validate
+./tests/integration/test_windows_installer.ps1
+```
+
+The integration check registers a temporary task and removes it afterward. It does
+not run the exporter or contact the platform.
 
 See [`../contracts/catalog-import/v1/README.md`](../contracts/catalog-import/v1/README.md)
 for the package contract.
