@@ -8,6 +8,7 @@ on:
       - "docker/Dockerfile"
       - "cloudbuild.yaml"
       - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_shutdown.py"
       - ".github/workflows/api-routing.yml"
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "docker/Dockerfile"
       - "cloudbuild.yaml"
       - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_shutdown.py"
       - ".github/workflows/api-routing.yml"
 
 permissions:
@@ -27,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install Gunicorn
+        run: python -m pip install gunicorn==23.0.0
       - name: Install Nginx
         run: sudo apt-get update && sudo apt-get install -y nginx
       - name: Stop the packaged default server
@@ -34,3 +41,5 @@ jobs:
       - name: Check routing and streamed imports
         # The Cloud Run origin test binds the default HTTPS port 443.
         run: sudo "$(command -v python3)" tests/integration/test_api_proxy.py
+      - name: Check graceful shutdown and child cleanup
+        run: python tests/integration/test_shutdown.py
