@@ -76,6 +76,15 @@ The `/install` bootstrap also uses this platform URL.
 The platform website's `/api/v1/catalog/imports` route returned HTTP 404 when checked on October 10, 2026.
 Configure this route to reach the catalog API before the first import.
 
+If an older installer reports `Unable to find type [Security.Cryptography.ProtectedData]`, run these commands in the same PowerShell window:
+
+```powershell
+Add-Type -AssemblyName System.Security
+& $installer -PlatformUrl 'https://app.rccgcm.org'
+```
+
+Paste the same API key again when prompted. This command loads the Windows encryption type without changing the API key.
+
 ## 5. Run and verify the first import
 
 Keep EasyWorship closed. Open a new PowerShell session under the same account.

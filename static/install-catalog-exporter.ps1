@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Security
 $TaskName = "Worship Prep Catalog Import"
 $LocalDirectory = Join-Path $env:USERPROFILE ".local"
 $BinaryDirectory = Join-Path $LocalDirectory "bin"
