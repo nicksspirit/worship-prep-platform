@@ -1,0 +1,35 @@
+name: API routing
+
+on:
+  pull_request:
+    paths:
+      - "deploy/start-django.sh"
+      - "deploy/nginx.conf.template"
+      - "docker/Dockerfile"
+      - "cloudbuild.yaml"
+      - "tests/integration/test_api_proxy.py"
+      - ".github/workflows/api-routing.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deploy/start-django.sh"
+      - "deploy/nginx.conf.template"
+      - "docker/Dockerfile"
+      - "cloudbuild.yaml"
+      - "tests/integration/test_api_proxy.py"
+      - ".github/workflows/api-routing.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nginx
+        run: sudo apt-get update && sudo apt-get install -y nginx
+      - name: Stop the packaged default server
+        run: sudo systemctl stop nginx
+      - name: Check routing and streamed imports
+        run: python3 tests/integration/test_api_proxy.py

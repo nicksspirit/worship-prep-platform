@@ -73,8 +73,16 @@ It retries a failed command once after 30 minutes.
 Wait for `Catalog Exporter diagnostics passed.` and the installation confirmation.
 
 The `/install` bootstrap also uses this platform URL.
-The platform website's `/api/v1/catalog/imports` route returned HTTP 404 when checked on October 10, 2026.
-Configure this route to reach the catalog API before the first import.
+The platform forwards `/api/` requests to the catalog API after the routing fix is deployed.
+Check the import route before the first import:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Method Options `
+  -Uri 'https://app.rccgcm.org/api/v1/catalog/imports' |
+  Select-Object StatusCode
+```
+
+Expect HTTP `204`. HTTP `404` means the routing fix is not deployed.
 
 ## 5. Run and verify the first import
 

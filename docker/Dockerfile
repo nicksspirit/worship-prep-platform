@@ -131,7 +131,7 @@ ENV DJANGO_ENV="prod" \
     SUPABASE_S3_REGION="${SUPABASE_S3_REGION}"
 
 RUN apt-get update -qq \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl nginx \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
