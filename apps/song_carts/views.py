@@ -28,7 +28,15 @@ from apps.song_carts.services import (
     add_comment,
     edit_comment,
 )
-from apps.song_carts.templates import AddSongPage, SectionChoiceProps
+from apps.song_carts.templates import AddSongPage, EmptySongCartPage, SectionChoiceProps
+
+
+class EmptyCartView(LoginRequiredMixin, View):
+    """Show how to start a song cart before any songs have been added."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the empty cart without creating a dated draft."""
+        return cast(RenderableTemplate, EmptySongCartPage("Song cart")).render(request)
 
 
 class CartListView(LoginRequiredMixin, View):
