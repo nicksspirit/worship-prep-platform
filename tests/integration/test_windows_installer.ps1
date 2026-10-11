@@ -84,10 +84,13 @@ try {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
     if ($task.Principal.LogonType -ne "Interactive" -or
         $task.Principal.RunLevel -ne "Limited" -or
-        $task.Principal.UserId -notin @($currentUser.User.Value, $currentUser.Name)) {
+        (Resolve-AccountSid -Account $task.Principal.UserId) -ne $currentUser.User.Value) {
         throw ("Task principal differs: logon={0}, privileges={1}, account={2}; expected SID={3}, name={4}." -f
             $task.Principal.LogonType, $task.Principal.RunLevel, $task.Principal.UserId,
             $currentUser.User.Value, $currentUser.Name)
+    }
+    if ((Resolve-AccountSid -Account $currentUser.User.Value) -ne $currentUser.User.Value) {
+        throw "Account SID resolution must also accept a SID directly."
     }
     if ($task.Triggers[0].DaysOfWeek -ne 1 -or
         $task.Triggers[0].WeeksInterval -ne 1 -or

@@ -146,6 +146,14 @@ function New-WeeklyTask {
         -Principal $principal
 }
 
+function Resolve-AccountSid {
+    param([string]$Account)
+    if ($Account.StartsWith("S-1-")) {
+        return ([Security.Principal.SecurityIdentifier]$Account).Value
+    }
+    return ([Security.Principal.NTAccount]$Account).Translate([Security.Principal.SecurityIdentifier]).Value
+}
+
 function Test-Installation {
     param([pscustomobject]$Paths, [string]$TaskName)
     Assert-PacificTimeZone -TimeZoneId (Get-TimeZone).Id
@@ -166,7 +174,7 @@ function Test-Installation {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     if ($task.Principal.LogonType -ne "Interactive" -or
-        $task.Principal.UserId -notin @($currentUser.User.Value, $currentUser.Name) -or
+        (Resolve-AccountSid -Account $task.Principal.UserId) -ne $currentUser.User.Value -or
         $task.Principal.RunLevel -ne "Limited") {
         throw "Scheduled task must use passwordless Interactive logon with limited privileges for the current Windows account."
     }
