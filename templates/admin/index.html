@@ -5,56 +5,64 @@
 <div class="flex flex-col gap-6">
     <div>
         <h1 class="text-2xl font-semibold text-font-important-light dark:text-font-important-dark">Song submissions</h1>
-        <p class="mt-2">Review service selections and respond to their submitters. Confirmation means a Technical Team member has seen the submission.</p>
+        <p class="submission-intro mt-2">Review service selections and respond to their submitters. Confirmation means a Technical Team member has seen the submission.</p>
     </div>
 
-    <dl class="flex flex-wrap gap-6 border-b border-base-200 pb-6 dark:border-base-800" aria-label="Submitted selections, excluding drafts">
+    <dl class="submission-summary border-b border-base-200 pb-6 dark:border-base-800" aria-label="Submitted selections, excluding drafts">
         <div><dt>Total submitted</dt><dd class="text-xl font-semibold text-font-important-light dark:text-font-important-dark">{{ submission_counts.total }}</dd></div>
         <div><dt>Pending</dt><dd class="text-xl font-semibold text-font-important-light dark:text-font-important-dark">{{ submission_counts.pending }}</dd></div>
         <div><dt>Confirmed</dt><dd class="text-xl font-semibold text-font-important-light dark:text-font-important-dark">{{ submission_counts.confirmed }}</dd></div>
         <div><dt>Rejected</dt><dd class="text-xl font-semibold text-font-important-light dark:text-font-important-dark">{{ submission_counts.rejected }}</dd></div>
     </dl>
 
-    <form method="get" class="flex flex-wrap items-end gap-4" aria-label="Filter submissions">
-        <div class="flex flex-col gap-2">
+    <form method="get" class="submission-filters" aria-label="Filter submissions">
+        <div class="submission-filter submission-filter-status">
             <label for="submission-status" class="font-medium">Status</label>
-            <select id="submission-status" name="status">
-                <option value="pending" {% if submission_status == "pending" %}selected{% endif %}>Pending</option>
-                <option value="confirmed" {% if submission_status == "confirmed" %}selected{% endif %}>Confirmed</option>
-                <option value="rejected" {% if submission_status == "rejected" %}selected{% endif %}>Rejected</option>
-                <option value="" {% if submission_status == "" %}selected{% endif %}>All submitted</option>
-                <option value="draft" {% if submission_status == "draft" %}selected{% endif %}>Drafts</option>
-                <option value="all" {% if submission_status == "all" %}selected{% endif %}>All states</option>
-            </select>
+            <div class="submission-select">
+                <select id="submission-status" name="status">
+                    <option value="pending" {% if submission_status == "pending" %}selected{% endif %}>Pending</option>
+                    <option value="confirmed" {% if submission_status == "confirmed" %}selected{% endif %}>Confirmed</option>
+                    <option value="rejected" {% if submission_status == "rejected" %}selected{% endif %}>Rejected</option>
+                    <option value="" {% if submission_status == "" %}selected{% endif %}>All submitted</option>
+                    <option value="draft" {% if submission_status == "draft" %}selected{% endif %}>Drafts</option>
+                    <option value="all" {% if submission_status == "all" %}selected{% endif %}>All states</option>
+                </select>
+                <span class="submission-select-arrow material-symbols-outlined" aria-hidden="true">expand_more</span>
+            </div>
         </div>
-        <div class="flex flex-col gap-2">
+        <div class="submission-filter submission-filter-search">
             <label for="submission-search" class="font-medium">Submitter or song</label>
             <input id="submission-search" name="q" type="search" value="{{ submission_query }}" placeholder="Name, email, or song title" maxlength="200">
         </div>
-        <div class="flex flex-col gap-2">
+        <div class="submission-filter submission-filter-sort">
             <label for="submission-sort" class="font-medium">Sort</label>
-            <select id="submission-sort" name="sort">
-                <option value="submitted_desc" {% if submission_sort == "submitted_desc" %}selected{% endif %}>Recently submitted</option>
-                <option value="service_date_desc" {% if submission_sort == "service_date_desc" %}selected{% endif %}>Service date: newest first</option>
-                <option value="service_date_asc" {% if submission_sort == "service_date_asc" %}selected{% endif %}>Service date: oldest first</option>
-            </select>
+            <div class="submission-select">
+                <select id="submission-sort" name="sort">
+                    <option value="submitted_desc" {% if submission_sort == "submitted_desc" %}selected{% endif %}>Recently submitted</option>
+                    <option value="service_date_desc" {% if submission_sort == "service_date_desc" %}selected{% endif %}>Service date: newest first</option>
+                    <option value="service_date_asc" {% if submission_sort == "service_date_asc" %}selected{% endif %}>Service date: oldest first</option>
+                </select>
+                <span class="submission-select-arrow material-symbols-outlined" aria-hidden="true">expand_more</span>
+            </div>
         </div>
-        {% component "unfold/components/button.html" with submit=1 %}Apply filters{% endcomponent %}
-        {% url "admin:index" as dashboard_url %}
-        {% component "unfold/components/button.html" with href=dashboard_url variant="default" %}Reset{% endcomponent %}
+        <div class="submission-filter-actions">
+            {% component "unfold/components/button.html" with submit=1 %}Apply filters{% endcomponent %}
+            {% url "admin:index" as dashboard_url %}
+            {% component "unfold/components/button.html" with href=dashboard_url variant="default" %}Reset{% endcomponent %}
+        </div>
     </form>
 
     <div>
-        <p class="mb-3">{{ submission_total }} matching submission{{ submission_total|pluralize }}{% if submissions_truncated %}. Showing the first 100; narrow your filters to find earlier entries{% endif %}.</p>
+        <p class="submission-result-count mb-3">{{ submission_total }} matching submission{{ submission_total|pluralize }}{% if submissions_truncated %}. Showing the first 100; narrow your filters to find earlier entries{% endif %}.</p>
         {% if submission_table.rows %}
             {% component "unfold/components/table.html" with table=submission_table striped=1 %}{% endcomponent %}
         {% else %}
-            <div class="border border-base-200 rounded-default p-6 dark:border-base-800">
+            <div class="submission-empty border border-base-200 rounded-default p-6 dark:border-base-800">
                 <h2 class="font-semibold text-font-important-light dark:text-font-important-dark">No matching submissions</h2>
                 <p class="mt-2">Try another status or clear your search. Drafts are available through the status filter and do not count as submitted.</p>
             </div>
         {% endif %}
     </div>
-    <p class="text-sm">Other administration tools are available in the sidebar.</p>
+    <p class="submission-footer text-sm">Other administration tools are available in the sidebar.</p>
 </div>
 {% endblock %}

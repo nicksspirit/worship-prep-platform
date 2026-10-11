@@ -35,8 +35,9 @@ def show_submissions(request, context):
                 detail_url, submission.service_date.strftime("%b %d, %Y"),
             ),
             format_html(
+                '<div class="submission-owner">'
                 '<div class="font-medium">{}</div>'
-                '<div class="text-sm break-all">{}</div>',
+                '<div class="text-sm break-all">{}</div></div>',
                 submission.owner_name or submission.owner_email,
                 submission.owner_email,
             ),
