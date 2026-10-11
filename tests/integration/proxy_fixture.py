@@ -24,7 +24,8 @@ events {{ worker_connections 1024; }}
 http {{
     log_format protocol '$server_protocol';
     access_log {self.access_log} protocol;
-    client_max_body_size 130m;
+    # Model the HTTP/2 frontend; production ingress owns the multipart bound.
+    client_max_body_size 0;
     client_body_temp_path {root}/body-{self.port};
     proxy_temp_path {root}/proxy-{self.port};
     fastcgi_temp_path {root}/fastcgi-{self.port};
