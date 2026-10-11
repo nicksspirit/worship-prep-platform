@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Security
 $TaskName = "Worship Prep Catalog Import"
 $LocalDirectory = Join-Path $env:USERPROFILE ".local"
 $BinaryDirectory = Join-Path $LocalDirectory "bin"
@@ -172,6 +173,16 @@ function Test-Installation {
 }
 
 if ($Mode -eq "Validate") {
+    $probe = [Text.Encoding]::UTF8.GetBytes("Catalog Exporter credential validation")
+    $protected = [Security.Cryptography.ProtectedData]::Protect(
+        $probe, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    $decrypted = [Security.Cryptography.ProtectedData]::Unprotect(
+        $protected, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    if ([Convert]::ToBase64String($probe) -ne [Convert]::ToBase64String($decrypted)) {
+        throw "Current-user DPAPI credential validation failed."
+    }
     foreach ($command in @(
         "Get-TimeZone",
         "New-ScheduledTaskAction",
