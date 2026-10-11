@@ -60,7 +60,8 @@ At a high level, deployment works like this:
 
 The app service forwards `/api/` requests to the Bolt service over verified HTTPS.
 Nginx keeps up to 16 idle upstream connections per worker and reuses them over
-HTTP/1.1. It verifies the certificate chain and Bolt hostname on each TLS
+HTTP/1.1. Portless HTTPS origins use port 443; an explicit upstream port is
+preserved. It verifies the certificate chain and Bolt hostname on each TLS
 connection; moving the origin into an upstream pool does not weaken verification.
 The launcher validates the rendered Nginx configuration before starting either
 process, and Nginx suppresses its version in response headers.

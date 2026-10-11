@@ -74,6 +74,8 @@ def serve_django():
 
 
 class ProxyTests(unittest.TestCase):
+    use_default_https_port = False
+
     @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
@@ -95,14 +97,18 @@ class ProxyTests(unittest.TestCase):
         (cls.root / "deploy/nginx.conf.template").write_text(
             template.replace("/etc/ssl/certs/ca-certificates.crt", str(certificate))
         )
-        cls.bolt = ThreadingHTTPServer(("127.0.0.1", 0), Backend)
+        cls.bolt = ThreadingHTTPServer(
+            ("127.0.0.1", 443 if cls.use_default_https_port else 0), Backend
+        )
         cls.bolt.backend = "bolt"
         cls.bolt.received_chunk = threading.Event()
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certificate, private_key)
         cls.bolt.socket = context.wrap_socket(cls.bolt.socket, server_side=True)
         threading.Thread(target=cls.bolt.serve_forever, daemon=True).start()
-        cls.bolt_host = f"localhost:{cls.bolt.server_port}"
+        cls.bolt_host = (
+            "localhost" if cls.use_default_https_port else f"localhost:{cls.bolt.server_port}"
+        )
         # Only Gunicorn is replaced; the production launcher and Nginx are real.
         (cls.root / "gunicorn").write_text(
             f'#!/bin/sh\nexec "{sys.executable}" "{Path(__file__).resolve()}" --serve-django\n'
@@ -236,7 +242,7 @@ class ProxyTests(unittest.TestCase):
         rendered = Path("/tmp/wpp-nginx.conf").read_text()
         invalid_configs = {
             "wrong-hostname": rendered.replace(
-                self.bolt_host, f"127.0.0.1:{self.bolt.server_port}"
+                f"proxy_ssl_name {self.bolt_host};", "proxy_ssl_name wrong.example;"
             ),
             "untrusted-chain": rendered.replace(
                 str(self.root / "certificate.pem"), "/etc/ssl/certs/ca-certificates.crt"
@@ -284,6 +290,12 @@ class ProxyTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 connection.request("GET", "/admin/")
             connection.close()
+
+
+class DefaultHttpsPortTests(ProxyTests):
+    """Exercise the same routes using the portless origin returned by Cloud Run."""
+
+    use_default_https_port = True
 
 
 if __name__ == "__main__":

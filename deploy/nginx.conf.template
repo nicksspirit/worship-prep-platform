@@ -23,7 +23,7 @@ http {
     }
 
     upstream bolt {
-        server __BOLT_HOST__;
+        server __BOLT_ADDRESS__;
         keepalive 16;
     }
 

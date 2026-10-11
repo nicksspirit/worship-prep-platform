@@ -21,8 +21,14 @@ if [[ ! "${BOLT_UPSTREAM_URL:-}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]]; then
   exit 1
 fi
 
+BOLT_ADDRESS="${BOLT_UPSTREAM_URL#https://}"
+if [[ "${BOLT_ADDRESS}" != *:* ]]; then
+  BOLT_ADDRESS="${BOLT_ADDRESS}:443"
+fi
+
 sed -e "s/__PORT__/${PORT}/g" \
   -e "s/__BOLT_HOST__/${BOLT_UPSTREAM_URL#https:\/\/}/g" \
+  -e "s/__BOLT_ADDRESS__/${BOLT_ADDRESS}/g" \
   deploy/nginx.conf.template > /tmp/wpp-nginx.conf
 nginx -t -c /tmp/wpp-nginx.conf
 
