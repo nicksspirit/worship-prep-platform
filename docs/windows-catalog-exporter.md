@@ -53,14 +53,14 @@ $env:WPP_EASYWORSHIP_DATA_DIR = $dataDir
 ## 4. Install the exporter
 
 Download the installer from the platform website.
-Set the installer's `-PlatformUrl` argument to the API service address that accepts catalog imports:
+Set the installer's `-PlatformUrl` argument to `https://app.rccgcm.org`:
 
 ```powershell
 $installer = Join-Path $env:TEMP 'install-catalog-exporter.ps1'
 Invoke-WebRequest -UseBasicParsing `
   -Uri 'https://app.rccgcm.org/static/install-catalog-exporter.ps1' `
   -OutFile $installer
-& $installer -PlatformUrl 'https://wpp-api-zxdtzfpwua-uw.a.run.app'
+& $installer -PlatformUrl 'https://app.rccgcm.org'
 ```
 
 Paste the full API key into **Paste the one-time Catalog Import API key**.
@@ -72,10 +72,9 @@ It retries a failed command once after 30 minutes.
 
 Wait for `Catalog Exporter diagnostics passed.` and the installation confirmation.
 
-The current `/install` bootstrap supplies the application address as the API address.
-Use the explicit command above for this deployment.
+The `/install` bootstrap also uses this platform URL.
 The platform website's `/api/v1/catalog/imports` route returned HTTP 404 when checked on October 10, 2026.
-The API service's same route accepted `OPTIONS` and advertised `POST` support.
+Configure this route to reach the catalog API before the first import.
 
 ## 5. Run and verify the first import
 
