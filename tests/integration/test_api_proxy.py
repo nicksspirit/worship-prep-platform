@@ -5,9 +5,9 @@ Run with ``python tests/integration/test_api_proxy.py`` after installing Nginx.
 
 import hashlib
 import http.client
+import importlib.util
 import json
 import os
-from pathlib import Path
 import shutil
 import ssl
 import subprocess
@@ -17,6 +17,7 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 
 class Backend(BaseHTTPRequestHandler):
@@ -31,7 +32,14 @@ class Backend(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        self.respond(b"")
+        if self.path.startswith(("/api/log-contract", "/log-contract")):
+            body = json.dumps({"request_id": self.headers.get("X-Request-ID"), "trace_context": self.headers.get("X-Cloud-Trace-Context")}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.respond(b"")
 
     def do_POST(self):
         if self.headers.get("Transfer-Encoding") == "chunked":
@@ -44,7 +52,14 @@ class Backend(BaseHTTPRequestHandler):
             body = b"".join(chunks)
         else:
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-        self.respond(body)
+        if client := getattr(self.server, "catalog_client", None):
+            result = client.post(self.path, content=body, headers=dict(self.headers))
+            self.send_response(result.status_code)
+            self.send_header("Content-Length", str(len(result.content)))
+            self.end_headers()
+            self.wfile.write(result.content)
+        else:
+            self.respond(body)
 
     def respond(self, body):
         response = json.dumps(
@@ -126,6 +141,7 @@ class ProxyTests(unittest.TestCase):
                 "DATABASE_URL": "postgresql://unused",
                 "BOLT_UPSTREAM_URL": f"https://{cls.bolt_host}",
                 "PORT": str(cls.port),
+                "GCP_PROJECT_ID": "wpp-test-project",
             },
             stdout=cls.logs, stderr=cls.logs,
         )
@@ -158,6 +174,77 @@ class ProxyTests(unittest.TestCase):
         result = response.status, dict(response.getheaders()), response.read()
         connection.close()
         return result
+
+    def test_json_access_logs_share_forwarded_identity_without_secrets(self):
+        trace = "0123456789abcdef0123456789abcdef/42;o=1"
+        for prefix in ("/api", ""):
+            with self.subTest(prefix=prefix):
+                status, _, body = self.request("GET", prefix + "/log-contract/%22%5C%09?key=private-query", headers={"X-Request-ID": "proxy-123", "X-Cloud-Trace-Context": trace, "Authorization": "Bearer private-key"})
+                result = json.loads(body)
+                self.assertEqual((status, result), (200, {"request_id": "proxy-123", "trace_context": trace}))
+        time.sleep(0.1)
+        self.logs.seek(0)
+        output = self.logs.read()
+        events = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+        correlated = [event for event in events if event.get("request_id") == "proxy-123"]
+        self.assertEqual(len(correlated), 2)
+        for event in correlated:
+            self.assertEqual(event["logging.googleapis.com/trace"], "projects/wpp-test-project/traces/0123456789abcdef0123456789abcdef")
+            self.assertEqual((event["method"], event["status"]), ("GET", 200))
+            self.assertGreaterEqual(float(event["duration"]), 0)
+            self.assertEqual(event["upstream_status"], "200")
+        self.assertNotIn("private-query", output)
+        self.assertNotIn("private-key", output)
+
+    @unittest.skipUnless(importlib.util.find_spec("django_bolt"), "Requires the project Python runtime")
+    def test_proxy_and_real_bolt_dispatch_log_the_same_cloud_trace(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        import django
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
+        os.environ.setdefault("DJANGO_ENV", "test")
+        django.setup()
+        from django.test import override_settings
+        from django_bolt.testing import TestClient
+
+        from apps.catalog.api import api
+        from apps.common.tests.test_request_logging import capture_logs
+
+        with override_settings(GCP_PROJECT_ID="wpp-test-project"), capture_logs() as logs, TestClient(api, read_django_settings=False) as client:
+            self.bolt.catalog_client = client
+            try:
+                status, _, _ = self.request("POST", "/api/v1/catalog/imports?key=private-query", headers={"X-Request-ID": "cross-service-123", "X-Cloud-Trace-Context": "0123456789abcdef0123456789abcdef/42;o=1", "Authorization": "Bearer private-key"})
+            finally:
+                del self.bolt.catalog_client
+        self.assertEqual(status, 422)
+        time.sleep(0.1)
+        self.logs.seek(0)
+        proxy_events = [json.loads(line) for line in self.logs.read().splitlines() if line.startswith("{")]
+        bolt_events = [json.loads(line) for line in logs.getvalue().splitlines()]
+        for events in (proxy_events, bolt_events):
+            event = next(event for event in events if event.get("request_id") == "cross-service-123")
+            self.assertEqual((event["status"], event["logging.googleapis.com/trace"]), (422, "projects/wpp-test-project/traces/0123456789abcdef0123456789abcdef"))
+        self.assertNotIn("private-query", logs.getvalue())
+        self.assertNotIn("private-key", logs.getvalue())
+
+    def test_early_rejection_is_valid_json_without_an_upstream(self):
+        status, _, _ = self.request("POST", "/api/v1/catalog/imports?key=private-query", headers={"Content-Length": str(131 * 1024 * 1024), "X-Request-ID": "early-rejection-123"})
+        self.assertEqual(status, 413)
+        time.sleep(0.1)
+        self.logs.seek(0)
+        output = self.logs.read()
+        events = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+        event = next(event for event in events if event.get("request_id") == "early-rejection-123")
+        self.assertEqual(event["status"], 413)
+        self.assertEqual(event["upstream_status"], "")
+        self.assertEqual(event["upstream_duration"], "")
+        self.assertNotIn("private-query", output)
+
+    def test_proxy_replaces_untrusted_correlation_with_bounded_identity(self):
+        status, _, body = self.request("GET", "/api/log-contract", headers={"X-Request-ID": 'bad"\\' * 100, "X-Cloud-Trace-Context": "untrusted-trace"})
+        result = json.loads(body)
+        self.assertEqual(status, 200)
+        self.assertRegex(result["request_id"], r"^[0-9a-f]{32}$")
+        self.assertEqual(result["trace_context"], result["request_id"] + "/0;o=0")
 
     def test_django_routes_keep_original_host_and_https_scheme(self):
         for path in ("/", "/admin/", "/accounts/google/login/", "/install"):

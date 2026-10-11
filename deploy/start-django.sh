@@ -21,6 +21,12 @@ if [[ ! "${BOLT_UPSTREAM_URL:-}" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]]; then
   exit 1
 fi
 
+GCP_PROJECT_ID="${GCP_PROJECT_ID:-}"
+if [[ -n "${GCP_PROJECT_ID}" && ! "${GCP_PROJECT_ID}" =~ ^[a-z][a-z0-9-]{4,61}[a-z0-9]$ ]]; then
+  echo "GCP_PROJECT_ID must be a valid Cloud project ID." >&2
+  exit 1
+fi
+
 BOLT_ADDRESS="${BOLT_UPSTREAM_URL#https://}"
 if [[ "${BOLT_ADDRESS}" != *:* ]]; then
   BOLT_ADDRESS="${BOLT_ADDRESS}:443"
@@ -29,6 +35,7 @@ fi
 sed -e "s/__PORT__/${PORT}/g" \
   -e "s/__BOLT_HOST__/${BOLT_UPSTREAM_URL#https:\/\/}/g" \
   -e "s/__BOLT_ADDRESS__/${BOLT_ADDRESS}/g" \
+  -e "s/__GCP_PROJECT_ID__/${GCP_PROJECT_ID}/g" \
   deploy/nginx.conf.template > /tmp/wpp-nginx.conf
 nginx -t -c /tmp/wpp-nginx.conf
 
@@ -37,8 +44,7 @@ set -m
 gunicorn backend.wsgi:application \
   --bind "127.0.0.1:8000" \
   --workers "${WORKERS}" \
-  --access-logfile - \
-  --error-logfile - &
+  --config python:backend.gunicorn &
 DJANGO_PID=$!
 nginx -c /tmp/wpp-nginx.conf -g 'daemon off;' &
 PROXY_PID=$!

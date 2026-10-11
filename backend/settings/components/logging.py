@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import sys
 from typing import Any, cast
 
 import structlog
 
-from backend.settings import DJANGO_ENV
+from backend.settings import DJANGO_ENV, env
+
+GCP_PROJECT_ID = env.str("GCP_PROJECT_ID", default="")
 
 type EventDict = dict[str, Any]
 
@@ -17,7 +20,7 @@ LOG_LEVEL = "DEBUG" if DJANGO_ENV == "local" else "INFO"
 def drop_none_values(
     logger: logging.Logger, method_name: str, event_dict: EventDict
 ) -> EventDict:
-    """Remove keys with None values to reduce log noise (console only)."""
+    """Remove missing optional fields, including requests without a Cloud trace."""
     return {k: v for k, v in event_dict.items() if v is not None}
 
 
@@ -40,25 +43,38 @@ def simplify_logger_name(
     return event_dict
 
 
-exc_processor = (
-    structlog.processors.format_exc_info
-    if DJANGO_ENV in ("local", "test")
-    else structlog.processors.dict_tracebacks
-)
+def sanitize_exception(logger, method_name, event_dict):
+    """Retain exception types without content, traceback source, or local variables."""
+    exception = event_dict.pop("exc_info", None)
+    event_dict.pop("stack_info", None)
+    if exception:
+        if exception is True:
+            exception = sys.exc_info()
+        event_dict.pop("positional_args", None)
+        if isinstance(exception, tuple):
+            exception = exception[1]
+        if isinstance(exception, BaseException):
+            event_dict["exception_type"] = type(exception).__name__
+        event_dict["event"] = "request_exception"
+    if event_dict.get("logger") == "gunicorn.error" and str(
+        event_dict.get("event", "")
+    ).startswith("Invalid request from ip="):
+        event_dict["event"] = "invalid_http_request"
+    return event_dict
+
 
 _BASE_PROCESSORS = [
     structlog.contextvars.merge_contextvars,
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
+    sanitize_exception,
     structlog.stdlib.PositionalArgumentsFormatter(),
-    structlog.processors.StackInfoRenderer(),
-    exc_processor,
     simplify_logger_name,
 ]
 
 CONSOLE_PROCESSORS = _BASE_PROCESSORS + [drop_none_values]
-JSON_PROCESSORS = _BASE_PROCESSORS.copy()
+JSON_PROCESSORS = _BASE_PROCESSORS + [drop_none_values]
 
 CONSOLE_FORMATTER = "console" if DJANGO_ENV in ("local", "test") else "json"
 
@@ -91,6 +107,12 @@ LOGGING = {
         "level": LOG_LEVEL,
     },
     "loggers": {
+        "httpx": {"level": "WARNING"},
+        "gunicorn.error": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "reactivated.fields": {
             "handlers": ["console"],
             "level": "INFO",

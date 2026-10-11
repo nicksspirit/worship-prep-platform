@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 from uuid import UUID
 
+import structlog
 from django.conf import settings
 from django.contrib.postgres.search import SearchVector
 from django.core.files.base import ContentFile
@@ -35,6 +36,8 @@ from apps.catalog.models import (
     SnapshotStatus,
 )
 from apps.catalog.services.catalog_text import SEARCH_CONFIG, normalize_title
+
+logger = structlog.get_logger(__name__)
 
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -611,6 +614,9 @@ def _finish_failed_run(
         update_fields=["status", "failure_code", "failure_summary", "completed_at"]
     )
     _event(run, "import", "failed", details={"code": code})
+    logger.warning(
+        "catalog_import_result", run_id=str(run.pk), status="failed", failure_code=code
+    )
     _try_write_report(run)
     if notify_scheduled_failure and run.trigger == ImportTrigger.SCHEDULED:
         from apps.catalog.services.administration import (
@@ -696,6 +702,10 @@ def import_package(
             _event(existing, "retry", "requested")
             _process_run(existing, inspected)
             _try_write_report(existing)
+        logger.info(
+            "catalog_import_result",
+            run_id=str(existing.pk), status=str(existing.status), created=False,
+        )
         return ImportResult(existing, created=False)
 
     previous = CatalogImportRun.objects.filter(status=ImportStatus.COMPLETED).first()
@@ -730,6 +740,9 @@ def import_package(
     _event(run, "package_received", "completed")
     _process_run(run, inspected)
     _try_write_report(run)
+    logger.info(
+        "catalog_import_result", run_id=str(run.pk), status=str(run.status), created=True
+    )
     return ImportResult(run, created=True)
 
 

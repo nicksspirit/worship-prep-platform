@@ -16,6 +16,7 @@ from django_bolt import (
 from django_bolt.openapi.spec import Components, SecurityScheme
 from django_bolt.param_functions import File, Header, Path, Query
 
+from apps.common.request_logging import BoltRequestLogging
 from apps.catalog.models import RightsStatus
 from apps.catalog.schema import (
     APIErrorDetail,
@@ -53,6 +54,8 @@ documentation_plugins = (
 )
 api = BoltAPI(
     prefix="/api/v1/catalog",
+    middleware=[BoltRequestLogging],
+    enable_logging=False,
     openapi_config=OpenAPIConfig(
         title="Worship Prep Song Catalog API",
         version="1.0.0",
