@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from uuid import uuid4
 
@@ -31,6 +32,47 @@ class SubmissionTransportTests(TestCase):
         SongCartItem.objects.create(
             cart=cls.cart, section="praise", song_uid="fixture-song",
             title="Fixture Song",
+        )
+
+    def test_cart_link_from_submissions_opens_an_empty_cart_without_creating_a_draft(self):
+        self.client.force_login(self.owner)
+        submissions = self.client.get(reverse("song_carts:list"))
+        cart_link = re.search(
+            r'<a href="([^"]+)" aria-label="Your song cart, 0 songs"',
+            submissions.content.decode(),
+        )
+        self.assertIsNotNone(cart_link)
+
+        response = self.client.get(cart_link[1])
+
+        self.assertContains(response, "Your song cart is empty.")
+        self.assertContains(response, reverse("catalog:search"))
+        self.assertContains(response, reverse("song_carts:add_unlisted"))
+        self.assertEqual(SongCart.objects.filter(owner=self.owner).count(), 1)
+
+    def test_cart_link_from_submissions_still_opens_the_saved_draft(self):
+        draft = SongCart.objects.create(
+            owner=self.owner, service_date=date(2026, 11, 1),
+        )
+        SongCartItem.objects.create(
+            cart=draft, section="praise", song_uid="fixture-song", title="Draft Song",
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("song_carts:list"))
+
+        self.assertContains(
+            response,
+            f'href="{reverse("song_carts:detail", args=[draft.id])}" '
+            'aria-label="Your song cart, 1 song"',
+        )
+
+    def test_empty_cart_requires_sign_in(self):
+        response = self.client.get(reverse("song_carts:empty"))
+
+        self.assertRedirects(
+            response, "/accounts/login/?next=/song-carts/empty/",
+            fetch_redirect_response=False,
         )
 
     def test_admin_detail_get_does_not_acknowledge_the_submission(self):

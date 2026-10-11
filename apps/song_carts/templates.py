@@ -44,6 +44,11 @@ class DeliveryProps(NamedTuple):
 
 
 @template
+class EmptySongCartPage(NamedTuple):
+    title: str
+
+
+@template
 class SongCartListPage(NamedTuple):
     title: str
     carts: list[CartSummaryProps]

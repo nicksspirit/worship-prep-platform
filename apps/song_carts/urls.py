@@ -7,6 +7,7 @@ app_name = "song_carts"
 
 urlpatterns = [
     path("song-carts/", views.CartListView.as_view(), name="list"),
+    path("song-carts/empty/", views.EmptyCartView.as_view(), name="empty"),
     path("song-carts/unlisted/", UnlistedSongView.as_view(), name="add_unlisted"),
     path(
         "song-carts/<uuid:cart_id>/unlisted/<int:song_id>/",

@@ -19,7 +19,7 @@ class SongCartContext(TypedDict):
 def song_cart(request: HttpRequest) -> SongCartContext:
     """Expose the signed-in user's active draft without trusting a cookie count."""
     empty: SongCartContext = {
-        "song_cart": {"url": reverse("song_carts:list"), "song_count": 0}
+        "song_cart": {"url": reverse("song_carts:empty"), "song_count": 0}
     }
     if not request.user.is_authenticated:
         return empty
