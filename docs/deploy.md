@@ -14,7 +14,7 @@ This repository deploys three Cloud Run resources:
 
 All three resources use the same Docker image. The difference is the startup command:
 
-- `wpp-app` runs `deploy/start-django.sh`
+- `wpp-app` runs `deploy/start-django.sh` (Nginx ingress and local Gunicorn)
 - `wpp-api` runs `deploy/start-bolt.sh`
 - `wpp-migrate` runs `deploy/start-migrate.sh`
 
@@ -55,8 +55,23 @@ At a high level, deployment works like this:
 2. Cloud Build pushes the image to Artifact Registry.
 3. Cloud Build deploys the `wpp-migrate` job with the new image.
 4. Cloud Build runs the migration job.
-5. Cloud Build deploys `wpp-app`.
-6. Cloud Build deploys `wpp-api`.
+5. Cloud Build deploys `wpp-api`.
+6. Cloud Build reads its Cloud Run URL and deploys `wpp-app` with `BOLT_UPSTREAM_URL`.
+
+The app service forwards `/api/` requests to the Bolt service over verified HTTPS.
+It sends all other requests to Gunicorn on `127.0.0.1:8000`. The proxy preserves
+API request paths, authorization headers, and streaming multipart bodies. It does
+not redirect the exporter to another hostname. Both services allow 600-second requests.
+
+After deployment, check the route without sending credentials or importing data:
+
+```bash
+curl -i -X OPTIONS https://app.rccgcm.org/api/v1/catalog/imports
+```
+
+Expect HTTP 204 and `Allow: POST, OPTIONS`. Check `/admin/` and `/install` too.
+Cloud Run's existing HTTP/1 ingress limit remains 32 MiB, even though the application
+package limit is 128 MiB. Larger uploads require HTTP/2 ingress as a separate change.
 
 The repo already contains the automation for this in:
 

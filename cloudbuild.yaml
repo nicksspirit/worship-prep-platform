@@ -1,4 +1,4 @@
-# Build → push → migrate → deploy Django → deploy Bolt.
+# Build → push → migrate → deploy Bolt → deploy Django and its API proxy.
 # deploy/deploy.sh supplies the settings below.
 
 substitutions:
@@ -116,23 +116,6 @@ steps:
       - --region=${_REGION}
       - --wait
 
-  - id: deploy-django
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - ${_DJANGO_SERVICE}
-      - --image=${_IMAGE}
-      - --region=${_REGION}
-      - --service-account=${_RUNTIME_SA}
-      - --allow-unauthenticated
-      - --port=8080
-      - --set-env-vars=${_SERVICE_ENV}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}
-      - --set-secrets=${_SERVICE_SECRETS}
-      - --command=/bin/bash
-      - --args=deploy/start-django.sh
-
   - id: deploy-bolt
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -145,10 +128,31 @@ steps:
       - --service-account=${_RUNTIME_SA}
       - --allow-unauthenticated
       - --port=8080
+      - --timeout=600
       - --set-env-vars=${_SERVICE_ENV}
       - --set-secrets=${_SERVICE_SECRETS}
       - --command=/bin/bash
       - --args=deploy/start-bolt.sh
+
+  - id: deploy-django
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        bolt_url="$$(gcloud run services describe ${_BOLT_SERVICE} \
+          --region=${_REGION} --format='value(status.url)')"
+        gcloud run deploy ${_DJANGO_SERVICE} \
+          --image=${_IMAGE} \
+          --region=${_REGION} \
+          --service-account=${_RUNTIME_SA} \
+          --allow-unauthenticated \
+          --port=8080 \
+          --timeout=600 \
+          --set-env-vars="${_SERVICE_ENV}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}|BOLT_UPSTREAM_URL=$$bolt_url" \
+          --set-secrets=${_SERVICE_SECRETS} \
+          --command=/bin/bash \
+          --args=deploy/start-django.sh
 
 images:
   - ${_IMAGE}
