@@ -24,7 +24,7 @@ from backend.settings.components.logging import JSON_PROCESSORS
 
 @contextmanager
 def capture_logs():
-    """Capture the configured application handlers as production JSON."""
+    """Capture application output while leaving pytest logging handlers intact."""
     stream = io.StringIO()
     formatter = ProcessorFormatter(
         processor=JSONRenderer(), foreign_pre_chain=JSON_PROCESSORS
@@ -40,7 +40,7 @@ def capture_logs():
             ],
         ]
         for handler in logger.handlers
-        if isinstance(handler, logging.StreamHandler)
+        if isinstance(handler, logging.StreamHandler) and handler.get_name() == "console"
     }
     previous = [(handler, handler.stream, handler.formatter) for handler in handlers]
     for handler in handlers:
@@ -217,8 +217,10 @@ class DjangoRequestLogTests(SimpleTestCase):
                     "PYTHONWARNINGS": "ignore:No directory at:UserWarning",
                 },
             )
+            status = None
+            deadline = time.monotonic() + 30
             try:
-                for attempt in range(100):
+                while time.monotonic() < deadline:
                     try:
                         connection = http.client.HTTPConnection(
                             "127.0.0.1", port, timeout=2
@@ -241,8 +243,9 @@ class DjangoRequestLogTests(SimpleTestCase):
                         if process.poll() is not None:
                             break
                         time.sleep(0.05)
-                else:
-                    self.fail("Gunicorn did not start")
+                if status is None:
+                    logs.seek(0)
+                    self.fail(f"Gunicorn did not start. Output: {logs.read()}")
             finally:
                 process.terminate()
                 process.wait(timeout=10)
