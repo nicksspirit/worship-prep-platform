@@ -32,4 +32,5 @@ jobs:
       - name: Stop the packaged default server
         run: sudo systemctl stop nginx
       - name: Check routing and streamed imports
-        run: python3 tests/integration/test_api_proxy.py
+        # The Cloud Run origin test binds the default HTTPS port 443.
+        run: sudo "$(command -v python3)" tests/integration/test_api_proxy.py

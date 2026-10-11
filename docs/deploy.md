@@ -59,9 +59,20 @@ At a high level, deployment works like this:
 6. Cloud Build reads its Cloud Run URL and deploys `wpp-app` with `BOLT_UPSTREAM_URL`.
 
 The app service forwards `/api/` requests to the Bolt service over verified HTTPS.
+Nginx keeps up to 16 idle upstream connections per worker and reuses them over
+HTTP/1.1. Portless HTTPS origins use port 443; an explicit upstream port is
+preserved. It verifies the certificate chain and Bolt hostname on each TLS
+connection; moving the origin into an upstream pool does not weaken verification.
+The launcher validates the rendered Nginx configuration before starting either
+process, and Nginx suppresses its version in response headers.
 It sends all other requests to Gunicorn on `127.0.0.1:8000`. The proxy preserves
 API request paths, authorization headers, and streaming multipart bodies. It does
 not redirect the exporter to another hostname. Both services allow 600-second requests.
+
+Both Cloud Run services remain public so Integration Clients can reach Bolt
+directly. Protected API routes enforce application authentication and scopes using
+Integration Client credentials. Public Cloud Run access does not grant access to
+those routes; route-specific IAM grants cannot restrict an existing public grant.
 
 After deployment, check the route without sending credentials or importing data:
 
