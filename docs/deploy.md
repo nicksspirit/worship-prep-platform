@@ -74,6 +74,15 @@ directly. Protected API routes enforce application authentication and scopes usi
 Integration Client credentials. Public Cloud Run access does not grant access to
 those routes; route-specific IAM grants cannot restrict an existing public grant.
 
+When Cloud Run terminates an app instance, the launcher sends SIGQUIT to Nginx and
+SIGTERM to Gunicorn. Both stop accepting new work and drain active requests for up
+to eight seconds. The launcher then kills stalled server process groups and reaps
+its children, reserving the remaining two seconds of Cloud Run's ten-second grace
+period for cleanup. A supervised server exiting unexpectedly stops the service with
+exit status 1; a requested shutdown exits with status 0. The 600-second request
+timeout does not extend the shutdown window, so a longer Catalog Import may lose
+its proxy connection during instance termination.
+
 After deployment, check the route without sending credentials or importing data:
 
 ```bash
