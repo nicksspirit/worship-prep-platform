@@ -1,0 +1,38 @@
+worker_processes 1;
+pid /tmp/wpp-nginx.pid;
+error_log stderr;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    server_tokens off;
+    include /tmp/wpp-nginx-logging.conf;
+    client_body_temp_path /tmp/wpp-nginx-body;
+    proxy_temp_path /tmp/wpp-nginx-proxy;
+    fastcgi_temp_path /tmp/wpp-nginx-fastcgi;
+    uwsgi_temp_path /tmp/wpp-nginx-uwsgi;
+    scgi_temp_path /tmp/wpp-nginx-scgi;
+    # 128 MiB package + 1 MiB events + multipart framing.
+    client_max_body_size 130m;
+
+    server {
+        listen __PORT__;
+        http2 on;
+        # Request diagnostics can include raw URLs; access logs omit query strings.
+        error_log /dev/null;
+
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header X-Request-ID $wpp_request_id;
+            proxy_set_header X-Cloud-Trace-Context $wpp_trace_context;
+            proxy_set_header Host $http_host;
+            proxy_request_buffering off;
+            proxy_read_timeout 600s;
+            proxy_send_timeout 600s;
+        }
+    }
+}

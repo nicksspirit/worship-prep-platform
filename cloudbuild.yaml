@@ -129,6 +129,10 @@ steps:
       - --allow-unauthenticated
       - --port=8080
       - --timeout=600
+      - --use-http2
+      # A valid 120.6 MiB import peaked at 664 MiB RSS before container storage.
+      - --memory=2Gi
+      - --concurrency=1
       - --set-env-vars=${_SERVICE_ENV}
       - --set-secrets=${_SERVICE_SECRETS}
       - --command=/bin/bash
@@ -149,6 +153,7 @@ steps:
           --allow-unauthenticated \
           --port=8080 \
           --timeout=600 \
+          --use-http2 \
           --set-env-vars="${_SERVICE_ENV}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}|BOLT_UPSTREAM_URL=$$bolt_url" \
           --set-secrets=${_SERVICE_SECRETS} \
           --command=/bin/bash \

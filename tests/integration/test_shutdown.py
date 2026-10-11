@@ -10,12 +10,12 @@ import os
 from pathlib import Path
 import shutil
 import signal
-import ssl
 import subprocess
 import tempfile
 import threading
 import time
 import unittest
+from proxy_fixture import TLSProxy
 
 
 class ShutdownTests(unittest.TestCase):
@@ -32,6 +32,8 @@ class ShutdownTests(unittest.TestCase):
             "accesslog = None\nerrorlog = '-'\ncontrol_socket_disable = True\n"
         )
         shutil.copy(source / "deploy/start-django.sh", self.root / "deploy")
+        shutil.copy(source / "deploy/supervise.sh", self.root / "deploy")
+        shutil.copy(source / "deploy/nginx-logging.conf.template", self.root / "deploy")
         certificate = self.root / "certificate.pem"
         key = self.root / "key.pem"
         subprocess.run(
@@ -62,12 +64,11 @@ class ShutdownTests(unittest.TestCase):
                 self.wfile.write(b"finished")
 
         self.bolt = ThreadingHTTPServer(("127.0.0.1", 0), BoltHandler)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certificate, key)
-        self.bolt.socket = context.wrap_socket(self.bolt.socket, server_side=True)
         self.addCleanup(self.bolt.server_close)
         self.addCleanup(self.bolt.shutdown)
         threading.Thread(target=self.bolt.serve_forever, daemon=True).start()
+        self.tls = TLSProxy(self.root, self.bolt.server_port, certificate, key)
+        self.addCleanup(self.tls.close)
         # A real Gunicorn worker holds the response until the test releases it.
         (self.root / "backend/wsgi.py").write_text('''
 from pathlib import Path
@@ -89,14 +90,14 @@ def application(environ, start_response):
             env={
                 **os.environ,
                 "DATABASE_URL": "postgresql://unused",
-                "BOLT_UPSTREAM_URL": f"https://localhost:{self.bolt.server_port}",
+                "BOLT_UPSTREAM_URL": f"https://localhost:{self.tls.port}",
                 "WEB_CONCURRENCY": "1",
                 "PORT": "8080",
             },
             stdout=self.logs, stderr=self.logs,
         )
         self.addCleanup(self.stop)
-        self.wait_for(lambda: self.responds(), "launcher did not start")
+        self.wait_for(lambda: self.responds(), "launcher did not start", timeout=30)
         self.pids = self.descendants(self.process.pid)
 
     def stop(self):
@@ -128,8 +129,8 @@ def application(environ, start_response):
                 pass
         return children
 
-    def wait_for(self, condition, message):
-        deadline = time.monotonic() + 5
+    def wait_for(self, condition, message, timeout=5):
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if condition():
                 return

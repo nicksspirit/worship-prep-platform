@@ -1,0 +1,22 @@
+    log_format structured escape=json '{"event":"request_finished","method":"$request_method",'
+        '"path":"$uri","status":$status,"duration":$request_time,'
+        '"upstream_status":"$upstream_status","upstream_duration":"$upstream_response_time",'
+        '"request_id":"$wpp_request_id","logging.googleapis.com/trace":"$cloud_trace"}';
+    access_log /dev/stdout structured;
+
+    map $http_x_request_id $wpp_request_id {
+        default $request_id;
+        "~^[A-Za-z0-9_-]{1,64}$" $http_x_request_id;
+    }
+    map $http_x_cloud_trace_context $wpp_trace_context {
+        default "$request_id/0;o=0";
+        "~^00000000000000000000000000000000/" "$request_id/0;o=0";
+        "~^[0-9a-f]{32}/[0-9]{1,20}(;o=[01])?$" $http_x_cloud_trace_context;
+    }
+    map $wpp_trace_context $wpp_trace_id {
+        "~^([0-9a-f]{32})/" $1;
+    }
+    map "__GCP_PROJECT_ID__:$wpp_trace_id" $cloud_trace {
+        default "";
+        "~^[a-z][a-z0-9-]{4,61}[a-z0-9]:[0-9a-f]{32}$" "projects/__GCP_PROJECT_ID__/traces/$wpp_trace_id";
+    }
