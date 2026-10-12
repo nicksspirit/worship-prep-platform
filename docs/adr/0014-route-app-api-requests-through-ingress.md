@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0015](0015-deliver-catalog-imports-directly-to-api.md)
 
 ## Date
 

@@ -18,6 +18,7 @@
 #   DJANGO_SERVICE          (default: wpp-app)
 #   BOLT_SERVICE            (default: wpp-api)
 #   MIGRATE_JOB             (default: wpp-migrate)
+#   CATALOG_EXPORTER_API_URL API origin configured by the Windows installer
 #   SUPABASE_S3_REGION      (default: us-east-1)
 #   ALLOWED_HOSTS           Comma-separated runtime hosts; .run.app is always appended
 #   CSRF_TRUSTED_ORIGINS    Comma-separated trusted origins; https://*.run.app is always appended
@@ -47,6 +48,7 @@ IMAGE_NAME="${IMAGE_NAME:-worship-prep-app}"
 DJANGO_SERVICE="${DJANGO_SERVICE:-wpp-app}"
 BOLT_SERVICE="${BOLT_SERVICE:-wpp-api}"
 MIGRATE_JOB="${MIGRATE_JOB:-wpp-migrate}"
+CATALOG_EXPORTER_API_URL="${CATALOG_EXPORTER_API_URL:-https://api.rccgcm.org}"
 SUPABASE_S3_REGION="${SUPABASE_S3_REGION:-us-east-1}"
 EMAIL_PORT="${EMAIL_PORT:-587}"
 
@@ -94,6 +96,7 @@ _RUNTIME_SA=${RUNTIME_SA}|\
 _DJANGO_SERVICE=${DJANGO_SERVICE}|\
 _BOLT_SERVICE=${BOLT_SERVICE}|\
 _MIGRATE_JOB=${MIGRATE_JOB}|\
+_CATALOG_EXPORTER_API_URL=${CATALOG_EXPORTER_API_URL}|\
 _SUPABASE_STORAGE_BUCKET=${SUPABASE_STORAGE_BUCKET}|\
 _SUPABASE_CATALOG_IMPORT_BUCKET=${SUPABASE_CATALOG_IMPORT_BUCKET}|\
 _SUPABASE_S3_ENDPOINT=${SUPABASE_S3_ENDPOINT}|\

@@ -216,7 +216,7 @@ class CatalogReadAPITests(TransactionTestCase):
         )
 
     def test_openapi_schema_describes_the_versioned_catalog_contract(self):
-        schema = catalog_api._get_openapi_schema()
+        schema = self.client.get("/api/v1/docs/openapi.json").json()
 
         self.assertEqual(schema["info"]["version"], "1.0.0")
         self.assertEqual(schema["security"], [{"BearerAuth": []}])

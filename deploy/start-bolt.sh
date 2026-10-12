@@ -9,34 +9,15 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
-PORT="${PORT:-8080}"
-PROCESSES="${BOLT_PROCESSES:-1}"
-
-if [[ ! "${PORT}" =~ ^[0-9]+$ ]] || [[ "${PORT}" == 8000 ]]; then
-  echo "PORT must be numeric and different from the internal Bolt port 8000." >&2
+BOLT_PORT="${BOLT_PORT:-8000}"
+if [[ ! "${BOLT_PORT}" =~ ^[0-9]+$ ]]; then
+  echo "BOLT_PORT must be numeric." >&2
   exit 1
 fi
 
-GCP_PROJECT_ID="${GCP_PROJECT_ID:-}"
-if [[ -n "${GCP_PROJECT_ID}" && ! "${GCP_PROJECT_ID}" =~ ^[a-z][a-z0-9-]{4,61}[a-z0-9]$ ]]; then
-  echo "GCP_PROJECT_ID must be a valid Cloud project ID." >&2
-  exit 1
-fi
-
-sed -e "s/__GCP_PROJECT_ID__/${GCP_PROJECT_ID}/g" \
-  deploy/nginx-logging.conf.template > /tmp/wpp-nginx-logging.conf
-
-sed -e "s/__PORT__/${PORT}/g" \
-  deploy/nginx-bolt.conf.template > /tmp/wpp-nginx.conf
-nginx -e stderr -t -c /tmp/wpp-nginx.conf
-
-# Bolt 0.6 serves HTTP/1; Nginx supplies Cloud Run's required h2c ingress.
-set -m
-python manage.py runbolt \
-  --host 127.0.0.1 \
-  --port 8000 \
-  --processes "${PROCESSES}" &
-BACKEND_PID=$!
-nginx -e stderr -c /tmp/wpp-nginx.conf -g 'daemon off;' &
-PROXY_PID=$!
-source deploy/supervise.sh
+export DJANGO_BOLT_SHUTDOWN_TIMEOUT="${DJANGO_BOLT_SHUTDOWN_TIMEOUT:-8}"
+exec python manage.py runbolt \
+  --host 0.0.0.0 \
+  --port "${BOLT_PORT}" \
+  --processes "${BOLT_PROCESSES:-1}" \
+  --workers-kill-timeout 8

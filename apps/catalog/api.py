@@ -5,7 +5,6 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.db import connections
 from django_bolt import (
-    JSON,
     BoltAPI,
     OpenAPIConfig,
     RedocRenderPlugin,
@@ -102,9 +101,7 @@ def _raw_error(
         )
     )
     body = response.dump(exclude_none=True)
-    response_headers = [("content-type", "application/json")]
-    response_headers.extend((headers or {}).items())
-    return status_code, response_headers, JSON(body).to_bytes()
+    return Response(body, status_code=status_code, headers=headers)
 
 
 def _search_url(

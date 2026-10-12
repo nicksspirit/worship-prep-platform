@@ -1,6 +1,7 @@
 from textwrap import dedent
 from typing import cast
 
+from django.conf import settings
 from django.http import Http404, HttpRequest, HttpResponse
 from django.views import View
 
@@ -44,7 +45,7 @@ def _limit(raw: str | None) -> int:
 
 def catalog_exporter_install(request: HttpRequest) -> HttpResponse:
     """Serve the copy-and-paste bootstrap for the Windows Catalog Exporter."""
-    platform_url = request.build_absolute_uri("/").rstrip("/")
+    platform_url = settings.CATALOG_EXPORTER_API_URL.rstrip("/")
     installer_url = request.build_absolute_uri("/static/install-catalog-exporter.ps1")
     quote = lambda value: "'" + value.replace("'", "''") + "'"
     script = dedent(f"""#Requires -Version 5.1

@@ -2,6 +2,11 @@ from backend.settings import env
 from backend.settings.components import BASE_DIR
 
 SITE_ID = env.int("SITE_ID", default=1)
+CATALOG_EXPORTER_API_URL = env.str(
+    "CATALOG_EXPORTER_API_URL", default="https://api.rccgcm.org"
+)
+# Allow the 128 MiB package, 1 MiB events, and multipart overhead; match Nginx.
+BOLT_MAX_UPLOAD_SIZE = 130 * 1024 * 1024
 
 INSTALLED_APPS = [
     # 3rd party apps (unfold must be before django.contrib.admin)

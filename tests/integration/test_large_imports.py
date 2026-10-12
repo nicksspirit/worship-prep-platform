@@ -1,4 +1,4 @@
-"""Real exporter -> TLS/H2 -> app h2c -> TLS/H2 -> Bolt h2c -> importer.
+"""Real exporter -> API TLS/H2 -> Nginx h2c ingress -> Bolt -> importer.
 
 Run in Dockerfile.proxy-test with WPP_HTTP2_TEST_DATABASE_URL pointing at a
 disposable PostgreSQL database. This script migrates that database.
@@ -68,22 +68,36 @@ class LargeImportTests(unittest.TestCase):
         ], check=True, capture_output=True)
         cls.certificate = certificate
         cls.bolt_port = free_port()
-        cls.app_port = free_port()
         # Nginx reopens /dev/stdout; append prevents independent writers overwriting.
         cls.logs = (cls.root / "processes.log").open("a+")
         cls.addClassCleanup(cls.logs.close)
         cls.processes = []
         cls.addClassCleanup(cls.stop_processes)
 
-        bolt_root = cls.prepare_launcher("start-bolt.sh", "nginx-bolt.conf.template")
-        # Two production containers share a namespace here; separate their loopback ports.
-        for path in (bolt_root / "deploy/start-bolt.sh",
-                     bolt_root / "deploy/nginx-bolt.conf.template"):
-            path.write_text(path.read_text().replace("8000", "18000"))
+        bolt_root = cls.root / "bolt"
+        (bolt_root / "deploy").mkdir(parents=True)
+        shutil.copy(SOURCE / "deploy/start-bolt.sh", bolt_root / "deploy")
+        backend_port = free_port()
         shutil.copy(SOURCE / "manage.py", bolt_root)
         cls.processes.append(subprocess.Popen(
             ["bash", str(bolt_root / "deploy/start-bolt.sh")],
-            env={**os.environ, "PORT": str(cls.bolt_port)},
+            env={**os.environ, "BOLT_PORT": str(backend_port)},
+            stdout=cls.logs, stderr=cls.logs,
+        ))
+        cls.wait_for(backend_port, "/api/v1/docs")
+        logging = (SOURCE / "deploy/nginx-logging.conf.template").read_text()
+        (cls.root / "logging.conf").write_text(
+            logging.replace("${GCP_PROJECT_ID}", "wpp-test-project")
+        )
+        config = (SOURCE / "deploy/nginx-bolt.conf.template").read_text()
+        config = (config.replace("/tmp/wpp-nginx", str(cls.root / "nginx"))
+                  .replace(str(cls.root / "nginx-logging.conf"), str(cls.root / "logging.conf"))
+                  .replace("${PORT}", str(cls.bolt_port))
+                  .replace("127.0.0.1:8000", f"127.0.0.1:{backend_port}"))
+        config_path = cls.root / "nginx.conf"
+        config_path.write_text(config)
+        cls.processes.append(subprocess.Popen(
+            ["nginx", "-e", "stderr", "-c", str(config_path), "-g", "daemon off;"],
             stdout=cls.logs, stderr=cls.logs,
         ))
         cls.wait_for(cls.bolt_port, "/api/v1/docs")
@@ -91,33 +105,7 @@ class LargeImportTests(unittest.TestCase):
                                  http2_upstream=True)
         cls.addClassCleanup(cls.bolt_edge.close)
 
-        app_root = cls.prepare_launcher("start-django.sh", "nginx.conf.template")
-        template = app_root / "deploy/nginx.conf.template"
-        template.write_text(template.read_text().replace(
-            "/etc/ssl/certs/ca-certificates.crt", str(certificate),
-        ))
-        cls.processes.append(subprocess.Popen(
-            ["bash", str(app_root / "deploy/start-django.sh")],
-            env={**os.environ, "PORT": str(cls.app_port), "WEB_CONCURRENCY": "1",
-                 "BOLT_UPSTREAM_URL": f"https://localhost:{cls.bolt_edge.port}"},
-            stdout=cls.logs, stderr=cls.logs,
-        ))
-        cls.wait_for(cls.app_port, "/api/v1/docs")
-        cls.app_edge = TLSProxy(cls.root, cls.app_port, certificate, key,
-                                http2_upstream=True)
-        cls.addClassCleanup(cls.app_edge.close)
-        cls.endpoint = f"https://localhost:{cls.app_edge.port}"
-
-    @classmethod
-    def prepare_launcher(cls, script, template):
-        root = cls.root / script
-        (root / "deploy").mkdir(parents=True)
-        for name in (script, template, "supervise.sh", "nginx-logging.conf.template"):
-            path = root / "deploy" / name
-            path.write_text((SOURCE / "deploy" / name).read_text().replace(
-                "/tmp/wpp-nginx", str(root / "nginx"),
-            ))
-        return root
+        cls.endpoint = f"https://localhost:{cls.bolt_edge.port}"
 
     @classmethod
     def wait_for(cls, port, path):
@@ -235,6 +223,35 @@ class LargeImportTests(unittest.TestCase):
         self.assertNotIn("private-correlation-query", output)
         self.assertNotIn("private-correlation-key", output)
 
+    def test_successful_import_logs_share_proxy_request_and_cloud_trace(self):
+        package, events = self.build_package()
+        trace_id = "0123456789abcdef0123456789abcdef"
+        offset = (self.root / "processes.log").stat().st_size
+        result = subprocess.run([
+            "curl", "--http2", "--cacert", str(self.certificate), "--silent",
+            "--output", "/dev/null", "--write-out", "%{http_code}",
+            "--header", "X-Request-ID: import-trace-123",
+            "--header", f"X-Cloud-Trace-Context: {trace_id}/42;o=1",
+            "--header", f"Authorization: Bearer {self.key}",
+            "--form", f"package=@{package};type=application/zip",
+            "--form", f"events=@{events};type=application/x-ndjson",
+            f"{self.endpoint}/api/v1/catalog/imports?key=private-import-query",
+        ], capture_output=True, text=True, timeout=60)
+
+        self.assertEqual(result.stdout, "201", result.stderr)
+        time.sleep(0.1)
+        output = (self.root / "processes.log").read_bytes()[offset:].decode()
+        logs = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+        correlated = [event for event in logs if event.get("request_id") == "import-trace-123"]
+        self.assertEqual(sorted(event["event"] for event in correlated),
+                         ["catalog_import_received", "catalog_import_result",
+                          "request_finished", "request_finished"])
+        for event in correlated:
+            self.assertEqual(event["logging.googleapis.com/trace"],
+                             f"projects/wpp-test-project/traces/{trace_id}")
+        self.assertNotIn(self.key, output)
+        self.assertNotIn("private-import-query", output)
+
     def test_direct_bolt_ingress_generates_and_forwards_request_identity(self):
         offset = (self.root / "processes.log").stat().st_size
         result = subprocess.run([
@@ -267,13 +284,14 @@ class LargeImportTests(unittest.TestCase):
                 self.assertTrue(self.read_catalog()[1])
                 print(f"Imported valid package {package.stat().st_size} bytes with "
                       f"{events.stat().st_size} event bytes", flush=True)
-        for edge in (self.app_edge, self.bolt_edge):
-            self.assertEqual(set(edge.access_log.read_text().splitlines()), {"HTTP/2.0"})
+        self.assertEqual(
+            set(self.bolt_edge.access_log.read_text().splitlines()), {"HTTP/2.0"}
+        )
         pid = self.processes[0].pid
         children = Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
-        for child in children:
+        for child in [str(pid), *children]:
             status = Path(f"/proc/{child}/status").read_text()
-            print("Bolt child peak memory: " + next(
+            print("Bolt process peak memory: " + next(
                 line for line in status.splitlines() if line.startswith("VmHWM:")),
                 flush=True)
 

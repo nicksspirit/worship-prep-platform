@@ -12,10 +12,13 @@ This repository deploys three Cloud Run resources:
 - `wpp-api`: the Django-Bolt API service
 - `wpp-migrate`: a Cloud Run Job that runs Django migrations
 
-All three resources use the same Docker image. The difference is the startup command:
+The `prod` Docker target contains Python and is shared by the app, migrations,
+and Bolt. The API service has two containers: `bolt` runs that image, and its
+ingress runs the `ingress` target based on the official Nginx image:
 
-- `wpp-app` runs `deploy/start-django.sh` (Nginx ingress and local Gunicorn)
-- `wpp-api` runs `deploy/start-bolt.sh` (Nginx h2c ingress and local Bolt)
+- `wpp-app` runs `deploy/start-django.sh` (Gunicorn only)
+- `wpp-api` runs `deploy/start-bolt.sh` in the Bolt container and the official
+  Nginx entrypoint in its ingress container
 - `wpp-migrate` runs `deploy/start-migrate.sh`
 
 ## Assumptions
@@ -51,54 +54,67 @@ This guide also assumes the following current production choices:
 
 At a high level, deployment works like this:
 
-1. Cloud Build builds the production Docker image.
-2. Cloud Build pushes the image to Artifact Registry.
-3. Cloud Build deploys the `wpp-migrate` job with the new image.
-4. Cloud Build runs the migration job.
-5. Cloud Build deploys `wpp-api`.
-6. Cloud Build reads its Cloud Run URL and deploys `wpp-app` with `BOLT_UPSTREAM_URL`.
+1. Cloud Build builds and pushes the `prod` and `ingress` targets.
+2. Cloud Build deploys and executes `wpp-migrate` with the `prod` image.
+3. Cloud Build deploys `wpp-api` with the Python backend and Nginx ingress images.
+4. Cloud Build deploys `wpp-app` with the `prod` image.
 
-The app service forwards `/api/` requests to the Bolt service over verified HTTPS.
-Nginx keeps up to 16 idle upstream connections per worker and reuses them over
-HTTP/2. Portless HTTPS origins use port 443; an explicit upstream port is
-preserved. It verifies the certificate chain and Bolt hostname on each TLS
-connection; moving the origin into an upstream pool does not weaken verification.
-The launcher validates the rendered Nginx configuration before starting either
-process, and Nginx suppresses its version in response headers.
-It sends all other requests to Gunicorn on `127.0.0.1:8000`. The proxy preserves
-API request paths, authorization headers, and streaming multipart bodies. It does
-not redirect the exporter to another hostname. Both services allow 600-second requests.
+`app.rccgcm.org` serves Django pages directly through Gunicorn on `PORT` (8080 in
+Cloud Run). The app has no Nginx process, API proxy, or Bolt upstream URL.
+`api.rccgcm.org` serves the Bolt API independently. Both services retain public
+Cloud Run access and 600-second request timeouts. Protected API routes enforce
+Integration Client authentication and scopes.
 
-Both Cloud Run services remain public so Integration Clients can reach Bolt
-directly. Protected API routes enforce application authentication and scopes using
-Integration Client credentials. Public Cloud Run access does not grant access to
-those routes; route-specific IAM grants cannot restrict an existing public grant.
+The Windows exporter downloads its installer from `app.rccgcm.org/install`, but
+uploads directly to `https://api.rccgcm.org/api/v1/catalog/imports`.
+`CATALOG_EXPORTER_API_URL` configures that API origin for another environment.
+Existing Windows installations must be reinstalled during the rollout:
+older scheduled tasks still target the app domain and will receive 404 after the
+proxy is removed, until reinstallation updates their endpoint. See [the reinstall procedure](windows-catalog-exporter.md).
 
-Cloud Build enables HTTP/2 on both services. Cloud Run terminates TLS and forwards
-h2c to each container's Nginx listener. Bolt 0.6.0 serves HTTP/1 on loopback behind
-its Nginx ingress. The pinned official Nginx 1.30.5 runtime supports HTTP/2 upstream
-proxying. Each ingress permits a 130 MiB multipart request while the importer keeps
-its 128 MiB package and 1 MiB exporter-event limits. See the
-[HTTP/2 verification procedure](http2-catalog-imports.md) before rollout.
+Only the API ingress container enables HTTP/2. Cloud Run terminates TLS and forwards h2c
+to Nginx on port 8080; locked Bolt 0.12.0 serves HTTP/1 on port 8000 in the
+same instance network. Nginx permits a 130 MiB multipart request while the importer retains its 128 MiB package and 1 MiB event
+limits. The app uses HTTP/1 between Cloud Run and Gunicorn; external browser TLS
+is still terminated by Cloud Run. See [HTTP/2 verification](http2-catalog-imports.md).
 
-When Cloud Run terminates an app instance, the launcher sends SIGQUIT to Nginx and
-SIGTERM to Gunicorn. Both stop accepting new work and drain active requests for up
-to eight seconds. The launcher then kills stalled server process groups and reaps
-its children, reserving the remaining two seconds of Cloud Run's ten-second grace
-period for cleanup. A supervised server exiting unexpectedly stops the service with
-exit status 1; a requested shutdown exits with status 0. The 600-second request
-timeout does not extend the shutdown window, so a longer Catalog Import may lose
-its proxy connection during instance termination.
+Both services use HTTP startup probes. Cloud Run first starts Bolt and checks
+`/api/v1/docs` on port 8000. Only after that probe succeeds does its startup
+dependency permit Nginx to start. The ingress probe checks the same route on
+port 8080 through Nginx and Bolt before traffic is admitted. The app checks
+`/health/` directly through Gunicorn. The API check uses an
+existing public route that proves the actual Bolt application has loaded; there
+is no `/api/v1/health` or `/api/v1/ready` route. Probes use HTTP/1 (which Nginx also
+accepts) every two seconds, with a two-second timeout and 60 attempts. Cloud Run
+holds traffic until the probe succeeds and shuts down an instance that never
+becomes ready within that startup window. These startup checks do not test the
+availability of the database or storage; Django's `/ready/` checks those separately.
 
-After deployment, check the route without sending credentials or importing data:
+Gunicorn runs as the app container's main process and drains requests for up to
+eight seconds on SIGTERM. Bolt runs as its container's main process with an
+eight-second graceful shutdown timeout. The ingress uses a small `/bin/sh`
+launcher that calls the official Nginx entrypoint and waits for its child. It
+converts Cloud Run's SIGTERM to Nginx SIGQUIT so active requests can drain, with
+`worker_shutdown_timeout 8s` leaving room within Cloud Run's ten-second shutdown
+window. Cloud Run manages startup and both container lifecycles; Tini is not
+needed. Long-running imports can still be interrupted at shutdown. An interrupted exporter retains
+its outbox package and retries with the same run identity.
+
+The API service declaration lives in `deploy/api-service.json.template`. Cloud
+Build inserts JSON-escaped settings and Secret Manager references and replaces
+the full container list, so migrating the old unnamed container cannot leave an
+extra server behind. It then ensures the public invoker IAM grant. The manifest
+sets the API maximum to 20 instances, matching the existing service, and allocates
+one CPU each to Bolt and Nginx; two containers increase per-instance resources.
+
+After deployment, check the API route without credentials or imported data:
 
 ```bash
-curl -i -X OPTIONS https://app.rccgcm.org/api/v1/catalog/imports
+curl -i -X OPTIONS https://api.rccgcm.org/api/v1/catalog/imports
 ```
 
-Expect HTTP 204 and `Allow: POST, OPTIONS`. Check `/admin/` and `/install` too.
-The complete API path uses HTTP/2 across both Cloud Run service boundaries,
-supporting packages above 32 MiB up to the unchanged 128 MiB package limit.
+Expect HTTP 204 and `Allow: POST, OPTIONS`. Check `/admin/` and `/install` on the
+app domain too. The former app-domain `/api/` route is intentionally absent.
 
 The repo already contains the automation for this in:
 
@@ -408,12 +424,12 @@ Run the deployment:
 What this command does:
 
 1. uploads the source to Cloud Build
-2. builds the production Docker image (~5 minutes)
-3. pushes the image to Artifact Registry
+2. builds the `prod` and `ingress` Docker targets
+3. pushes both images to Artifact Registry
 4. deploys the migration job
 5. runs migrations
-6. deploys the Django service
-7. deploys the Bolt service
+6. deploys the Bolt service with both HTTP startup probes
+7. deploys the Django-only app with its HTTP startup probe
 
 ## Step 7: Watch the Deployment
 
@@ -454,8 +470,7 @@ curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/ready/
 Check the API service:
 
 ```bash
-curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/health
-curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/ready
+curl -fsSL https://api.rccgcm.org/api/v1/docs
 ```
 
 Check the app login page:
@@ -599,10 +614,12 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 
 ### Follow a Catalog Import in Cloud Logging
 
-Cloud Build sets `GCP_PROJECT_ID` on both services. Nginx propagates bounded
+Cloud Build sets `GCP_PROJECT_ID` on Django, Bolt, and the Nginx ingress. Only
+Django and Bolt receive application settings and Secret Manager references.
+Nginx propagates bounded
 `X-Request-ID` and `X-Cloud-Trace-Context` values; JSON request logs and Catalog
 Importer outcome events carry the same full Cloud Logging trace. Valid Cloud Run
-trace context is preserved through the app proxy into Bolt. For direct local
+trace context is preserved through the API ingress into Bolt. For direct local
 runs without a project ID, request IDs still work and no Cloud Logging trace is
 attached by the applications.
 
@@ -614,7 +631,7 @@ gcloud logging read 'resource.type="cloud_run_revision" AND jsonPayload.run_id="
   --project=worship-prep-portal --limit=50 --format=json
 ```
 
-Copy `jsonPayload.request_id` to find the request across app and API container
+Copy `jsonPayload.request_id` to find the request across Nginx and Bolt container
 logs, including failures rejected before a Catalog Import Run exists:
 
 ```bash
@@ -636,7 +653,7 @@ and retry, with a safe failure code when processing fails. Request logs include
 method, status, and elapsed time; Nginx also includes upstream status and timing
 as strings, allowing missing values and multiple upstream attempts. Bolt rejects
 some malformed input in Rust before Python dispatch; those requests have the
-Nginx ingress event but no Python completion event. Both ingresses must preserve
+Nginx ingress event but no Python completion event. The API ingress must preserve
 the correlation headers.
 
 Access logs omit query strings, authorization, request bodies, and response
@@ -757,8 +774,7 @@ Then verify:
 ```bash
 curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/health/
 curl -fsSL https://wpp-app-zxdtzfpwua-uw.a.run.app/ready/
-curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/health
-curl -fsSL https://wpp-api-zxdtzfpwua-uw.a.run.app/api/v1/ready
+curl -fsSL https://api.rccgcm.org/api/v1/docs
 ```
 
 ## Final Notes

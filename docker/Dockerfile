@@ -2,6 +2,7 @@
 # Build targets:
 #   - local: Development container with hot-reload
 #   - prod:  Production-optimized container (Cloud Run)
+#   - ingress: Official Nginx container for the API HTTP/2 ingress
 #   - test:  Test runner container
 # =============================================================================
 
@@ -130,9 +131,6 @@ ENV DJANGO_ENV="prod" \
     SUPABASE_S3_SECRET_KEY="${SUPABASE_S3_SECRET_KEY}" \
     SUPABASE_S3_REGION="${SUPABASE_S3_REGION}"
 
-COPY deploy/install-nginx.sh /tmp/install-nginx.sh
-RUN bash /tmp/install-nginx.sh && rm /tmp/install-nginx.sh
-
 COPY --from=build-prod --chown=wpp:rccgcm /venv /venv
 COPY --from=node-deps --chown=wpp:rccgcm /code/node_modules /code/node_modules
 COPY --chown=wpp:rccgcm . /code/
@@ -146,6 +144,25 @@ RUN python -c "from pathlib import Path; import django; Path('node_modules/_reac
 RUN npm exec build.client
 
 RUN python manage.py collectstatic --noinput
+
+CMD ["/bin/bash", "/code/deploy/start-django.sh"]
+
+FROM nginx:1.30.5-trixie AS ingress
+
+ENV PORT=8080 \
+    GCP_PROJECT_ID="" \
+    NGINX_ENVSUBST_OUTPUT_DIR=/tmp \
+    NGINX_ENVSUBST_FILTER="^(PORT|GCP_PROJECT_ID)$"
+
+COPY deploy/nginx-bolt.conf.template /etc/nginx/templates/wpp-nginx.conf.template
+COPY deploy/nginx-logging.conf.template /etc/nginx/templates/wpp-nginx-logging.conf.template
+COPY deploy/start-ingress.sh /usr/local/bin/start-ingress.sh
+
+USER nginx
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/start-ingress.sh"]
+CMD []
 
 FROM runtime-base AS test
 

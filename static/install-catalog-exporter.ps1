@@ -83,6 +83,9 @@ function Install-VerifiedExporter {
 
 function Save-UserScopedCredential {
     param([SecureString]$Secret, [string]$CredentialPath)
+    if (-not $Secret -and (Test-Path $CredentialPath -PathType Leaf)) {
+        return
+    }
     if (-not $Secret) {
         $Secret = Read-Host "Paste the one-time Catalog Import API key" -AsSecureString
     }
