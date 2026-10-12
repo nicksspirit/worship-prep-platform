@@ -85,6 +85,7 @@
   color: var(--color-chapel-neutral-950);
   /* Make sure scrolling doesn't jump */
   scroll-behavior: smooth;
+  scroll-padding-block-start: 5rem;
 }
 
 body {
