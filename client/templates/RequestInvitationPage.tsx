@@ -33,7 +33,7 @@ export const Template = (props: RequestInvitationPageProps) => {
                         </p>
                     </div>
 
-                    <div className="relative z-10 mt-16 lg:mt-0 flex items-center justify-between border-t border-chapel-neutral-950/20 pt-6 pb-12 lg:pb-16 px-8 lg:px-16">
+                    <div className="relative z-10 mt-16 lg:mt-0 flex items-center justify-between border-t border-chapel-neutral-950/20 pt-8 pb-16 lg:pb-24 px-8 lg:px-16">
                         <div className="text-xs font-bold uppercase tracking-widest">Invite only</div>
                         <div className="text-xs font-bold uppercase tracking-widest text-chapel-primary-500">New requests</div>
                     </div>

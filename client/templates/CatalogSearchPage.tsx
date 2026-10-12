@@ -270,8 +270,8 @@ export const Template = (props: CatalogSearchPageProps) => {
 
     return (
         <Layout title={props.title}>
-            <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
-                <div className="mx-auto grid max-w-7xl lg:grid-cols-[19rem_minmax(0,1fr)]">
+            <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950 overflow-x-hidden">
+                <div className="mx-auto grid w-full max-w-[1600px] lg:grid-cols-[19rem_minmax(0,1fr)]">
                     <aside className="min-w-0 border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:sticky lg:top-20 lg:h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-10">
                         <h1 className="max-w-xs text-5xl leading-[0.9] text-balance">Songs for worship.</h1>
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
@@ -349,7 +349,7 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                         Add to song cart
                                                     </a>
                                                 </div>
-                                                <div className="border-s border-chapel-neutral-300 ps-4 text-sm leading-6 text-chapel-neutral-600">
+                                                <div className="min-w-0 border-s border-chapel-neutral-300 ps-4 text-sm leading-6 text-chapel-neutral-600">
                                                     {song.lyrics_available ? (
                                                         <>
                                                             <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chapel-neutral-400">Lyric preview</p>

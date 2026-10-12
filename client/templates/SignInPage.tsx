@@ -71,8 +71,8 @@ export const Template = (props: SignInPageProps) => {
             <div className="flex min-h-[calc(100vh-5rem)] w-full flex-col lg:flex-row bg-chapel-neutral-50 text-chapel-neutral-950 overflow-hidden">
                 
                 {/* Left Side: Editorial Typography & Imagery */}
-                <div className="bg-grain relative flex flex-col justify-between w-full lg:w-[45%] bg-chapel-neutral-200 px-8 py-12 lg:p-16 border-b lg:border-b-0 lg:border-r border-chapel-neutral-950">
-                    <div className="relative z-10 pt-16">
+                <div className="bg-grain relative flex flex-col justify-between w-full lg:w-[45%] bg-chapel-neutral-200 border-b lg:border-b-0 lg:border-r border-chapel-neutral-950">
+                    <div className="relative z-10 pt-16 px-8 lg:px-16">
                         
                         <h1 className="font-serif text-[4rem] lg:text-[6rem] leading-[0.9] tracking-tight mb-8">
                             Worship <br />
@@ -84,7 +84,7 @@ export const Template = (props: SignInPageProps) => {
                         </p>
                     </div>
 
-                    <div className="relative z-10 mt-16 lg:mt-0 flex items-center justify-between border-t border-chapel-neutral-950/20 pt-6">
+                    <div className="relative z-10 mt-16 lg:mt-0 flex items-center justify-between border-t border-chapel-neutral-950/20 pt-8 pb-16 lg:pb-24 px-8 lg:px-16">
                         <div className="text-xs font-bold uppercase tracking-widest">Est. 2026</div>
                         <div className="text-xs font-bold uppercase tracking-widest text-chapel-primary-500">Secure Access</div>
                     </div>
