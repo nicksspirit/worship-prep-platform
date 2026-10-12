@@ -16,7 +16,7 @@
     map $wpp_trace_context $wpp_trace_id {
         "~^([0-9a-f]{32})/" $1;
     }
-    map "__GCP_PROJECT_ID__:$wpp_trace_id" $cloud_trace {
+    map "${GCP_PROJECT_ID}:$wpp_trace_id" $cloud_trace {
         default "";
-        "~^[a-z][a-z0-9-]{4,61}[a-z0-9]:[0-9a-f]{32}$" "projects/__GCP_PROJECT_ID__/traces/$wpp_trace_id";
+        "~^[a-z][a-z0-9-]{4,61}[a-z0-9]:[0-9a-f]{32}$" "projects/${GCP_PROJECT_ID}/traces/$wpp_trace_id";
     }

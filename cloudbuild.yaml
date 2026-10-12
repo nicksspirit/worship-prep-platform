@@ -1,4 +1,4 @@
-# Build → push → migrate → deploy Bolt → deploy Django and its API proxy.
+# Build → push → migrate → deploy the independent API and Django services.
 # deploy/deploy.sh supplies the settings below.
 
 substitutions:
@@ -10,6 +10,7 @@ substitutions:
   _DJANGO_SERVICE: wpp-app
   _BOLT_SERVICE: wpp-api
   _MIGRATE_JOB: wpp-migrate
+  _CATALOG_EXPORTER_API_URL: https://api.rccgcm.org
 
   # Storage.
   _SUPABASE_STORAGE_BUCKET: ""
@@ -30,6 +31,7 @@ substitutions:
   # Shared deployment values. Escaped newlines keep each flag a single argument.
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${BUILD_ID}
   _SERVICE_ENV: "^|^DJANGO_ENV=prod|GCP_PROJECT_ID=${PROJECT_ID}|\
+    CATALOG_EXPORTER_API_URL=${_CATALOG_EXPORTER_API_URL}|\
     SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET}|\
     SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET}|\
     SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT}|\
@@ -70,23 +72,29 @@ steps:
     args:
       - -ceu
       - |
-        docker build \
-          -f docker/Dockerfile \
-          --target=prod \
-          --build-arg=SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET} \
-          --build-arg=SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET} \
-          --build-arg=SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT} \
-          --build-arg=SUPABASE_S3_ACCESS_KEY="$$SUPABASE_S3_ACCESS_KEY" \
-          --build-arg=SUPABASE_S3_SECRET_KEY="$$SUPABASE_S3_SECRET_KEY" \
-          --build-arg=SUPABASE_S3_REGION=${_SUPABASE_S3_REGION} \
-          -t ${_IMAGE} \
-          .
+        for target in prod ingress; do
+          docker build \
+            -f docker/Dockerfile \
+            --target="$$target" \
+            --build-arg=SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET} \
+            --build-arg=SUPABASE_CATALOG_IMPORT_BUCKET=${_SUPABASE_CATALOG_IMPORT_BUCKET} \
+            --build-arg=SUPABASE_S3_ENDPOINT=${_SUPABASE_S3_ENDPOINT} \
+            --build-arg=SUPABASE_S3_ACCESS_KEY="$$SUPABASE_S3_ACCESS_KEY" \
+            --build-arg=SUPABASE_S3_SECRET_KEY="$$SUPABASE_S3_SECRET_KEY" \
+            --build-arg=SUPABASE_S3_REGION=${_SUPABASE_S3_REGION} \
+            -t "${_IMAGE}-$$target" \
+            .
+        done
 
   - id: push-image
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_IMAGE}
+      - ${_IMAGE}-prod
+
+  - id: push-ingress-image
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_IMAGE}-ingress"]
 
   - id: deploy-migrate-job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -96,7 +104,7 @@ steps:
       - jobs
       - deploy
       - ${_MIGRATE_JOB}
-      - --image=${_IMAGE}
+      - --image=${_IMAGE}-prod
       - --region=${_REGION}
       - --service-account=${_RUNTIME_SA}
       - --set-secrets=DIRECT_URL=DIRECT_URL:latest,SECRET_KEY=SECRET_KEY:latest
@@ -118,46 +126,67 @@ steps:
 
   - id: deploy-bolt
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    env:
+      - API_NAME=${_BOLT_SERVICE}
+      - PROJECT_ID=${PROJECT_ID}
+      - RUNTIME_SA=${_RUNTIME_SA}
+      - PROD_IMAGE=${_IMAGE}-prod
+      - INGRESS_IMAGE=${_IMAGE}-ingress
+      - SERVICE_ENV=${_SERVICE_ENV}
+      - SERVICE_SECRETS=${_SERVICE_SECRETS}
+    args:
+      - -ceu
+      - |
+        python3 - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+        from string import Template
+
+        # JSON escaping keeps configuration values out of shell and YAML syntax.
+        values = {key: json.dumps(os.environ[key]) for key in (
+            "API_NAME", "PROJECT_ID", "RUNTIME_SA", "PROD_IMAGE", "INGRESS_IMAGE"
+        )}
+        env = []
+        for setting in os.environ["SERVICE_ENV"].removeprefix("^|^").split("|"):
+            name, value = setting.split("=", 1)
+            env.append({"name": name, "value": value})
+        for setting in os.environ["SERVICE_SECRETS"].split(","):
+            name, reference = setting.split("=", 1)
+            secret, version = reference.rsplit(":", 1)
+            env.append({"name": name, "valueFrom": {
+                "secretKeyRef": {"name": secret, "key": version}
+            }})
+        values["BOLT_ENV"] = json.dumps(env)
+        manifest = Template(Path("deploy/api-service.json.template").read_text()).substitute(values)
+        Path("/tmp/wpp-api-service.json").write_text(json.dumps(json.loads(manifest)))
+        PY
+        # Replace the full container list, including the legacy unnamed container.
+        gcloud run services replace /tmp/wpp-api-service.json --region=${_REGION}
+        gcloud run services add-iam-policy-binding ${_BOLT_SERVICE} \
+          --region=${_REGION} --member=allUsers --role=roles/run.invoker
+
+  - id: deploy-django
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - ${_BOLT_SERVICE}
-      - --image=${_IMAGE}
+      - ${_DJANGO_SERVICE}
+      - --image=${_IMAGE}-prod
       - --region=${_REGION}
       - --service-account=${_RUNTIME_SA}
       - --allow-unauthenticated
       - --port=8080
       - --timeout=600
-      - --use-http2
-      # A valid 120.6 MiB import peaked at 664 MiB RSS before container storage.
-      - --memory=2Gi
-      - --concurrency=1
-      - --set-env-vars=${_SERVICE_ENV}
+      - --no-use-http2
+      - --startup-probe=httpGet.path=/health/,httpGet.port=8080,periodSeconds=2,timeoutSeconds=2,failureThreshold=60
+      - --set-env-vars=${_SERVICE_ENV}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}
       - --set-secrets=${_SERVICE_SECRETS}
       - --command=/bin/bash
-      - --args=deploy/start-bolt.sh
-
-  - id: deploy-django
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        bolt_url="$$(gcloud run services describe ${_BOLT_SERVICE} \
-          --region=${_REGION} --format='value(status.url)')"
-        gcloud run deploy ${_DJANGO_SERVICE} \
-          --image=${_IMAGE} \
-          --region=${_REGION} \
-          --service-account=${_RUNTIME_SA} \
-          --allow-unauthenticated \
-          --port=8080 \
-          --timeout=600 \
-          --use-http2 \
-          --set-env-vars="${_SERVICE_ENV}|CSRF_TRUSTED_ORIGINS=${_CSRF_TRUSTED_ORIGINS}|BOLT_UPSTREAM_URL=$$bolt_url" \
-          --set-secrets=${_SERVICE_SECRETS} \
-          --command=/bin/bash \
-          --args=deploy/start-django.sh
+      - --args=deploy/start-django.sh
 
 images:
-  - ${_IMAGE}
+  - ${_IMAGE}-prod
+  - ${_IMAGE}-ingress

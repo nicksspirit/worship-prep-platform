@@ -1,4 +1,5 @@
 worker_processes 1;
+worker_shutdown_timeout 8s;
 pid /tmp/wpp-nginx.pid;
 error_log stderr;
 
@@ -18,7 +19,7 @@ http {
     client_max_body_size 130m;
 
     server {
-        listen __PORT__;
+        listen ${PORT};
         http2 on;
         # Request diagnostics can include raw URLs; access logs omit query strings.
         error_log /dev/null;

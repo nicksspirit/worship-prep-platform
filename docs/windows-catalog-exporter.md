@@ -52,15 +52,11 @@ $env:WPP_EASYWORSHIP_DATA_DIR = $dataDir
 
 ## 4. Install the exporter
 
-Download the installer from the platform website.
-Set the installer's `-PlatformUrl` argument to `https://app.rccgcm.org`:
+Run this in PowerShell. It downloads and runs the platform's bootstrap, which then
+downloads the checksum-verified exporter installer:
 
 ```powershell
-$installer = Join-Path $env:TEMP 'install-catalog-exporter.ps1'
-Invoke-WebRequest -UseBasicParsing `
-  -Uri 'https://app.rccgcm.org/static/install-catalog-exporter.ps1' `
-  -OutFile $installer
-& $installer -PlatformUrl 'https://app.rccgcm.org'
+irm https://app.rccgcm.org/install | iex
 ```
 
 Paste the full API key into **Paste the one-time Catalog Import API key**.
@@ -75,26 +71,52 @@ You can lock the screen. Signing out prevents the task from running.
 
 Wait for `Catalog Exporter diagnostics passed.` and the installation confirmation.
 
-The `/install` bootstrap also uses this platform URL.
-The platform forwards `/api/` requests to the catalog API after the routing fix is deployed.
+The bootstrap downloads the installer from the app domain and configures uploads
+to `https://api.rccgcm.org`. The app domain no longer forwards `/api/` requests.
 Check the import route before the first import:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing -Method Options `
-  -Uri 'https://app.rccgcm.org/api/v1/catalog/imports' |
+  -Uri 'https://api.rccgcm.org/api/v1/catalog/imports' |
   Select-Object StatusCode
 ```
 
-Expect HTTP `204`. HTTP `404` means the routing fix is not deployed.
+Expect HTTP `204`. HTTP `502` means the API backend is not ready; resolve that
+before uploading.
 
 If an older installer reports `Unable to find type [Security.Cryptography.ProtectedData]`, run these commands in the same PowerShell window:
 
 ```powershell
 Add-Type -AssemblyName System.Security
-& $installer -PlatformUrl 'https://app.rccgcm.org'
+irm https://app.rccgcm.org/install | iex
 ```
 
 Paste the same API key again when prompted. This command loads the Windows encryption type without changing the API key.
+
+### Reinstall an existing exporter
+
+After deploying the new app and verifying the API route, reinstall under the
+same Windows account:
+
+```powershell
+irm https://app.rccgcm.org/install | iex
+```
+
+Reinstallation preserves the exporter instance ID, outbox/state directory, and
+existing encrypted API key unless a replacement key is explicitly supplied. It
+updates the saved endpoint and per-user environment and replaces the scheduled
+task. Until reinstallation, the old app-domain endpoint returns 404 and scheduled
+imports fail; perform the switch together during the rollout.
+
+Check the saved endpoint and scheduled task after reinstalling:
+
+```powershell
+[Environment]::GetEnvironmentVariable('WPP_CATALOG_EXPORTER_ENDPOINT', 'User')
+(Get-ScheduledTask -TaskName 'Worship Prep Catalog Import').Actions.Arguments
+```
+
+Both must reference `https://api.rccgcm.org`. Open a new PowerShell session for
+subsequent manual runs so it loads the updated per-user environment.
 
 ## 5. Run and verify the first import
 

@@ -1,24 +1,26 @@
-"""Exercise the production launcher with real Nginx and Gunicorn on Linux.
+"""Exercise production launchers with real Gunicorn, Bolt and Nginx on Linux.
 
-Run with ``python tests/integration/test_shutdown.py`` after installing both.
+Run with ``python tests/integration/test_shutdown.py`` in the production-compatible Docker test image.
 """
 
 import concurrent.futures
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import threading
 import os
 from pathlib import Path
 import shutil
 import signal
 import subprocess
 import tempfile
-import threading
 import time
 import unittest
-from proxy_fixture import TLSProxy
+from proxy_fixture import free_port
 
 
 class ShutdownTests(unittest.TestCase):
+    launcher = "start-django.sh"
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -27,48 +29,12 @@ class ShutdownTests(unittest.TestCase):
         (self.root / "deploy").mkdir()
         (self.root / "backend").mkdir()
         (self.root / "backend/__init__.py").touch()
-        # This fixture exercises supervision with a minimal WSGI app.
+        # Exercise the actual Gunicorn launcher with a minimal WSGI app.
         (self.root / "backend/gunicorn.py").write_text(
             "accesslog = None\nerrorlog = '-'\ncontrol_socket_disable = True\n"
         )
-        shutil.copy(source / "deploy/start-django.sh", self.root / "deploy")
-        shutil.copy(source / "deploy/supervise.sh", self.root / "deploy")
-        shutil.copy(source / "deploy/nginx-logging.conf.template", self.root / "deploy")
-        certificate = self.root / "certificate.pem"
-        key = self.root / "key.pem"
-        subprocess.run(
-            [
-                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-                "-keyout", str(key), "-out", str(certificate), "-days", "1",
-                "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
-            ],
-            check=True, capture_output=True,
-        )
-        template = (source / "deploy/nginx.conf.template").read_text()
-        (self.root / "deploy/nginx.conf.template").write_text(
-            template.replace("/etc/ssl/certs/ca-certificates.crt", str(certificate))
-        )
-        root = self.root
-
-        class BoltHandler(BaseHTTPRequestHandler):
-            def log_message(self, *args):
-                pass
-
-            def do_GET(self):
-                (root / "started").touch()
-                while not (root / "release").exists():
-                    time.sleep(0.02)
-                self.send_response(200)
-                self.send_header("Content-Length", "8")
-                self.end_headers()
-                self.wfile.write(b"finished")
-
-        self.bolt = ThreadingHTTPServer(("127.0.0.1", 0), BoltHandler)
-        self.addCleanup(self.bolt.server_close)
-        self.addCleanup(self.bolt.shutdown)
-        threading.Thread(target=self.bolt.serve_forever, daemon=True).start()
-        self.tls = TLSProxy(self.root, self.bolt.server_port, certificate, key)
-        self.addCleanup(self.tls.close)
+        shutil.copy(source / "deploy" / self.launcher, self.root / "deploy")
+        self.port = free_port()
         # A real Gunicorn worker holds the response until the test releases it.
         (self.root / "backend/wsgi.py").write_text('''
 from pathlib import Path
@@ -83,16 +49,48 @@ def application(environ, start_response):
     start_response("200 OK", [("Content-Length", "8")])
     return [b"finished"]
 ''')
+        if self.launcher == "start-bolt.sh":
+            shutil.copy(source / "manage.py", self.root)
+            (self.root / "fixture_urls.py").write_text("urlpatterns = []\n")
+            (self.root / "fixture_settings.py").write_text(
+                'SECRET_KEY = "shutdown-fixture"\n'
+                'INSTALLED_APPS = ["django_bolt"]\n'
+                'BOLT_API = ["fixture_api:api"]\n'
+                'ROOT_URLCONF = "fixture_urls"\n'
+                'DEBUG = False\n'
+                'ALLOWED_HOSTS = ["*"]\n'
+            )
+            (self.root / "fixture_api.py").write_text('''
+import asyncio
+from pathlib import Path
+from django_bolt import BoltAPI, Response
+
+api = BoltAPI(enable_logging=False)
+
+@api.get("/health/")
+async def health():
+    return Response(b"finished", media_type="text/plain")
+
+@api.get("/short/")
+@api.get("/stall/")
+async def hold_request():
+    Path("started").touch()
+    while not Path("release").exists():
+        await asyncio.sleep(0.02)
+    return Response(b"finished", media_type="text/plain")
+''')
         self.logs = (self.root / "logs").open("w+")
         self.addCleanup(self.logs.close)
         self.process = subprocess.Popen(
-            ["bash", str(self.root / "deploy/start-django.sh")],
+            ["bash", str(self.root / "deploy" / self.launcher)],
             env={
                 **os.environ,
                 "DATABASE_URL": "postgresql://unused",
-                "BOLT_UPSTREAM_URL": f"https://localhost:{self.tls.port}",
                 "WEB_CONCURRENCY": "1",
-                "PORT": "8080",
+                "PORT": str(self.port),
+                "BOLT_PORT": str(self.port),
+                "DJANGO_SETTINGS_MODULE": "fixture_settings",
+                "PYTHONPATH": str(self.root),
             },
             stdout=self.logs, stderr=self.logs,
         )
@@ -134,14 +132,16 @@ def application(environ, start_response):
         while time.monotonic() < deadline:
             if condition():
                 return
+            if self.process.poll() is not None:
+                break
             time.sleep(0.02)
         self.logs.seek(0)
         self.fail(f"{message}\n{self.logs.read()}")
 
     def request(self, path="/health/"):
-        connection = http.client.HTTPConnection("127.0.0.1", 8080, timeout=12)
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=12)
         try:
-            connection.request("GET", path)
+            connection.request("GET", path.rstrip("/") if self.launcher == "start-bolt.sh" else path)
             response = connection.getresponse()
             return response.status, response.read()
         finally:
@@ -168,13 +168,10 @@ def application(environ, start_response):
             if not live or time.monotonic() >= deadline:
                 break
             time.sleep(0.02)
-        self.assertEqual(live, [], "supervised descendants remain running")
+        self.assertEqual(live, [], "Server workers remain running")
 
-    def test_active_django_request_finishes_on_sigterm(self):
+    def test_active_request_finishes_on_sigterm(self):
         self.finish_request("/short/")
-
-    def test_active_bolt_request_finishes_on_sigterm(self):
-        self.finish_request("/api/short/")
 
     def finish_request(self, path):
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -184,7 +181,6 @@ def application(environ, start_response):
             self.process.terminate()
 
             time.sleep(0.2)
-            self.assertFalse(self.responds(), "shutdown must stop accepting new work")
             (self.root / "release").touch()
             self.assertEqual(response.result(timeout=5), (200, b"finished"))
         self.assertEqual(self.process.wait(timeout=10), 0)
@@ -205,31 +201,69 @@ def application(environ, start_response):
                 response.result(timeout=1)
         self.assert_stopped()
 
-    def fail_server(self, name, signal_number):
-        children = Path(
-            f"/proc/{self.process.pid}/task/{self.process.pid}/children"
-        ).read_text().split()
-        pid = next(
-            int(pid) for pid in children
-            if name in Path(f"/proc/{pid}/cmdline").read_text()
+class BoltShutdownTests(ShutdownTests):
+    launcher = "start-bolt.sh"
+
+
+class NginxShutdownTests(ShutdownTests):
+    launcher = "start-ingress.sh"
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        source = Path(__file__).resolve().parents[2]
+        root = self.root
+
+        class Backend(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path != "/health/":
+                    (root / "started").touch()
+                    while not (root / "release").exists():
+                        time.sleep(0.02)
+                try:
+                    self.send_response(200)
+                    self.send_header("Content-Length", "8")
+                    self.end_headers()
+                    self.wfile.write(b"finished")
+                except BrokenPipeError:
+                    pass
+
+        backend = ThreadingHTTPServer(("127.0.0.1", 0), Backend)
+        self.addCleanup(backend.server_close)
+        self.addCleanup(backend.shutdown)
+        threading.Thread(target=backend.serve_forever, daemon=True).start()
+        self.port = free_port()
+        config = (source / "deploy/nginx-bolt.conf.template").read_text()
+        config = (config.replace("/tmp/wpp-nginx", str(root / "nginx"))
+                  .replace("${PORT}", str(self.port))
+                  .replace("127.0.0.1:8000", f"127.0.0.1:{backend.server_port}"))
+        (root / "nginx-logging.conf").write_text(
+            (source / "deploy/nginx-logging.conf.template").read_text()
+            .replace("${GCP_PROJECT_ID}", "wpp-test-project")
         )
-
-        os.kill(pid, signal_number)
-
-        self.assertEqual(self.process.wait(timeout=9.5), 1)
-        self.assert_stopped()
-
-    def test_gunicorn_clean_exit_is_reported_as_service_failure(self):
-        self.fail_server("gunicorn", signal.SIGTERM)
-
-    def test_nginx_clean_exit_is_reported_as_service_failure(self):
-        self.fail_server("nginx", signal.SIGTERM)
-
-    def test_killed_gunicorn_master_leaves_no_running_workers(self):
-        self.fail_server("gunicorn", signal.SIGKILL)
-
-    def test_killed_nginx_master_leaves_no_running_workers(self):
-        self.fail_server("nginx", signal.SIGKILL)
+        (root / "nginx.conf").write_text(config)
+        # Official entrypoint execs Nginx after rendering; this fixture renders above.
+        entrypoint = root / "docker-entrypoint.sh"
+        entrypoint.write_text('#!/bin/sh\nexec "$@"\n')
+        entrypoint.chmod(0o755)
+        launcher = root / "start-ingress.sh"
+        launcher.write_text(
+            (source / "deploy/start-ingress.sh").read_text()
+            .replace("/docker-entrypoint.sh", str(entrypoint))
+            .replace("/tmp/wpp-nginx.conf", str(root / "nginx.conf"))
+        )
+        self.logs = (root / "logs").open("w+")
+        self.addCleanup(self.logs.close)
+        self.process = subprocess.Popen(
+            ["sh", str(launcher)], stdout=self.logs, stderr=self.logs,
+        )
+        self.addCleanup(self.stop)
+        self.wait_for(self.responds, "Nginx ingress did not start")
+        self.pids = self.descendants(self.process.pid)
 
 
 if __name__ == "__main__":

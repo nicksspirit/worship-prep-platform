@@ -1,19 +1,20 @@
-name: API routing
+name: Service startup and API ingress
 
 on:
   pull_request:
     paths:
+      - "pyproject.toml"
+      - "uv.lock"
       - "deploy/start-django.sh"
-      - "deploy/nginx.conf.template"
       - "deploy/nginx-bolt.conf.template"
       - "deploy/nginx-logging.conf.template"
       - "deploy/start-bolt.sh"
-      - "deploy/install-nginx.sh"
-      - "deploy/supervise.sh"
+      - "deploy/start-ingress.sh"
       - "docker/Dockerfile"
       - "docker/Dockerfile.proxy-test"
+      - "deploy/api-service.json.template"
       - "cloudbuild.yaml"
-      - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_bolt_ingress.py"
       - "tests/integration/test_large_imports.py"
       - "tests/integration/proxy_fixture.py"
       - "exporter/tests/deliver-fixture/**"
@@ -21,22 +22,26 @@ on:
       - "apps/common/**"
       - "apps/catalog/api.py"
       - "backend/gunicorn.py"
+      - "apps/catalog/views.py"
+      - "apps/catalog/tests/test_foundation.py"
+      - "backend/settings/components/common.py"
       - "backend/settings/components/logging.py"
       - ".github/workflows/api-routing.yml"
   push:
     branches: [main]
     paths:
+      - "pyproject.toml"
+      - "uv.lock"
       - "deploy/start-django.sh"
-      - "deploy/nginx.conf.template"
       - "deploy/nginx-bolt.conf.template"
       - "deploy/nginx-logging.conf.template"
       - "deploy/start-bolt.sh"
-      - "deploy/install-nginx.sh"
-      - "deploy/supervise.sh"
+      - "deploy/start-ingress.sh"
       - "docker/Dockerfile"
       - "docker/Dockerfile.proxy-test"
+      - "deploy/api-service.json.template"
       - "cloudbuild.yaml"
-      - "tests/integration/test_api_proxy.py"
+      - "tests/integration/test_bolt_ingress.py"
       - "tests/integration/test_large_imports.py"
       - "tests/integration/proxy_fixture.py"
       - "exporter/tests/deliver-fixture/**"
@@ -44,6 +49,9 @@ on:
       - "apps/common/**"
       - "apps/catalog/api.py"
       - "backend/gunicorn.py"
+      - "apps/catalog/views.py"
+      - "apps/catalog/tests/test_foundation.py"
+      - "backend/settings/components/common.py"
       - "backend/settings/components/logging.py"
       - ".github/workflows/api-routing.yml"
 
@@ -58,8 +66,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the production-compatible HTTP/2 fixture
         run: docker build -f docker/Dockerfile.proxy-test -t wpp-http2-test .
-      - name: Check routing and streamed imports
-        run: docker run --rm wpp-http2-test python tests/integration/test_api_proxy.py
+      - name: Check API ingress, streaming, and startup probes
+        run: docker run --rm wpp-http2-test python tests/integration/test_bolt_ingress.py
+      - name: Check direct API installer bootstrap
+        run: docker run --rm --user 1000:1000 wpp-http2-test python manage.py test apps.catalog.tests.test_foundation.ExporterInstallTests --noinput
       - name: Check structured Django and Gunicorn logs
         run: docker run --rm --user 1000:1000 wpp-http2-test python manage.py test apps.common.tests.test_request_logging --noinput
       - name: Check graceful shutdown and child cleanup
@@ -74,7 +84,7 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Check real exporter delivery and importer limits through both services
+      - name: Check direct API exporter delivery and importer limits
         run: >-
           docker run --rm --user 1000:1000 --network wpp-http2-tests
           -e WPP_HTTP2_TEST_DATABASE_URL=postgresql://postgres:http2-fixture@wpp-http2-postgres:5432/http2_fixture

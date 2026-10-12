@@ -59,7 +59,7 @@ if ($paths.ExecutablePath -ne (Join-Path $testDirectory ".local\bin\catalog-expo
 $paths.ExecutablePath = Join-Path $PSHOME "powershell.exe"
 $configuration = [pscustomobject]@{
     data_directory = Join-Path $testDirectory "EasyWorship Data"
-    platform_url = "https://app.rccgcm.org"
+    platform_url = "https://api.rccgcm.org"
     exporter_instance_id = [guid]::NewGuid().ToString()
     schedule_day = "Sunday"
 }
@@ -73,6 +73,12 @@ try {
     Add-Type -AssemblyName System.Security
     $secret = ConvertTo-SecureString "installer test credential" -AsPlainText -Force
     Save-UserScopedCredential -Secret $secret -CredentialPath $paths.CredentialPath
+    $existingKey = [IO.File]::ReadAllBytes($paths.CredentialPath)
+    Save-UserScopedCredential -CredentialPath $paths.CredentialPath
+    if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($paths.CredentialPath)) -ne
+        [Convert]::ToBase64String($existingKey)) {
+        throw "Reinstallation must preserve the existing protected API key."
+    }
     $configuration | ConvertTo-Json | Set-Content $paths.ConfigurationPath
 
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -82,6 +88,9 @@ try {
     }
     Register-ScheduledTask -TaskName $TaskName -InputObject $definition -Force | Out-Null
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    if ($task.Actions.Arguments -notlike '*--endpoint "https://api.rccgcm.org"*') {
+        throw "Scheduled uploads must use the API domain."
+    }
     if ($task.Principal.LogonType -ne "Interactive" -or
         $task.Principal.RunLevel -ne "Limited" -or
         (Resolve-AccountSid -Account $task.Principal.UserId) -ne $currentUser.User.Value) {
@@ -107,7 +116,7 @@ try {
         ('--data-dir "' + $configuration.data_directory + '"'),
         ('--state-dir "' + $paths.StateDirectory + '"'),
         ('--instance-id ' + $configuration.exporter_instance_id),
-        '--endpoint "https://app.rccgcm.org"',
+        '--endpoint "https://api.rccgcm.org"',
         ('--api-key-file "' + $paths.CredentialPath + '"'),
         '--scheduled'
     )) {

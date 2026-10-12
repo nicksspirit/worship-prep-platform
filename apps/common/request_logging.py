@@ -74,8 +74,7 @@ class BoltRequestLogging:
             try:
                 response = await self.get_response(request)
             except Exception as exc:  # noqa: BLE001 - Bolt maps all exceptions to HTTP.
-                response = MiddlewareResponse.from_tuple(
-                    handle_exception(exc, request=request)
-                )
+                status, headers, body = handle_exception(exc, request=request)
+                response = MiddlewareResponse(status, dict(headers), body)
             finish_request(request.method, request.path, response.status_code, started)
             return response

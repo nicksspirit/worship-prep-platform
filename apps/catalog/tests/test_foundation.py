@@ -14,7 +14,7 @@ from django.contrib.staticfiles import finders
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
-from django.test import TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.urls import reverse
 from django_bolt import UploadFile
 
@@ -33,15 +33,7 @@ from apps.catalog.models import (
 from apps.catalog.services import rollback_to_snapshot
 
 
-class GreenfieldRuntimeTests(TestCase):
-    def test_health_and_readiness_boot(self):
-        self.assertEqual(self.client.get(reverse("health")).json(), {"status": "ok"})
-        self.assertEqual(self.client.get(reverse("ready")).status_code, 200)
-
-    def test_static_assets_remain_discoverable(self):
-        self.assertIsNotNone(finders.find("rccgcm_logo.png"))
-        self.assertIsNotNone(finders.find("install-catalog-exporter.ps1"))
-
+class ExporterInstallTests(SimpleTestCase):
     def test_catalog_exporter_install_bootstrap_is_pipeable(self):
         response = self.client.get("/install")
 
@@ -54,7 +46,23 @@ class GreenfieldRuntimeTests(TestCase):
             "http://testserver/static/install-catalog-exporter.ps1",
             response.content.decode(),
         )
+        self.assertIn("$platformUrl = 'https://api.rccgcm.org'", response.content.decode())
         self.assertNotIn("EasyWorship Data directory", response.content.decode())
+
+
+class GreenfieldRuntimeTests(TestCase):
+    def test_health_and_readiness_boot(self):
+        self.assertEqual(self.client.get(reverse("health")).json(), {"status": "ok"})
+        self.assertEqual(self.client.get(reverse("ready")).status_code, 200)
+
+    def test_catalog_import_route_is_absent_from_django(self):
+        response = self.client.post("/api/v1/catalog/imports")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_static_assets_remain_discoverable(self):
+        self.assertIsNotNone(finders.find("rccgcm_logo.png"))
+        self.assertIsNotNone(finders.find("install-catalog-exporter.ps1"))
 
     def test_greenfield_modules_are_installed(self):
         self.assertEqual(apps.get_app_config("accounts").name, "apps.accounts")
@@ -138,7 +146,8 @@ class CatalogImporterTests(TransactionTestCase):
         package, _run_id = self.build_package()
         upload = UploadFile(filename="catalog.zip", size=len(package), file_data=package)
         response = async_to_sync(catalog_import)(upload, "")
-        self.assertEqual(response[0], 401)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.content["error"]["code"], "invalid_api_key")
 
     def test_import_rejects_bearer_key_without_import_scope(self):
         package, _run_id = self.build_package()

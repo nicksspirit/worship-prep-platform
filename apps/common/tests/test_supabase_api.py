@@ -56,13 +56,17 @@ class SupabaseApiPolicyTests(TestCase):
     def test_rejection_covers_all_commands_on_all_application_tables(self):
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT cmd, permissive, roles, qual, with_check FROM pg_policies "
+                "SELECT tablename, cmd, permissive, roles, qual, with_check "
+                "FROM pg_policies "
                 "WHERE schemaname='public' AND policyname='deny_supabase_api'"
             )
             policies = cursor.fetchall()
 
-        self.assertEqual(len(policies), 29)
-        for command, permissive, roles, using, check in policies:
+        expected_tables = set(
+            connection.introspection.django_table_names(only_existing=True)
+        ) | {"django_migrations"}
+        self.assertSetEqual({policy[0] for policy in policies}, expected_tables)
+        for _, command, permissive, roles, using, check in policies:
             self.assertEqual(command, "ALL")
             self.assertEqual(permissive, "RESTRICTIVE")
             self.assertEqual(set(roles), {"anon", "authenticated"})

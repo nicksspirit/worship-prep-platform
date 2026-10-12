@@ -1,10 +1,11 @@
 FROM ghcr.io/astral-sh/uv:0.10.12 AS uv
+FROM nginx:1.30.5-trixie AS nginx
 FROM golang:1.26-bookworm AS go
 WORKDIR /exporter
 COPY exporter ./
 RUN go build -o /deliver-fixture ./tests/deliver-fixture
 
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim-trixie
 COPY --from=uv /uv /usr/local/bin/uv
 COPY --from=go /deliver-fixture /tmp/deliver-fixture
 ENV PATH="/code/.venv/bin:/usr/sbin:$PATH" \
@@ -12,8 +13,13 @@ ENV PATH="/code/.venv/bin:/usr/sbin:$PATH" \
     DJANGO_ENV=test \
     DJANGO_SETTINGS_MODULE=backend.settings
 WORKDIR /code
-COPY deploy/install-nginx.sh /tmp/install-nginx.sh
-RUN bash /tmp/install-nginx.sh && rm /tmp/install-nginx.sh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcrypt1 libpcre2-8-0 libssl3t64 zlib1g libzstd1 curl openssl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system nginx \
+    && useradd --system --gid nginx --no-create-home nginx
+COPY --from=nginx /usr/sbin/nginx /usr/sbin/nginx
+RUN nginx -V 2>&1 | grep -q -- '--with-http_v2_module'
 COPY uv.lock pyproject.toml ./
 RUN uv sync --frozen --group test --group prod --no-install-project
 COPY . .

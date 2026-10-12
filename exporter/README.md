@@ -69,8 +69,9 @@ irm https://app.rccgcm.org/install | iex
 The weekday defaults to Sunday. Windows must use the `Pacific Standard Time` zone so
 daylight-saving transitions remain aligned with America/Los_Angeles. Re-run the command
 after machine or account changes to reinstall; `-Mode Diagnose` remains available from
-the downloaded installer. The platform URL is `https://app.rccgcm.org`; its ingress
-forwards `/api/` requests to Django Bolt.
+the downloaded installer. The upload endpoint is `https://api.rccgcm.org`; the bootstrap and installer
+continue to download from `https://app.rccgcm.org`. Existing installations must
+be reinstalled to update both the saved endpoint and scheduled task.
 
 The task uses the current account's SID with `Interactive` logon and limited privileges.
 The installer does not request or store a Windows password. The same Windows account
