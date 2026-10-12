@@ -117,7 +117,7 @@ const SearchGlyph = () => (
 );
 
 const FreshnessNote = ({freshness}: {freshness: Freshness | null}) => (
-    <p className="flex items-center justify-end gap-3 text-right text-xs font-bold uppercase tracking-[0.14em] text-chapel-neutral-600">
+    <p className="flex items-center justify-end gap-3 text-end text-xs font-bold uppercase tracking-[0.14em] text-chapel-neutral-600">
         <span className="h-2 w-2 rounded-full bg-chapel-primary-500" aria-hidden="true" />
         {freshness ? (
             <span>
@@ -270,9 +270,9 @@ export const Template = (props: CatalogSearchPageProps) => {
 
     return (
         <Layout title={props.title}>
-            <main className="min-h-[calc(100vh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
+            <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
                 <div className="mx-auto grid max-w-7xl lg:grid-cols-[19rem_minmax(0,1fr)]">
-                    <aside className="border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:min-h-[calc(100vh-5rem)] lg:border-b-0 lg:border-r lg:p-10">
+                    <aside className="min-w-0 border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:sticky lg:top-20 lg:h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-10">
                         <h1 className="max-w-xs text-5xl leading-[0.9] text-balance">Songs for worship.</h1>
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
                             A catalogue of easy worship songs updated weekly.
@@ -284,8 +284,8 @@ export const Template = (props: CatalogSearchPageProps) => {
                         />
                     </aside>
 
-                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:px-12 lg:py-14" aria-labelledby="catalog-results-heading">
-                        <div className="border-b border-chapel-neutral-300 pb-9">
+                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:flex lg:h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden lg:px-12 lg:py-0" aria-labelledby="catalog-results-heading">
+                        <div className="border-b border-chapel-neutral-300 pb-9 lg:max-h-[60%] lg:shrink-0 lg:overflow-y-auto lg:pt-10">
                             <SearchForm props={props} />
                             <div className="mt-5 flex flex-wrap items-center gap-x-2">
                                 <p className="text-sm text-chapel-neutral-700">Can’t find your song?</p>
@@ -293,7 +293,7 @@ export const Template = (props: CatalogSearchPageProps) => {
                             </div>
                         </div>
 
-                        <div className="pt-10">
+                        <div className="wrap-anywhere pt-10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:scroll-py-6 lg:pb-14">
                             {props.error ? (
                                 <div role="alert" className="border border-chapel-primary-200 bg-chapel-primary-50 p-6 sm:p-8">
                                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-chapel-primary-500">Search needs attention</p>
@@ -349,7 +349,7 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                         Add to song cart
                                                     </a>
                                                 </div>
-                                                <div className="border-l border-chapel-neutral-300 pl-4 text-sm leading-6 text-chapel-neutral-600">
+                                                <div className="border-s border-chapel-neutral-300 ps-4 text-sm leading-6 text-chapel-neutral-600">
                                                     {song.lyrics_available ? (
                                                         <>
                                                             <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chapel-neutral-400">Lyric preview</p>

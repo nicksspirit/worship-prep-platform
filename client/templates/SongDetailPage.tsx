@@ -34,20 +34,19 @@ export const Template = (props: SongDetailPageProps) => (
     <Layout title={`${props.title} — Song Catalog`}>
         <main className="min-h-[calc(100vh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
             <section className="relative overflow-hidden border-b border-chapel-neutral-300">
-                <div className="absolute inset-y-0 right-0 hidden w-[38%] bg-chapel-primary-500 lg:block" aria-hidden="true" />
-                <div className="relative mx-auto grid max-w-7xl lg:grid-cols-[1fr_0.55fr]">
-                    <div className="px-6 py-14 lg:px-12 lg:py-24">
+                <div className="relative mx-auto grid max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(0,0.55fr)]">
+                    <div className="min-w-0 px-6 py-14 lg:px-12 lg:py-24">
                         <a href={props.catalog_url} className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.18em] text-chapel-neutral-600 transition-colors hover:text-chapel-primary-500">
                             <span aria-hidden="true">←</span> Back to search
                         </a>
                         <p className="mt-16 text-xs font-bold uppercase tracking-[0.18em] text-chapel-primary-500">Song Detail</p>
-                        <h1 className="mt-4 max-w-4xl text-[clamp(3.7rem,8vw,6rem)] leading-[0.86] tracking-[-0.035em] text-balance">{props.title}</h1>
+                        <h1 className="mt-4 max-w-4xl break-words text-[clamp(3.7rem,8vw,6rem)] leading-[0.86] tracking-[-0.035em] text-balance">{props.title}</h1>
                         <p className="mt-8 text-lg font-semibold">Author: {props.author}</p>
                         <a href={props.add_to_cart_url} className="mt-8 inline-flex border border-chapel-neutral-950 bg-chapel-neutral-950 px-6 py-4 text-sm font-bold text-white hover:bg-chapel-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">
                             Add to song cart
                         </a>
                     </div>
-                    <aside className="relative bg-chapel-secondary-950 px-6 py-12 text-white lg:my-12 lg:bg-transparent lg:px-12 lg:py-16" aria-label="Song information">
+                    <aside className="relative min-w-0 bg-chapel-secondary-950 px-6 py-12 text-white lg:bg-chapel-primary-500 lg:px-12 lg:py-28 lg:after:absolute lg:after:inset-y-0 lg:after:start-full lg:after:w-screen lg:after:bg-chapel-primary-500" aria-label="Song information">
                         <dl className="space-y-7">
                             <div className="border-b border-current/20 pb-5">
                                 <dt className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/80">Song freshness</dt>
