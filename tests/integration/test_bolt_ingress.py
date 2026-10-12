@@ -296,6 +296,7 @@ class BoltIngressTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             manifest = json.loads(output.read_text())
+        self.assertNotIn("namespace", manifest["metadata"])
         containers = {item["name"]: item for item in
                       manifest["spec"]["template"]["spec"]["containers"]}
         self.assertEqual(containers["ingress"]["env"],
