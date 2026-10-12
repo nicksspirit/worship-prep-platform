@@ -116,7 +116,7 @@ try {
         ('--data-dir "' + $configuration.data_directory + '"'),
         ('--state-dir "' + $paths.StateDirectory + '"'),
         ('--instance-id ' + $configuration.exporter_instance_id),
-        '--endpoint "https://app.rccgcm.org"',
+        '--endpoint "https://api.rccgcm.org"',
         ('--api-key-file "' + $paths.CredentialPath + '"'),
         '--scheduled'
     )) {

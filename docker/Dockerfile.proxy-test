@@ -15,7 +15,9 @@ ENV PATH="/code/.venv/bin:/usr/sbin:$PATH" \
 WORKDIR /code
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcrypt1 libpcre2-8-0 libssl3t64 zlib1g libzstd1 curl openssl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system nginx \
+    && useradd --system --gid nginx --no-create-home nginx
 COPY --from=nginx /usr/sbin/nginx /usr/sbin/nginx
 RUN nginx -V 2>&1 | grep -q -- '--with-http_v2_module'
 COPY uv.lock pyproject.toml ./
