@@ -3,7 +3,6 @@
   "kind": "Service",
   "metadata": {
     "name": ${API_NAME},
-    "namespace": ${PROJECT_ID},
     "annotations": {"run.googleapis.com/ingress": "all"}
   },
   "spec": {
