@@ -41,6 +41,10 @@ MIDDLEWARE = [
     "apps.common.request_logging.DjangoRequestLogging",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # After WhiteNoise: static files return before this runs, so they keep their
+    # precompressed variants, Content-Length, and Range support instead of being
+    # recompressed on the fly. Only dynamic responses (rendered HTML) reach it.
+    "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "apps.common.middleware.CsrfBypassApiMiddleware",
