@@ -308,7 +308,7 @@ export const Template = (props: CatalogSearchPageProps) => {
         <Layout title={props.title}>
             <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950 overflow-x-hidden">
                 <div className="grid w-full lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[24rem_minmax(0,1fr)]">
-                    <aside className="min-w-0 border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:sticky lg:top-20 lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-10">
+                    <aside className="min-w-0 border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:sticky lg:top-20 lg:h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-10">
                         <h1 className="max-w-xs text-5xl leading-[0.9] text-balance">Songs for worship.</h1>
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
                             A catalogue of easy worship songs updated weekly.
@@ -320,8 +320,8 @@ export const Template = (props: CatalogSearchPageProps) => {
                         />
                     </aside>
 
-                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:flex lg:flex-col lg:px-12 lg:py-0 2xl:px-24" aria-labelledby="catalog-results-heading">
-                        <div className="border-b border-chapel-neutral-300 pb-9 lg:shrink-0 lg:pt-10 lg:sticky lg:top-20 bg-chapel-neutral-50 z-10">
+                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:flex lg:h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden lg:px-12 lg:py-0 2xl:px-24" aria-labelledby="catalog-results-heading">
+                        <div className="border-b border-chapel-neutral-300 pb-9 lg:shrink-0 lg:pt-10">
                             <div className="mx-auto max-w-5xl">
                                 <SearchForm props={props} />
                                 <div className="mt-5 flex flex-wrap items-center gap-x-2">
@@ -331,7 +331,7 @@ export const Template = (props: CatalogSearchPageProps) => {
                             </div>
                         </div>
 
-                        <div className="wrap-anywhere pt-10 lg:min-h-0 lg:flex-1 lg:pb-14 lg:pr-4">
+                        <div className="wrap-anywhere pt-10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:scroll-py-6 lg:pb-14 lg:pr-4">
                             <div className="mx-auto max-w-5xl">
                             {props.error ? (
                                 <div role="alert" className="border border-chapel-primary-200 bg-chapel-primary-50 p-6 sm:p-8">
