@@ -141,7 +141,7 @@ RUN python -V && python -c "import django; print(f'Django {django.VERSION}')"
 
 RUN python -c "from pathlib import Path; import django; Path('node_modules/_reactivated').mkdir(parents=True, exist_ok=True); django.setup(); from reactivated.apps import generate_schema; generate_schema(skip_cache=True)"
 
-RUN npm exec build.client
+RUN NODE_ENV=production npm exec build.client
 
 RUN python manage.py collectstatic --noinput
 
