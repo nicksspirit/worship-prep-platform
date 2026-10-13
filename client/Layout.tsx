@@ -33,8 +33,13 @@ const devCriticalCSS = `
     }
 `;
 
-const GOOGLE_FONTS_URL =
-  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap";
+// Only the headline serif is preloaded. Chrome holds first paint until a preloaded font
+// arrives, and preloading the body sans as well delayed first paint a further ~150ms on a
+// 1.5 Mbps / 150ms link. The size-adjusted fallbacks in styles.css already keep the sans
+// swap from shifting text. Hashed names must match the @font-face URLs in client/styles.css.
+const PRELOADED_FONTS = [
+  "cormorant-garamond-latin-400-normal.8048ac209bec.woff2",
+];
 
 export const Layout = (props: Props) => {
   const { STATIC_URL, user, song_cart } = React.useContext(Context);
@@ -70,10 +75,11 @@ export const Layout = (props: Props) => {
         <link rel="manifest" href={`${staticUrl}/site.webmanifest`} />
         <link rel="shortcut icon" href={`${staticUrl}/favicon.ico`} />
 
-        {/* Fonts load in parallel with the app stylesheet. A CSS @import would chain them behind it. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
+        {/* Starts the headline font download with the HTML instead of after the stylesheet is parsed.
+            crossOrigin is required even for same-origin font preloads. */}
+        {PRELOADED_FONTS.map((font) => (
+          <link key={font} rel="preload" as="font" type="font/woff2" crossOrigin="anonymous" href={`${staticUrl}/fonts/${font}`} />
+        ))}
 
         {/* Production: Reactivated appends its stylesheet after </html>, so the first paint is unstyled.
             Linking it in <head> makes it render-blocking. The duplicate tag is a cache hit. */}

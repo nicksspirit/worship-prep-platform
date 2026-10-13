@@ -74,8 +74,104 @@
   --color-chapel-danger-900: #4B1016;
   --color-chapel-danger-950: #29080A;
 
-  --font-serif: 'Cormorant Garamond', serif;
-  --font-sans: 'Instrument Sans', sans-serif;
+  --font-serif: 'Cormorant Garamond', 'Cormorant Garamond Fallback', serif;
+  --font-sans: 'Instrument Sans', 'Instrument Sans Fallback', sans-serif;
+}
+
+/*
+ * Self-hosted fonts (Latin subset). Files live in static/fonts/ with a content hash in
+ * the name, which WHITENOISE_IMMUTABLE_FILE_TEST caches for a year. Replace a font by
+ * adding a new hashed file and updating these URLs and the preloads in client/Layout.tsx.
+ * Cormorant Garamond is only used at weight 400 (regular and italic); Instrument Sans
+ * is a variable font because the UI uses weights 400 to 700.
+ */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/cormorant-garamond-latin-400-normal.8048ac209bec.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/cormorant-garamond-latin-400-italic.e48e58027030.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/static/fonts/instrument-sans-latin-wght-normal.2ee17598a98d.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/instrument-sans-latin-400-italic.b089ac6fca39.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+ * Size-adjusted system fallbacks so the swap to the web font barely moves text.
+ * Overrides were computed from each font's hhea metrics and an English
+ * letter-frequency-weighted average advance width (the Capsize method):
+ *   size-adjust = web avg width / fallback avg width
+ *   *-override  = web metric / size-adjust
+ * Times New Roman and Arial are matched by their metric-compatible clones too
+ * (Liberation, Tinos, Arimo). Systems without any of them use plain serif/sans-serif.
+ */
+@font-face {
+  font-family: 'Cormorant Garamond Fallback';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Times New Roman'), local('TimesNewRomanPSMT'), local('Liberation Serif'), local('Tinos');
+  size-adjust: 97.34%;
+  ascent-override: 94.92%;
+  descent-override: 29.48%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond Fallback';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Times New Roman Italic'), local('TimesNewRomanPS-ItalicMT'), local('Liberation Serif Italic'), local('Tinos Italic');
+  size-adjust: 87.57%;
+  ascent-override: 105.51%;
+  descent-override: 32.77%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Instrument Sans Fallback';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Arimo');
+  size-adjust: 103.24%;
+  ascent-override: 93.96%;
+  descent-override: 24.22%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Instrument Sans Fallback';
+  font-style: italic;
+  font-weight: 400;
+  src: local('Arial Italic'), local('Arial-ItalicMT'), local('Liberation Sans Italic'), local('Arimo Italic');
+  size-adjust: 103.16%;
+  ascent-override: 94.03%;
+  descent-override: 24.23%;
+  line-gap-override: 0%;
 }
 
 :root {
