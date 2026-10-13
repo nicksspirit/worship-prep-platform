@@ -266,12 +266,48 @@ const RecentSearches = ({query, mode, shouldRecord}: {query: string; mode: strin
 };
 
 export const Template = (props: CatalogSearchPageProps) => {
-    const resultLabel = props.results.length === 1 ? "1 song" : `${props.results.length} songs`;
+    const [displayedResults, setDisplayedResults] = React.useState(props.results);
+    const [nextUrl, setNextUrl] = React.useState(props.next_url);
+    const [hasMore, setHasMore] = React.useState(props.has_more);
+    const [isLoadingNext, setIsLoadingNext] = React.useState(false);
+
+    // Reset state if props change (e.g. user performs a new search)
+    React.useEffect(() => {
+        setDisplayedResults(props.results);
+        setNextUrl(props.next_url);
+        setHasMore(props.has_more);
+    }, [props.results, props.next_url, props.has_more]);
+
+    const handleLoadMore = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+        e.preventDefault();
+        if (!nextUrl || isLoadingNext) return;
+
+        setIsLoadingNext(true);
+        try {
+            const response = await fetch(nextUrl, {
+                headers: {
+                    "Accept": "application/json",
+                },
+            });
+            if (response.ok) {
+                const data = await response.json() as {props: CatalogSearchPageProps};
+                setDisplayedResults((prev) => [...prev, ...data.props.results]);
+                setNextUrl(data.props.next_url);
+                setHasMore(data.props.has_more);
+            }
+        } catch (error) {
+            console.error("Failed to load more results", error);
+        } finally {
+            setIsLoadingNext(false);
+        }
+    };
+
+    const resultLabel = displayedResults.length === 1 ? "1 song" : `${displayedResults.length} songs`;
 
     return (
         <Layout title={props.title}>
-            <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950">
-                <div className="mx-auto grid max-w-7xl lg:grid-cols-[19rem_minmax(0,1fr)]">
+            <main className="min-h-[calc(100dvh-5rem)] bg-chapel-neutral-50 text-chapel-neutral-950 overflow-x-hidden">
+                <div className="grid w-full lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[24rem_minmax(0,1fr)]">
                     <aside className="min-w-0 border-b border-chapel-primary-700 bg-chapel-primary-500 p-7 text-white lg:sticky lg:top-20 lg:h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-e lg:p-10">
                         <h1 className="max-w-xs text-5xl leading-[0.9] text-balance">Songs for worship.</h1>
                         <p className="mt-6 max-w-md text-sm leading-6 text-white/80">
@@ -284,16 +320,19 @@ export const Template = (props: CatalogSearchPageProps) => {
                         />
                     </aside>
 
-                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:flex lg:h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden lg:px-12 lg:py-0" aria-labelledby="catalog-results-heading">
-                        <div className="border-b border-chapel-neutral-300 pb-9 lg:max-h-[60%] lg:shrink-0 lg:overflow-y-auto lg:pt-10">
-                            <SearchForm props={props} />
-                            <div className="mt-5 flex flex-wrap items-center gap-x-2">
-                                <p className="text-sm text-chapel-neutral-700">Can’t find your song?</p>
-                                <a href={`${reverse("song_carts:add_unlisted")}${props.mode === "title" && props.query.trim() ? `?title=${encodeURIComponent(props.query.trim())}` : ""}`} className="inline-flex min-h-11 items-center text-sm font-bold text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Add an unlisted song</a>
+                    <section className="min-w-0 px-6 py-9 sm:px-8 lg:flex lg:h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden lg:px-12 lg:py-0 2xl:px-24" aria-labelledby="catalog-results-heading">
+                        <div className="border-b border-chapel-neutral-300 pb-9 lg:shrink-0 lg:pt-10">
+                            <div className="mx-auto max-w-5xl">
+                                <SearchForm props={props} />
+                                <div className="mt-5 flex flex-wrap items-center gap-x-2">
+                                    <p className="text-sm text-chapel-neutral-700">Can’t find your song?</p>
+                                    <a href={`${reverse("song_carts:add_unlisted")}${props.mode === "title" && props.query.trim() ? `?title=${encodeURIComponent(props.query.trim())}` : ""}`} className="inline-flex min-h-11 items-center text-sm font-bold text-chapel-primary-600 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500">Add an unlisted song</a>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="wrap-anywhere pt-10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:scroll-py-6 lg:pb-14">
+                        <div className="wrap-anywhere pt-10 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:scroll-py-6 lg:pb-14 lg:pr-4">
+                            <div className="mx-auto max-w-5xl">
                             {props.error ? (
                                 <div role="alert" className="border border-chapel-primary-200 bg-chapel-primary-50 p-6 sm:p-8">
                                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-chapel-primary-500">Search needs attention</p>
@@ -328,14 +367,14 @@ export const Template = (props: CatalogSearchPageProps) => {
                                             <p className="text-xs font-bold uppercase tracking-[0.14em] text-chapel-primary-500">Searching {props.mode}</p>
                                             <h2 id="catalog-results-heading" className="mt-2 text-4xl">Songs for “{props.query.trim()}”</h2>
                                         </div>
-                                        <p className="shrink-0 text-sm text-chapel-neutral-500">Showing {resultLabel}{props.has_more ? " on this page" : ""}</p>
-                                    </div>
+                                            <p className="shrink-0 text-sm text-chapel-neutral-500">Showing {resultLabel}{hasMore ? " on this page" : ""}</p>
+                                        </div>
 
-                                    <div className="divide-y divide-chapel-neutral-300">
-                                        {props.results.map((song, index) => (
-                                            <article key={song.song_uid} className="group grid gap-4 py-6 sm:grid-cols-[2.5rem_minmax(0,1fr)_minmax(12rem,0.7fr)_2rem] sm:items-center">
+                                        <div className="divide-y divide-chapel-neutral-300">
+                                            {displayedResults.map((song, index) => (
+                                            <article key={song.song_uid} className="group grid gap-6 py-6 sm:grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(15rem,1fr)_2rem] sm:items-center">
                                                 <span className="font-serif text-lg italic text-chapel-neutral-400" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                                                <div className="min-w-0">
+                                                <div className="min-w-0 pr-6">
                                                     <h3 className="text-3xl leading-none">
                                                         <a href={song.url} className="decoration-chapel-primary-300 underline-offset-8 transition-colors hover:text-chapel-primary-500 hover:underline focus-visible:underline">
                                                             {song.title}
@@ -349,7 +388,7 @@ export const Template = (props: CatalogSearchPageProps) => {
                                                         Add to song cart
                                                     </a>
                                                 </div>
-                                                <div className="border-s border-chapel-neutral-300 ps-4 text-sm leading-6 text-chapel-neutral-600">
+                                                <div className="min-w-0 border-s border-chapel-neutral-300 pl-6 text-sm leading-6 text-chapel-neutral-600">
                                                     {song.lyrics_available ? (
                                                         <>
                                                             <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-[0.14em] text-chapel-neutral-400">Lyric preview</p>
@@ -370,15 +409,22 @@ export const Template = (props: CatalogSearchPageProps) => {
                                         ))}
                                     </div>
 
-                                    {props.next_url && (
+                                    {nextUrl && (
                                         <div className="flex justify-end border-t border-chapel-neutral-950 pt-7">
-                                            <a href={props.next_url} rel="next" data-purpose="catalog-next" className="minimal-btn">
-                                                Continue browsing <span aria-hidden="true" className="ml-3">→</span>
+                                            <a 
+                                                href={nextUrl} 
+                                                rel="next" 
+                                                data-purpose="catalog-next" 
+                                                className={`minimal-btn ${isLoadingNext ? "opacity-50 pointer-events-none" : ""}`}
+                                                onClick={handleLoadMore}
+                                            >
+                                                {isLoadingNext ? "Loading..." : "Load more"} <span aria-hidden="true" className="ml-3">↓</span>
                                             </a>
                                         </div>
                                     )}
                                 </>
                             )}
+                            </div>
                         </div>
                     </section>
                 </div>
