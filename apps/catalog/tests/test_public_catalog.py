@@ -191,6 +191,7 @@ class PublicCatalogTests(TestCase):
         self.assertContains(title_response, "Amazing Hidden Song")
         self.assertContains(title_response, "N/A")
         self.assertContains(title_response, "Lyric preview")
+        self.assertContains(title_response, "How sweet the sound")
         self.assertContains(title_response, "Lyrics unavailable for public display")
         self.assertNotContains(title_response, "SECRET REFRAIN MUST NEVER LEAK")
 

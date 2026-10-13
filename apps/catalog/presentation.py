@@ -150,8 +150,11 @@ def present_search(
                 url=reverse("catalog:detail", kwargs={"song_uid": item.song_uid}),
                 title=item.title,
                 author=_author(item.authors),
-                lyric_preview=_preview(item.cleaned_lyrics or "", normalized_query)
-                if item.lyrics_available and safe_mode == "lyrics"
+                lyric_preview=_preview(
+                    item.cleaned_lyrics or "",
+                    normalized_query if safe_mode == "lyrics" else "",
+                )
+                if item.lyrics_available
                 else [],
                 lyrics_available=item.lyrics_available,
                 rights_status=item.rights_status,
