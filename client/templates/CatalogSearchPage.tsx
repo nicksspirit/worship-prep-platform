@@ -290,10 +290,10 @@ export const Template = (props: CatalogSearchPageProps) => {
                 },
             });
             if (response.ok) {
-                const data = await response.json();
-                setDisplayedResults((prev) => [...prev, ...data.results]);
-                setNextUrl(data.next_url);
-                setHasMore(data.has_more);
+                const data = await response.json() as {props: CatalogSearchPageProps};
+                setDisplayedResults((prev) => [...prev, ...data.props.results]);
+                setNextUrl(data.props.next_url);
+                setHasMore(data.props.has_more);
             }
         } catch (error) {
             console.error("Failed to load more results", error);
