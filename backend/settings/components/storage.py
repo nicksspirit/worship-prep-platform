@@ -12,6 +12,13 @@ STATIC_ROOT = PUBLIC_ASSET_DIR / "static"
 MEDIA_ROOT = PUBLIC_ASSET_DIR / "media"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
+# Vite output (static/dist/index.js) and most other files keep stable names, so they
+# use WhiteNoise's short default max-age. Only fonts and images whose filename carries
+# a 12-character content hash (name.<hash>.ext) are safe to cache for a year.
+WHITENOISE_IMMUTABLE_FILE_TEST = (
+    rf"^{STATIC_URL}(?:fonts|images)/[^/]+\.[0-9a-f]{{12}}\.[a-z0-9]+$"
+)
+
 # Used in environments/prod.py (guard); optional outside production.
 SUPABASE_STORAGE_BUCKET = env.str("SUPABASE_STORAGE_BUCKET", default="")
 SUPABASE_CATALOG_IMPORT_BUCKET = env.str(
