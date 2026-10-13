@@ -33,6 +33,9 @@ const devCriticalCSS = `
     }
 `;
 
+const GOOGLE_FONTS_URL =
+  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap";
+
 export const Layout = (props: Props) => {
   const { STATIC_URL, user, song_cart } = React.useContext(Context);
   const staticUrl = STATIC_URL.replace(/\/+$/, "");
@@ -66,6 +69,15 @@ export const Layout = (props: Props) => {
         <link rel="icon" type="image/png" sizes="16x16" href={`${staticUrl}/favicon-16x16.png`} />
         <link rel="manifest" href={`${staticUrl}/site.webmanifest`} />
         <link rel="shortcut icon" href={`${staticUrl}/favicon.ico`} />
+
+        {/* Fonts load in parallel with the app stylesheet. A CSS @import would chain them behind it. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
+
+        {/* Production: Reactivated appends its stylesheet after </html>, so the first paint is unstyled.
+            Linking it in <head> makes it render-blocking. The duplicate tag is a cache hit. */}
+        {!isDev && <link rel="stylesheet" href={`${staticUrl}/dist/index.css`} />}
 
         {/* Development: inject critical CSS to prevent FOUC */}
         {isDev && <style dangerouslySetInnerHTML={{ __html: devCriticalCSS }} />}
