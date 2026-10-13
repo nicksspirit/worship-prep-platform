@@ -41,9 +41,23 @@ const PRELOADED_FONTS = [
   "cormorant-garamond-latin-400-normal.8048ac209bec.woff2",
 ];
 
+// Right-sized logo renditions (see static/images/README.txt). The logo is drawn in a
+// 52px box scaled 1.3x (about 68 CSS px), so 96w serves 1x screens and 192w serves 2x/3x.
+const LOGO_SIZES = "68px";
+const LOGO_WEBP = {
+  "96": "rccgcm_logo-96.7f11592cbc62.webp",
+  "192": "rccgcm_logo-192.6f868c269d8a.webp",
+};
+const LOGO_PNG = {
+  "96": "rccgcm_logo-96.d49fba854bb9.png",
+  "192": "rccgcm_logo-192.140978e86b8e.png",
+};
+
 export const Layout = (props: Props) => {
   const { STATIC_URL, user, song_cart } = React.useContext(Context);
   const staticUrl = STATIC_URL.replace(/\/+$/, "");
+  const logoSrcSet = (files: Record<"96" | "192", string>) =>
+    `${staticUrl}/images/${files["96"]} 96w, ${staticUrl}/images/${files["192"]} 192w`;
   const signedOutHeaderLink = props.signedOutHeaderLink === "song-search"
     ? {href: reverse("catalog:search"), label: "Song search"}
     : {href: reverse("account_login"), label: "Sign in"};
@@ -81,6 +95,18 @@ export const Layout = (props: Props) => {
           <link key={font} rel="preload" as="font" type="font/woff2" crossOrigin="anonymous" href={`${staticUrl}/fonts/${font}`} />
         ))}
 
+        {/* React does not auto-preload an <img> inside <picture>, so preload the WebP the browser will
+            pick. imageSrcSet and imageSizes must stay identical to the <source> below. */}
+        <link
+          rel="preload"
+          as="image"
+          type="image/webp"
+          href={`${staticUrl}/images/${LOGO_WEBP["96"]}`}
+          imageSrcSet={logoSrcSet(LOGO_WEBP)}
+          imageSizes={LOGO_SIZES}
+          fetchPriority="high"
+        />
+
         {/* Production: Reactivated appends its stylesheet after </html>, so the first paint is unstyled.
             Linking it in <head> makes it render-blocking. The duplicate tag is a cache hit. */}
         {!isDev && <link rel="stylesheet" href={`${staticUrl}/dist/index.css`} />}
@@ -101,7 +127,20 @@ export const Layout = (props: Props) => {
             <div className="relative flex w-18 justify-center">
               {/* Centered Circular Logo overlapping the bottom border */}
               <div className="absolute top-1/2 flex h-18 w-18 -translate-y-1/2 items-center justify-center rounded-full border-4 border-chapel-neutral-50 shadow-sm bg-white overflow-hidden p-1.5">
-                <img src={`${staticUrl}/rccgcm_logo.png`} alt="RCCG Chapel of Mercy Logo" className="h-full w-full object-contain scale-[1.3]" />
+                <picture className="contents">
+                  <source type="image/webp" srcSet={logoSrcSet(LOGO_WEBP)} sizes={LOGO_SIZES} />
+                  <img
+                    src={`${staticUrl}/images/${LOGO_PNG["96"]}`}
+                    srcSet={logoSrcSet(LOGO_PNG)}
+                    sizes={LOGO_SIZES}
+                    width={96}
+                    height={96}
+                    fetchPriority="high"
+                    decoding="async"
+                    alt="RCCG Chapel of Mercy Logo"
+                    className="h-full w-full object-contain scale-[1.3]"
+                  />
+                </picture>
               </div>
             </div>
 
@@ -122,7 +161,7 @@ export const Layout = (props: Props) => {
                   <button type="button" aria-label="Account menu" tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-chapel-neutral-200 p-1.5 rounded-full transition-colors">
                     <div className="h-9 w-9 rounded-full bg-chapel-neutral-300 overflow-hidden flex items-center justify-center">
                       {user.avatar_url ? (
-                        <img src={user.avatar_url} alt={user.full_name || "Profile"} className="h-full w-full object-cover" />
+                        <img src={user.avatar_url} alt={user.full_name || "Profile"} width={36} height={36} decoding="async" className="h-full w-full object-cover" />
                       ) : (
                         <svg className="h-full w-full text-chapel-neutral-500" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
