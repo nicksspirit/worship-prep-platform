@@ -43,7 +43,7 @@ a design specification; this document does not authorize application changes.
 
 ## Working Vocabulary
 
-Canonical definitions live in [CONTEXT.md](../../CONTEXT.md).
+Canonical definitions live in [GLOSSARY.md](../../GLOSSARY.md).
 
 | Term | Meaning | Status |
 | --- | --- | --- |
