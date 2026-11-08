@@ -162,7 +162,8 @@ reference, explanatory note, deciding Superuser, timestamp, and any status chang
 _Avoid_: import metadata, source backup
 
 **Integration Client**:
-An external tool permitted to search the Song Catalog through machine credentials.
+An external tool permitted to use specific platform capabilities through scoped
+machine credentials.
 _Avoid_: Catalog Visitor, Catalog Administrator
 
 **Song Detail**:
@@ -175,6 +176,12 @@ A non-editable, slide-accurate approximation of a Song Catalog entry in presenta
 mode that helps a user judge how its lyrics will appear during a church service. It does
 not promise pixel-identical EasyWorship output.
 _Avoid_: Song Detail, slide editor, presentation controller
+
+**Schedule Preview**:
+A temporary, read-only view of the songs prepared for one service, preserving the
+song order within Call to Worship, Praise, Worship, and an optional Special Song
+section. Anyone with the link can review the arranged slides.
+_Avoid_: Song Cart, live schedule, EasyWorship remote access
 
 **Song Section**:
 One ordered pairing of a normalized lyric label, such as Verse or Chorus, with the

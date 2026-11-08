@@ -11,7 +11,7 @@ from apps.common.models import BaseModel
 
 
 class APIKeyScope(models.TextChoices):
-    """Scopes reserved for Song Catalog machine interfaces."""
+    """Scopes for Integration Client machine interfaces."""
 
     CATALOG_IMPORT = "catalog.import", _("Catalog: Import")
     CATALOG_SEARCH = "catalog.search", _("Catalog: Search")
@@ -21,6 +21,7 @@ class APIKeyScope(models.TextChoices):
         "catalog.lyrics.restricted",
         _("Catalog: Restricted lyrics"),
     )
+    SCHEDULE_PREVIEW_PUBLISH = "schedule.preview.publish", _("Schedule: Publish previews")
 
 
 def normalize_api_key_scopes(raw_scopes: ty.Iterable[str] | None) -> list[str]:
@@ -118,7 +119,7 @@ class IntegrationApiKeyRateWindow(models.Model):
     request_count = models.PositiveIntegerField(default=0)
 
     class Meta:
-        constraints = [
+        constraints: ty.ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=["api_key", "bucket"],
                 name="api_key_unique_rate_bucket",

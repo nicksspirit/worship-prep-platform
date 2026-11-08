@@ -7,26 +7,27 @@ from django.urls import include, path, re_path
 from health_check.views import HealthCheckView
 
 from apps.accounts.views import (
+    AccountConfirmEmailView,
+    AccountConfirmLoginCodeView,
+    AccountConnectionsView,
+    AccountEmailView,
+    AccountInactiveView,
+    AccountPasswordChangeView,
+    AccountPasswordSetView,
+    AccountReauthenticateView,
     InvitationRequiredView,
     PasswordResetDoneView,
     PasswordResetFromKeyDoneView,
     PasswordResetFromKeyView,
     PasswordResetView,
-    AccountEmailView,
-    AccountPasswordChangeView,
-    AccountPasswordSetView,
-    AccountReauthenticateView,
-    AccountConnectionsView,
-    AccountConfirmEmailView,
-    AccountConfirmLoginCodeView,
-    AccountInactiveView,
-    SocialSignupView,
     SignInView,
+    SocialSignupView,
     account_email_verification_sent_view,
     google_login_view,
     social_login_cancelled_view,
     social_login_error_view,
 )
+from apps.schedule_previews.views import show_schedule_preview
 
 admin.autodiscover()
 admin.site.login = secure_admin_login(admin.site.login)
@@ -130,6 +131,11 @@ urlpatterns = [
     ),
     path("invitations/", include("invitations.urls", namespace="invitations")),
     path("accounts/", include("allauth.urls")),
+    path(
+        "schedule-previews/<uuid:preview_id>/",
+        show_schedule_preview,
+        name="schedule_preview",
+    ),
     path("", include("apps.catalog.urls")),
     path("", include("apps.song_carts.urls")),
     path("", include("apps.accounts.urls")),

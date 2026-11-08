@@ -53,6 +53,13 @@ UNFOLD = {
                         "icon": "queue_music",
                         "link": reverse_lazy("admin:index"),
                     },
+                    {
+                        "title": _("Schedule Previews"),
+                        "icon": "slideshow",
+                        "link": reverse_lazy(
+                            "admin:schedule_previews_schedulepreview_changelist"
+                        ),
+                    },
                 ],
             },
             {

@@ -1,9 +1,7 @@
 from typing import Annotated
 from urllib.parse import urlencode
 
-from asgiref.sync import sync_to_async
 from django.conf import settings
-from django.db import connections
 from django_bolt import (
     BoltAPI,
     OpenAPIConfig,
@@ -15,7 +13,6 @@ from django_bolt import (
 from django_bolt.openapi.spec import Components, SecurityScheme
 from django_bolt.param_functions import File, Header, Path, Query
 
-from apps.common.request_logging import BoltRequestLogging
 from apps.catalog.models import RightsStatus
 from apps.catalog.schema import (
     APIErrorDetail,
@@ -41,6 +38,8 @@ from apps.catalog.services.importing import (
     MAX_EXPORTER_EVENTS_BYTES,
     MAX_PACKAGE_BYTES,
 )
+from apps.common.bolt_database import call_bolt_database
+from apps.common.request_logging import BoltRequestLogging
 
 SEARCH_RATE_LIMIT = 60
 LYRICS_RATE_LIMIT = 30
@@ -56,11 +55,11 @@ api = BoltAPI(
     middleware=[BoltRequestLogging],
     enable_logging=False,
     openapi_config=OpenAPIConfig(
-        title="Worship Prep Song Catalog API",
+        title="Worship Prep Integration API",
         version="1.0.0",
         path="/api/v1/docs",
         description=(
-            "Versioned read resources for Integration Clients. Send one-time-issued "
+            "Versioned resources for Integration Clients. Send one-time-issued "
             "credentials as `Authorization: Bearer <key>`. Each operation documents "
             "its required scopes; restricted lyrics require the exceptional "
             "`catalog.lyrics.restricted` scope. Errors use "
@@ -130,25 +129,6 @@ def _rate_headers(rate) -> dict[str, str]:
     return headers
 
 
-def _run_database_call(service, *args, **kwargs):
-    """Run a sync Django service without retaining its worker-thread connection."""
-
-    try:
-        return service(*args, **kwargs)
-    finally:
-        # Bolt owns the async request loop; Django connections opened in its
-        # thread-sensitive worker are otherwise invisible to request_finished.
-        connections.close_all()
-
-
-async def _database_call(service, *args, **kwargs):
-    return await sync_to_async(_run_database_call, thread_sensitive=True)(
-        service,
-        *args,
-        **kwargs,
-    )
-
-
 @api.post(
     "/imports",
     response_model=CatalogImportResponse,
@@ -187,7 +167,7 @@ async def catalog_import(
 ):
     """Receive a Catalog Import Package from an import-scoped client."""
 
-    outcome = await _database_call(
+    outcome = await call_bolt_database(
         import_for_client,
         ImportCatalogRequest(
             package.file.read(),
@@ -240,7 +220,7 @@ async def catalog_search(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    result = await _database_call(
+    result = await call_bolt_database(
         search_for_client,
         SearchCatalogRequest(
             q, mode, limit, continuation, authorization, SEARCH_RATE_LIMIT
@@ -319,7 +299,7 @@ async def song_metadata(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    result = await _database_call(
+    result = await call_bolt_database(
         read_song_for_client,
         ReadCatalogSongRequest(song_uid, authorization, False, SONG_RATE_LIMIT),
     )
@@ -378,7 +358,7 @@ async def song_lyrics(
         Header(alias="Authorization", description="Bearer Integration Client key"),
     ] = "",
 ):
-    result = await _database_call(
+    result = await call_bolt_database(
         read_song_for_client,
         ReadCatalogSongRequest(song_uid, authorization, True, LYRICS_RATE_LIMIT),
     )

@@ -53,7 +53,10 @@ class DjangoRequestLogging:
             **correlate_request(request.headers)
         ):
             response = self.get_response(request)
-            finish_request(request.method, request.path, response.status_code, started)
+            path = request.path
+            if path.startswith("/schedule-previews/"):
+                path = "/schedule-previews/<redacted>/"
+            finish_request(request.method, path, response.status_code, started)
             return response
 
 

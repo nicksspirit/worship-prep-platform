@@ -138,6 +138,9 @@ The versioned API is served under `/api/v1/` with Bearer-key scopes:
   `catalog.lyrics.restricted` for restricted lyrics.
 - `POST /api/v1/catalog/imports` requires `catalog.import`; the Catalog Exporter may
   attach its durable event timeline and scheduled/manual trigger identity.
+- `POST /api/v1/schedule-previews` requires `schedule.preview.publish`; it accepts the
+  prepared song slides and returns an unlisted link. See the
+  [Schedule Preview API guide](docs/schedule-preview-api.md) for the PowerShell example.
 
 Machine-readable OpenAPI is available at `/api/v1/docs/openapi.json`. Local development
 serves Swagger UI at `/api/v1/docs`; production serves ReDoc at the same entry point.
