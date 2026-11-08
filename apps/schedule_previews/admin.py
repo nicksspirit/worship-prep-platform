@@ -15,7 +15,9 @@ class SchedulePreviewAdmin(ModelAdmin):
     search_fields = ("content__title",)
     ordering = ("-expires_at",)
     readonly_fields = fields = (
-        *list_display,
+        "title",
+        "created_at",
+        "expires_at",
         "publish_request",
         "request_id",
         "source_ip",
@@ -28,34 +30,36 @@ class SchedulePreviewAdmin(ModelAdmin):
         return str(obj)
 
     @admin.display(description="Publish request")
-    def publish_request(self, obj: SchedulePreview) -> str | None:
+    def publish_request(self, obj: SchedulePreview) -> str:
         if obj.request_details is None:
-            return None
+            return "Not recorded"
         return f"{obj.request_details['method']} {obj.request_details['path']}"
 
     @admin.display(description="Request ID")
-    def request_id(self, obj: SchedulePreview) -> str | None:
-        return (obj.request_details or {}).get("request_id")
+    def request_id(self, obj: SchedulePreview) -> str:
+        return (obj.request_details or {}).get("request_id") or "Not recorded"
 
     @admin.display(description="Source IP")
-    def source_ip(self, obj: SchedulePreview) -> str | None:
-        return (obj.request_details or {}).get("source_ip")
+    def source_ip(self, obj: SchedulePreview) -> str:
+        return (obj.request_details or {}).get("source_ip") or "Not recorded"
 
     @admin.display(description="API key ID")
-    def api_key_id(self, obj: SchedulePreview) -> int | None:
-        return obj.publisher_key_id
+    def api_key_id(self, obj: SchedulePreview) -> int | str:
+        return obj.publisher_key_id if obj.publisher_key_id is not None else "Not recorded"
 
     @admin.display(description="Payload")
     def payload(self, obj: SchedulePreview) -> str:
-        if obj.submitted_payload is None:
-            return format_html(
-                '<p>{}</p><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{}</pre>',
-                "Original request payload was not recorded. Showing the stored preview.",
-                json.dumps(obj.content, indent=2, ensure_ascii=False),
-            )
+        payload = obj.submitted_payload
+        label = "View submitted JSON"
+        if payload is None:
+            label = "View stored preview JSON (original request not recorded)"
+            payload = obj.content
         return format_html(
-            '<pre style="white-space: pre-wrap; overflow-wrap: anywhere">{}</pre>',
-            json.dumps(obj.submitted_payload, indent=2, ensure_ascii=False),
+            '<details><summary class="cursor-pointer">{}</summary>'
+            '<pre class="mt-2" style="white-space: pre-wrap; overflow-wrap: anywhere">{}</pre>'
+            '</details>',
+            label,
+            json.dumps(payload, indent=2, ensure_ascii=False),
         )
 
     @admin.display(description="Preview")
