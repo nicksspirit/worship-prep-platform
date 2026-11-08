@@ -66,6 +66,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the production-compatible HTTP/2 fixture
         run: docker build -f docker/Dockerfile.proxy-test -t wpp-http2-test .
+      - name: Check Cloud Build manifest renderer in its configured image
+        run: |
+          image=$(docker run --rm wpp-http2-test python -c 'import yaml; print(next(s for s in yaml.safe_load(open("cloudbuild.yaml"))["steps"] if s["id"] == "render-bolt-manifest")["name"])')
+          script=$(docker run --rm wpp-http2-test python -c 'import yaml; print(next(s for s in yaml.safe_load(open("cloudbuild.yaml"))["steps"] if s["id"] == "render-bolt-manifest")["args"][1])')
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            -e API_NAME=wpp-api -e PROJECT_ID=test-project -e RUNTIME_SA=test@example.com \
+            -e PROD_IMAGE=test-prod -e INGRESS_IMAGE=test-ingress \
+            -e 'SERVICE_ENV=^|^DJANGO_ENV=prod' -e 'SERVICE_SECRETS=SECRET_KEY=key:latest' \
+            --entrypoint bash "$image" -ceu "$script"
+          test -s wpp-api-service.json
+          rm wpp-api-service.json
       - name: Check API ingress, streaming, and startup probes
         run: docker run --rm wpp-http2-test python tests/integration/test_bolt_ingress.py
       - name: Check direct API installer bootstrap

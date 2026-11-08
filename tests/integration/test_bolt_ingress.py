@@ -15,11 +15,11 @@ import tempfile
 import threading
 import time
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from string import Template
 
 import yaml
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from proxy_fixture import free_port
 
 
@@ -269,7 +269,7 @@ class BoltIngressTests(unittest.TestCase):
         result = subprocess.run(
             ["curl", "--http2-prior-knowledge", "--fail", "--silent", "--show-error",
              f"http://127.0.0.1:{self.port}/api/v1/docs"],
-            capture_output=True, text=True, timeout=10,
+            check=False, capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["backend"], "bolt")
@@ -277,11 +277,11 @@ class BoltIngressTests(unittest.TestCase):
     def test_service_manifest_rendering_keeps_application_secrets_in_bolt(self):
         source = Path(__file__).resolve().parents[2]
         build = yaml.safe_load((source / "cloudbuild.yaml").read_text())
-        deployment = next(step for step in build["steps"] if step["id"] == "deploy-bolt")
+        deployment = next(step for step in build["steps"] if step["id"] == "render-bolt-manifest")
         renderer = deployment["args"][1].split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "service.json"
-            renderer = renderer.replace("/tmp/wpp-api-service.json", str(output))
+            renderer = renderer.replace("/workspace/wpp-api-service.json", str(output))
             ordinary_value = 'Quoted "value" with a backslash \\ and\na second line'
             result = subprocess.run(
                 [sys.executable, "-c", renderer], cwd=source,
@@ -292,7 +292,7 @@ class BoltIngressTests(unittest.TestCase):
                     "INGRESS_IMAGE": "fixture-ingress", "PROD_IMAGE": "fixture-prod",
                     "SERVICE_ENV": f"^|^APP_NAME={ordinary_value}|BOLT_PORT=8000",
                     "SERVICE_SECRETS": "DATABASE_URL=database-url:latest,SECRET_KEY=django-key:7",
-                }, capture_output=True, text=True, timeout=10,
+                }, check=False, capture_output=True, text=True, timeout=10,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             manifest = json.loads(output.read_text())
@@ -313,7 +313,7 @@ class BoltIngressTests(unittest.TestCase):
     def test_startup_probe_rejects_open_proxy_until_backend_is_listening(self):
         source = Path(__file__).resolve().parents[2]
         build = yaml.safe_load((source / "cloudbuild.yaml").read_text())
-        deployment = next(step for step in build["steps"] if step["id"] == "deploy-bolt")
+        deployment = next(step for step in build["steps"] if step["id"] == "render-bolt-manifest")
         self.assertIn("deploy/api-service.json.template", "\n".join(deployment["args"]))
         values = {
             "API_NAME": "wpp-api", "PROJECT_ID": "wpp-test-project",

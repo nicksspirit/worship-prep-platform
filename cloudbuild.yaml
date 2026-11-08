@@ -124,8 +124,8 @@ steps:
       - --region=${_REGION}
       - --wait
 
-  - id: deploy-bolt
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - id: render-bolt-manifest
+    name: python:3.13-slim-bookworm
     entrypoint: bash
     env:
       - API_NAME=${_BOLT_SERVICE}
@@ -160,10 +160,16 @@ steps:
             }})
         values["BOLT_ENV"] = json.dumps(env)
         manifest = Template(Path("deploy/api-service.json.template").read_text()).substitute(values)
-        Path("/tmp/wpp-api-service.json").write_text(json.dumps(json.loads(manifest)))
+        Path("/workspace/wpp-api-service.json").write_text(json.dumps(json.loads(manifest)))
         PY
+  - id: deploy-bolt
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
         # Replace the full container list, including the legacy unnamed container.
-        gcloud run services replace /tmp/wpp-api-service.json --region=${_REGION}
+        gcloud run services replace /workspace/wpp-api-service.json --region=${_REGION}
         gcloud run services add-iam-policy-binding ${_BOLT_SERVICE} \
           --region=${_REGION} --member=allUsers --role=roles/run.invoker
 
