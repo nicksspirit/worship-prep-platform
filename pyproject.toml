@@ -58,6 +58,9 @@ reportImplicitStringConcatenation = "none"
 line-length = 90
 target-version = "py313"
 
+[tool.ruff.lint]
+extend-select = ["I"]
+
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "backend.settings"
