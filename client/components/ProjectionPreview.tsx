@@ -7,7 +7,13 @@ export type ProjectionSlide = {
     lines: string[];
 };
 
-export const ProjectionPreview = ({title, slides}: {title: string; slides: ProjectionSlide[]}) => {
+export const ProjectionPreview = ({
+    title,
+    slides,
+    heading = "Projection Preview",
+    className = "mt-20 border-t border-chapel-neutral-300 pt-12",
+    showNotes = true,
+}: {title: string; slides: ProjectionSlide[]; heading?: string; className?: string; showNotes?: boolean}) => {
     const {STATIC_URL} = React.useContext(Context);
     const staticUrl = STATIC_URL.replace(/\/+$/, "");
     const [currentIndex, setCurrentIndex] = React.useState(0);
@@ -87,28 +93,38 @@ export const ProjectionPreview = ({title, slides}: {title: string; slides: Proje
     }, [reduceMotion]);
 
     return (
-        <section className="mt-20 border-t border-chapel-neutral-300 pt-12" aria-labelledby="projection-preview-heading">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <p className="text-xs font-normal text-chapel-neutral-700">Approximate 16:9 canvas</p>
-                    <h2 id="projection-preview-heading" className="mt-2 text-4xl sm:text-5xl">Projection Preview</h2>
+        <section className={className} aria-labelledby="projection-preview-heading">
+            <div className={showNotes ? "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between" : "flex flex-col gap-2"}>
+                <div className="min-w-0">
+                    {showNotes && <p className="mb-2 text-xs font-normal text-chapel-neutral-700">Approximate 16:9 canvas</p>}
+                    <h2 id="projection-preview-heading" className="text-4xl sm:text-5xl [overflow-wrap:anywhere]">{heading}</h2>
                 </div>
-                <div className="max-w-md">
-                    <p className="text-sm leading-6 text-chapel-neutral-600">A non-editable approximation for judging lyric flow and readability—not a pixel-identical EasyWorship renderer.</p>
+                <div className={showNotes ? "max-w-md" : "self-end"}>
+                    {showNotes && <p className="mb-5 text-sm leading-6 text-chapel-neutral-600">A non-editable approximation for judging lyric flow and readability—not a pixel-identical EasyWorship renderer.</p>}
                     <button
                         ref={launchButtonRef}
                         type="button"
                         onClick={openFullscreenPreview}
-                        className="mt-5 inline-flex w-full items-center justify-between border border-chapel-neutral-950 bg-chapel-neutral-950 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white sm:w-auto sm:gap-8"
+                        aria-label={showNotes ? undefined : "Open full screen preview"}
+                        className={showNotes
+                            ? "inline-flex w-full items-center justify-between border border-chapel-neutral-950 bg-chapel-neutral-950 px-5 py-4 text-xs font-bold uppercase tracking-[0.15em] text-white sm:w-auto sm:gap-8"
+                            : "inline-flex min-h-11 items-center gap-2 rounded-md border border-chapel-neutral-400 bg-white px-3 text-sm font-semibold whitespace-nowrap text-chapel-neutral-800 hover:bg-chapel-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chapel-primary-500"}
                     >
-                        Open full screen preview <span aria-hidden="true">↗</span>
+                        {showNotes ? <>Open full screen preview <span aria-hidden="true">↗</span></> : (
+                            <>
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" />
+                                </svg>
+                                <span>Full screen</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
 
             <div
                 ref={previewRef}
-                className={`projection-preview-shell mt-8 overflow-hidden border border-chapel-neutral-950 bg-black shadow-[0_28px_70px_rgba(15,30,66,0.22)]${isFullscreen ? " projection-preview-shell--fullscreen" : ""}`}
+                className={`projection-preview-shell ${showNotes ? "mt-8" : "mt-4"} overflow-hidden border border-chapel-neutral-950 bg-black shadow-[0_28px_70px_rgba(15,30,66,0.22)]${isFullscreen ? " projection-preview-shell--fullscreen" : ""}`}
                 role={isFullscreen ? "dialog" : undefined}
                 aria-modal={isFullscreen ? "true" : undefined}
                 aria-labelledby={isFullscreen ? "projection-fullscreen-heading" : undefined}

@@ -16,6 +16,9 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
+# Only the Nginx sidecar connects to Bolt over loopback in Cloud Run.
+BOLT_TRUSTED_PROXIES = env.list("BOLT_TRUSTED_PROXIES", default=["127.0.0.1/32"])
+
 DATABASES["default"]["CONN_MAX_AGE"] = 0
 DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 

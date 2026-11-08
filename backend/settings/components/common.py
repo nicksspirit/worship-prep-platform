@@ -1,10 +1,20 @@
-from backend.settings import env
+from django.core.exceptions import ImproperlyConfigured
+
+from backend.settings import DJANGO_ENV, env
 from backend.settings.components import BASE_DIR
 
 SITE_ID = env.int("SITE_ID", default=1)
 CATALOG_EXPORTER_API_URL = env.str(
     "CATALOG_EXPORTER_API_URL", default="https://api.rccgcm.org"
 )
+SCHEDULE_PREVIEW_APP_ORIGIN = env.str(
+    "SCHEDULE_PREVIEW_APP_ORIGIN",
+    default="http://localhost:8001" if DJANGO_ENV == "local" else "https://app.rccgcm.org",
+)
+SCHEDULE_PREVIEW_TTL_HOURS = env.int("SCHEDULE_PREVIEW_TTL_HOURS", default=72)
+if SCHEDULE_PREVIEW_TTL_HOURS < 1:
+    raise ImproperlyConfigured("SCHEDULE_PREVIEW_TTL_HOURS must be at least 1.")
+
 # Allow the 128 MiB package, 1 MiB events, and multipart overhead; match Nginx.
 BOLT_MAX_UPLOAD_SIZE = 130 * 1024 * 1024
 
@@ -34,6 +44,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.api_keys",
     "apps.catalog",
+    "apps.schedule_previews",
     "apps.song_carts",
 ]
 

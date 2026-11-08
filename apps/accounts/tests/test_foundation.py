@@ -249,7 +249,11 @@ class AccountFoundationTests(TestCase):
         self.assertIn(reverse("admin:accounts_user_changelist"), links)
         self.assertIn(reverse("admin:accounts_invitationrequest_changelist"), links)
         self.assertIn(reverse("admin:api_keys_integrationapikey_changelist"), links)
-        self.assertFalse(any("schedule" in link or "songs" in link for link in links))
+        previews = reverse("admin:schedule_previews_schedulepreview_changelist")
+        self.assertIn(previews, links)
+        self.assertFalse(
+            any("schedule" in link or "songs" in link for link in links if link != previews)
+        )
 
 
 class GoogleIdentityLinkCommandTests(TestCase):
