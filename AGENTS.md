@@ -53,6 +53,7 @@
 
 ## Code Style
 - Follow [PEP 8](https://peps.python.org/pep-0008/) for Python formatting.
+- Ruff checks Python lint and import order. Before finishing Python changes, run `uvx ruff check <changed-files>`; sort imports with `uvx ruff check --select I --fix <changed-files>`.
 - Use [Google style docstrings](https://raw.githubusercontent.com/NilsJPWerner/autoDocstring/c9da64126fd9e667decd9d85b4e5b53c60372ea7/docs/google.md) for function/method documentation.
 - **Function names**: Be concise, start with a verb/action, clearly reflect purpose (avoid excessive verbosity).
 - **Class names**: Use nouns or concepts to represent their purpose.
