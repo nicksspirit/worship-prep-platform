@@ -29,7 +29,7 @@ const keepDjangoStaticFonts = {
   },
 };
 
-isDevMode = process.env.NODE_ENV === "development";
+const isDevMode = process.env.NODE_ENV === "development";
 
 export default defineConfig({
   // Django owns static assets. Its collectstatic output lives in public/, so Vite
