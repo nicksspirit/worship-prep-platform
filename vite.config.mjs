@@ -9,24 +9,32 @@ const keepDjangoStaticFonts = {
   name: "keep-django-static-fonts",
   generateBundle(_options, bundle) {
     const emittedFonts = Object.keys(bundle).filter((name) => name.endsWith(".woff2"));
+
     for (const asset of Object.values(bundle)) {
       if (asset.type !== "asset" || !asset.fileName.endsWith(".css")) continue;
       let css = String(asset.source);
+
       for (const font of emittedFonts) {
         css = css.replaceAll(`url(/${font})`, `url(/static/fonts/${font})`);
       }
+
       if (/url\(\/[^/)]+\.woff2\)/.test(css)) {
         this.error(`${asset.fileName} still references a font outside /static/fonts/.`);
       }
+
       asset.source = css;
     }
+
     for (const font of emittedFonts) delete bundle[font];
   },
 };
+
+isDevMode = process.env.NODE_ENV === "development";
 
 export default defineConfig({
   // Django owns static assets. Its collectstatic output lives in public/, so Vite
   // must not treat that generated directory as a second source of frontend assets.
   publicDir: false,
+  sourceMap: isDevMode,
   plugins: [tailwindcss(), keepDjangoStaticFonts],
 });
